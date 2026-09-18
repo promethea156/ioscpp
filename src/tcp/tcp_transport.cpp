@@ -15,6 +15,7 @@
 #else
 #    include <fcntl.h>
 #    include <netdb.h>
+#    include <netinet/tcp.h>
 #    include <sys/select.h>
 #    include <sys/socket.h>
 #    include <sys/time.h>
@@ -126,7 +127,11 @@ bool connect_with_timeout(socket_t socket, const sockaddr *address, int address_
         fd_set writable;
         FD_ZERO(&writable);
         FD_SET(socket, &writable);
-        timeval timeout{static_cast<long>(timeout_ms / 1000), static_cast<long>((timeout_ms % 1000) * 1000)};
+        // The `timeval` member types differ by platform, so the fields are
+        // assigned rather than brace-initialized to avoid a narrowing error.
+        timeval timeout{};
+        timeout.tv_sec = static_cast<decltype(timeout.tv_sec)>(timeout_ms / 1000);
+        timeout.tv_usec = static_cast<decltype(timeout.tv_usec)>((timeout_ms % 1000) * 1000);
         if (::select(static_cast<int>(socket) + 1, nullptr, &writable, nullptr, &timeout) <= 0)
         {
             return false;
@@ -153,7 +158,9 @@ void set_timeout(socket_t socket, int option, unsigned int timeout_ms)
     const DWORD timeout = timeout_ms;
     (void)::setsockopt(socket, SOL_SOCKET, option, reinterpret_cast<const char *>(&timeout), sizeof(timeout));
 #else
-    const timeval timeout{static_cast<long>(timeout_ms / 1000), static_cast<long>((timeout_ms % 1000) * 1000)};
+    timeval timeout{};
+    timeout.tv_sec = static_cast<decltype(timeout.tv_sec)>(timeout_ms / 1000);
+    timeout.tv_usec = static_cast<decltype(timeout.tv_usec)>((timeout_ms % 1000) * 1000);
     (void)::setsockopt(socket, SOL_SOCKET, option, &timeout, sizeof(timeout));
 #endif
 }
