@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    # A tag also runs the whole matrix, so the release is built and tested before
+    # the release job below publishes it.
+    tags: ["v*"]
+  pull_request:
+
+jobs:
+  format:
+    name: format
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check formatting
+        run: >
+          pipx run clang-format==19.1.1 --dry-run --Werror
+          $(git ls-files '*.hpp' '*.cpp')
+
+  build:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: >
+          cmake -S . -B build
+          -DIOSCPP_BUILD_TESTS=ON
+          -DIOSCPP_BUILD_EXAMPLES=ON
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure -C Release
+
+  release:
+    name: release
+    # Only on a tag, and only after the matrix has built and tested it on every
+    # platform. The release notes are the tag's section of the changelog.
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract the release notes
+        run: awk '/^## \[/{count++} count == 1' CHANGELOG.md > notes.md
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file notes.md

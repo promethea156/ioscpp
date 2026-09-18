@@ -1,0 +1,142 @@
+#pragma once
+
+#include <cstddef>
+#include <filesystem>
+#include <memory>
+#include <span>
+#include <string>
+#include <string_view>
+#include <vector>
+
+#include "ioscpp/error.hpp"
+#include "ioscpp/export.hpp"
+
+namespace ioscpp
+{
+class Lockdown;
+class Stream;
+} // namespace ioscpp
+
+namespace ioscpp::crypto
+{
+
+/**
+ * @brief The host's pairing record with a device.
+ *
+ * A pairing record holds the host's RSA key pair and self-signed certificate, the
+ * device's certificate and the device's root certificate, and the 20-byte session key
+ * derived from the pairing exchange. `lockdownd` refuses to start a session, and so any
+ * service, until it has accepted this record.
+ *
+ * The record is persisted as a plist. The default path is
+ * `~/.ioscpp/<udid>.plist`, mirroring how `libimobiledevice` stores its records.
+ *
+ * `load` loads the record when the file exists and generates a fresh key pair and
+ * certificate when it does not; `pair` completes the record against the device. After a
+ * successful `pair`, `save` writes it, so the next run reuses it and the device does
+ * not ask for trust again.
+ *
+ * A `Pairing` is not thread-safe. The key and the certificate share one mbedTLS
+ * context, so concurrent calls must be serialized by the caller.
+ */
+class IOSCPP_API Pairing
+{
+public:
+    ~Pairing();
+    Pairing(Pairing &&) noexcept;
+    Pairing &operator=(Pairing &&) noexcept;
+    Pairing(const Pairing &) = delete;
+    Pairing &operator=(const Pairing &) = delete;
+
+    /// Loads the record at `record_path`, generating it when absent.
+    static Result<Pairing> load(const std::filesystem::path &record_path);
+
+    /// Loads the record for `udid` from the default directory, generating it when absent.
+    static Result<Pairing> load_for_udid(std::string_view udid);
+
+    /// Writes the record to the path it was loaded from.
+    Status save() const;
+
+    /// Whether the device side of the record is present, so pairing is complete.
+    bool paired() const noexcept;
+
+    /// The host id, a random string that identifies this host to the device.
+    std::string_view host_id() const noexcept;
+
+    /// The device's unique id, once known.
+    std::string_view udid() const noexcept;
+
+    /// Sets the device's unique id, which the pairing exchange learns from the device.
+    void set_udid(std::string udid);
+
+    /// The system build id, a random string shared by every record on this host.
+    std::string_view system_buid() const noexcept;
+
+    /// The host's DER-encoded self-signed certificate.
+    std::span<const std::byte> host_certificate() const noexcept;
+
+    /// The host's DER-encoded private key.
+    std::span<const std::byte> host_private_key() const noexcept;
+
+    /// The device's DER-encoded certificate.
+    std::span<const std::byte> device_certificate() const noexcept;
+
+    /// The device's DER-encoded root certificate.
+    std::span<const std::byte> root_certificate() const noexcept;
+
+    /// The 20-byte AES session key derived by the pairing exchange.
+    std::span<const std::byte> session_key() const noexcept;
+
+private:
+    friend Status pair(Lockdown &lockdown, Pairing &pairing);
+    friend class TlsSession;
+
+    Pairing();
+
+    struct Impl;
+    std::unique_ptr<Impl> impl_;
+};
+
+/**
+ * @brief Completes the pairing exchange with `lockdown`.
+ *
+ * Sends a `Pair` request carrying the host certificate, the host id, and the system
+ * build id, and stores the device's certificate, its root certificate, and the derived
+ * session key in `pairing`. The device may show the *Trust This Computer?* prompt, so
+ * this blocks until it is answered.
+ *
+ * The record must be saved afterwards, or the exchange is repeated on the next run.
+ */
+Status pair(Lockdown &lockdown, Pairing &pairing);
+
+/**
+ * @brief The TLS session that `lockdownd` wraps every later message in.
+ *
+ * After `StartSession`, `lockdownd` speaks TLS, using the host certificate and the
+ * session key from pairing. `start` runs the handshake over `stream`, and `read` and
+ * `write` move plaintext through it.
+ */
+class IOSCPP_API TlsSession
+{
+public:
+    ~TlsSession();
+    TlsSession(TlsSession &&) noexcept;
+    TlsSession &operator=(TlsSession &&) noexcept;
+    TlsSession(const TlsSession &) = delete;
+    TlsSession &operator=(const TlsSession &) = delete;
+
+    /// Runs the TLS handshake over `stream` as the client.
+    static Result<TlsSession> start(Stream &stream, const Pairing &pairing);
+
+    Status write(std::span<const std::byte> data);
+    Result<std::size_t> read(std::span<std::byte> buffer);
+    void close();
+
+private:
+    TlsSession();
+
+    struct Impl;
+    std::unique_ptr<Impl> impl_;
+};
+
+} // namespace ioscpp::crypto

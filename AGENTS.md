@@ -1,0 +1,101 @@
+# Agent Instructions
+
+## Git
+
+Never commit or push without the user's explicit approval. Do not run `git commit`, `git push`, `git tag`, or any other command that changes remote state unless the user has clearly asked for it in the current request. Preparing changes and then asking is fine.
+
+When asking for approval, show the proposed commit message and the list of files that would be included, so the user can review exactly what will be committed.
+
+## Local Tooling
+
+### `usbmuxd` and `libimobiledevice` can hold the device
+
+`usbmuxd` claims the device's USB interface while it runs. Stop it before opening the same device with `ioscpp`, exactly as `adb kill-server` is needed for Android:
+
+```powershell
+# Linux
+sudo systemctl stop usbmuxd
+# macOS (if installed through brew)
+brew services stop usbmuxd
+```
+
+The `idevice*` tools (`idevice_id`, `ideviceinfo`, `idevicepair`) talk through `usbmuxd`, so they are useful to compare against but cannot run at the same time as `ioscpp` on the same device.
+
+### The device asks for trust
+
+The first time a host pairs with a device, the device shows a *Trust This Computer?* prompt. A test that pairs without a human to tap the prompt hangs. The `ioscpp` pairing exchange waits for that tap, so a device test should either assume the device is already trusted, or expect the prompt.
+
+### The device test is destructive when it is configured to be
+
+`ioscpp_device_tests` exits with code 77 (a CTest skip) when no matching device is attached. It always checks the stat failure path, which touches no app, and it runs the install and uninstall round trip only when `IOSCPP_TEST_IPA` and `IOSCPP_TEST_BUNDLE` name a disposable app. That round trip uninstalls and reinstalls the bundle and loses its data, so only set those variables for an app the user has agreed to replace.
+
+## Testing
+
+Build and run the suite from the repository root:
+
+```powershell
+cmake -S . -B build -DIOSCPP_BUILD_TESTS=ON -DIOSCPP_BUILD_EXAMPLES=ON
+cmake --build build --config Release
+ctest --test-dir build -C Release -E "^device$" --output-on-failure
+```
+
+Check the formatting with clang-format 19.1.1 before committing:
+
+```powershell
+cmake --build build --target format-check
+```
+
+### `-E` matches the test *name* as a regular expression
+
+`ctest -E` matches the test name as a regular expression, not only the test registered as `device`, so a test whose name merely contains `device` is skipped silently and the run still reports success. Anchor the exclusion to exclude only the device test:
+
+```powershell
+ctest --test-dir build -C Release -E "^device$" --output-on-failure
+```
+
+### The USB example needs a device and the Trust prompt
+
+`ioscpp_usb_example` detects the first attached device and connects to it. On a device that has not been trusted by this host, the device shows the *Trust This Computer?* prompt, and the pairing exchange blocks until it is answered. Run the example from an interactive terminal so the prompt can be seen.
+
+```powershell
+build\examples\Release\ioscpp_usb_example.exe
+```
+
+### The demo example walks every feature on one device
+
+`ioscpp_demo_example` detects the first attached device, connects, and runs every feature once. It needs a device and an IPA, and takes the bundle id and the IPA as arguments. It uninstalls the bundle first, so it loses that bundle's data.
+
+```powershell
+build\examples\Release\ioscpp_demo_example.exe <bundle-id> <app.ipa>
+```
+
+## Commit Messages
+
+All commits MUST follow the [Conventional Commits 1.0.0](https://www.conventionalcommits.org/en/v1.0.0/#specification) specification.
+
+Format:
+
+```
+<type>[optional scope]: <description>
+
+[optional body]
+
+[optional footer(s)]
+```
+
+Common types: `feat`, `fix`, `docs`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `style`.
+
+- Use a scope in parentheses when useful, e.g. `feat(afc): ...`.
+- Mark breaking changes with `!` after the type/scope and/or a `BREAKING CHANGE:` footer.
+- Keep the description a short summary.
+
+Examples:
+
+```
+docs: add vertical-slice implementation roadmap
+feat(afc): implement push command
+fix(usb): handle short USB transfers
+feat(api)!: rename connect to open
+```
+
+See `docs/01-objective.md` for the full versioning and commit message standards.

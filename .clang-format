@@ -1,0 +1,55 @@
+# ioscpp code style.
+#
+# Applied with clang-format 19. The style is deliberately roomy so the protocol
+# code stays easy to read: braces on their own lines (Allman), 4-space indentation,
+# a 120-column limit, and comments left exactly as written.
+---
+Language: Cpp
+BasedOnStyle: Google
+
+Standard: c++20
+ColumnLimit: 120
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+ContinuationIndentWidth: 4
+
+# Braces on their own lines (Allman) for functions, classes, and control flow.
+BreakBeforeBraces: Allman
+AllowShortFunctionsOnASingleLine: None
+AllowShortLambdasOnASingleLine: Empty
+AllowShortBlocksOnASingleLine: Never
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+AllowShortCaseLabelsOnASingleLine: false
+
+# Class members are indented by 4; access modifiers line up with `class`.
+AccessModifierOffset: -4
+IndentAccessModifiers: false
+EmptyLineBeforeAccessModifier: LogicalBlock
+
+# Preprocessor directives are indented after the `#` to show nesting.
+IndentPPDirectives: AfterHash
+
+# Namespaces do not add a level of indentation.
+NamespaceIndentation: None
+FixNamespaceComments: true
+
+# `char *text`, matching the existing sources.
+PointerAlignment: Right
+DerivePointerAlignment: false
+SpacesBeforeTrailingComments: 1
+
+# Never reflow comments: the protocol explanations are wrapped by hand.
+ReflowComments: false
+# Keep string literals intact, so error messages stay readable as one sentence.
+BreakStringLiterals: false
+
+SortIncludes: true
+IncludeBlocks: Regroup
+
+BreakConstructorInitializers: BeforeComma
+PackConstructorInitializers: Never
+ConstructorInitializerIndentWidth: 4
+
+...
