@@ -1,0 +1,157 @@
+# Assumptions
+
+Ideas the implementation depends on that are **not yet proven on a real device**. An
+assumption is not a bug: it is a belief taken from the reference implementations, from the
+protocol notes, or from a device-free test, and it holds only until a device run confirms or
+refutes it. When an assumption is tested, its entry moves to
+[`04-blockers.md`](04-blockers.md) (if it was wrong) or is marked **proven** here (if it held).
+
+Each entry says what is assumed, why we believe it, how far the code goes, and how to prove it.
+
+## How to read an entry
+
+- **Assumption** — the thing believed.
+- **Why we believe it** — the evidence, which is never this repository's own device run yet.
+- **Status** — the furthest the code or the tests reach today.
+- **Proof** — the device run that would settle it.
+
+## USB
+
+### A single process can own the device without `usbmuxd`
+
+**Assumption.** A host process can claim the device's mux interface directly with libusb and
+exchange mux frames, with `usbmuxd` stopped and no daemon or socket in between.
+
+**Why we believe it.** `usbmuxd` itself is just such a process; its `src/usb.c` is the same
+claim on the same interface. go-ios and pymobiledevice3 do it without `usbmuxd`
+(`02-references.md`).
+
+**Status.** `UsbTransport::open` claims the interface (`src/usb/usb_transport.cpp:393`), but no
+run has confirmed a frame round-trips on hardware. `AGENTS.md` documents that `usbmuxd` holds
+the device, which is consistent with one owner.
+
+**Proof.** Run `ioscpp_usb_example` with `usbmuxd` stopped and see a device answer the mux
+version request.
+
+### The mux interface is present and stable
+
+**Assumption.** Every supported device and iOS version exposes the interface with class `0xff`,
+subclass `0xfe`, protocol `0x02`, and two bulk endpoints, and it is not necessarily interface 0.
+
+**Why we believe it.** `usbmuxd`'s `src/usb.h` fixes that triple, and
+`docs/04-blockers.md` records the "not the first interface" trap.
+
+**Status.** `find_mux_interface` walks the descriptors for the triple
+(`src/usb/usb_transport.cpp:119`), but only on one device would that be shown correct.
+
+**Proof.** A device whose mux interface is not index 0 still connects.
+
+### libusb behaves the same on all three platforms
+
+**Assumption.** Claiming the interface, detaching the kernel driver on Linux, and reading the
+serial descriptor work on Windows (WinUSB), macOS, and Linux alike.
+
+**Why we believe it.** libusb is the documented cross-platform path, and the code has a Linux
+detach (`src/usb/usb_transport.cpp:387`).
+
+**Status.** Only compiled, not run, on any platform.
+
+**Proof.** The device test passes on all three CI platforms.
+
+### A short bulk transfer is not an error
+
+**Assumption.** libusb can return a transfer shorter than requested without the device having
+stalled, and the transport must loop or buffer rather than treat it as end of stream.
+
+**Why we believe it.** `docs/04-blockers.md` records this as a known trap, and `read` buffers a
+partial transfer for later reads (`src/usb/usb_transport.cpp:436`).
+
+**Proof.** A large transfer over the real link reassembles without a desync.
+
+## Mux protocol
+
+### The version negotiation and v2 setup are as described
+
+**Assumption.** The device answers `MUX_PROTO_VERSION` with a version, a v2 device needs the
+`MUX_PROTO_SETUP` packet with payload `\x07`, and the header is 8 bytes on v1 and 16 on v2.
+
+**Why we believe it.** `usbmuxd`'s `src/device.c` and `docs/04-blockers.md` describe it.
+
+**Status.** `Connection` implements it (`src/connection.cpp`) and `tests/stream_test.cpp` covers it
+over a mock only.
+
+**Proof.** A real device completes the negotiation and a port connect.
+
+## Pairing and `lockdownd`
+
+### Pairing works, including the trust prompt and TLS
+
+**Assumption.** The pairing exchange completes (with the user tapping *Trust* when asked), the
+pairing record is saved and reused, and after `StartSession` the `lockdownd` link is TLS using the
+session key.
+
+**Why we believe it.** `docs/04-blockers.md` and the `lockdown.c` reference describe the flow.
+
+**Status.** `crypto::Pairing` and `Lockdown` are written but the device test only reaches
+`Device::connect` and a `ProductType`/`ProductVersion` query (`tests/device_test.cpp:57`).
+
+**Proof.** A device that is already trusted completes the tour's query step.
+
+### A pairing record saved once is reusable
+
+**Assumption.** A pairing record written by one run is accepted by `lockdownd` on the next, with no
+re-pair and no trust tap.
+
+**Proof.** Two consecutive device test runs, the second with the device already trusted.
+
+## AFC
+
+### The AFC wire format is as implemented
+
+**Assumption.** The `CFA6LPAA` packet format, the operation set, and the relative UTF-8 NUL
+terminated paths (`docs/06-afc-protocol.md`) match what a device expects.
+
+**Status.** `Afc` is written, but the device test does not exercise list, stat, pull, or push yet.
+
+**Proof.** The tour lists a directory and round-trips a file against a device.
+
+## Apps
+
+### Install needs the package staged, then installed by device path
+
+**Assumption.** An IPA is uploaded over `AFC` into `/PublicStaging` and then installed over
+`installation_proxy` from that device-side path, and launch/close/is_running work over process
+control.
+
+**Why we believe it.** `docs/04-blockers.md` and the `installation_proxy.c` and `process_control.c`
+references describe it.
+
+**Status.** `App` is written, but no device test covers it.
+
+**Proof.** The demo installs, launches, checks, and closes an app on a device.
+
+## iOS 17+ CoreDevice
+
+### The RSD tunnel is reachable in userspace, with no daemon or TUN
+
+**Assumption.** The `CoreDeviceProxy` handshake returns an RSD address and port, and the device's
+IPv6 packets can be carried as data over a `Stream` with no `tunneld` and no `utun` interface.
+
+**Why we believe it.** go-ios's `ios tunnel start --userspace` and pymobiledevice3's tunnel guide do
+exactly this (`03-roadmap.md`, slice 9).
+
+**Status.** Not implemented.
+
+**Proof.** A device of iOS 17.4 or later lists the RSD services over the tunnel.
+
+## Test fidelity
+
+### The mock transport models the device
+
+**Assumption.** A device-free test over `MockTransport` that passes means the codec and the session
+logic are correct, so a later device failure is a protocol assumption, not a codec bug.
+
+**Why we believe it.** It is the only way to test without a device, and the slices are built on it.
+
+**Risk.** A mock encodes the same misunderstanding the code does, so it can confirm a wrong frame.
+The device tests are what break the tie.
