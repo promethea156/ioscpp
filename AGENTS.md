@@ -16,6 +16,13 @@ next, say which branch and remote it would go to.
 The one exception is a chain the user spelled out in the same request, for example
 "commit and push": then run the commit, and the push, without stopping in between.
 
+## Branching
+
+`main` is stable, `development` integrates feature work, `release_candidate` stabilizes a
+release, and `hotfix` carries an urgent fix from `main` back to `main` and `development`. A
+short-lived branch is `<type>/<slug>`. See `docs/01-objective.md` for the full model. Do not
+switch the current branch or create a branch without saying so.
+
 ## Local Tooling
 
 ### `usbmuxd` and `libimobiledevice` can hold the device

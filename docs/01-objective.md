@@ -72,9 +72,26 @@ Version bumps are derived from commit types, tying SemVer to the [commit message
 - `feat` maps to a **MINOR** release.
 - A `BREAKING CHANGE` (or `!`), regardless of type, maps to a **MAJOR** release.
 
+## Branching
+
+The repository keeps four long-lived branches, so a change is always made somewhere that says
+what it is for:
+
+- `main` is stable. Every commit on it is a release or a change about to be tagged, and a tag
+  is only made here. Nothing lands on `main` without passing the whole CI matrix.
+- `development` is the integration branch. Feature work merges here first, and it is where the
+  slices in [`03-roadmap.md`](03-roadmap.md) are built.
+- `release_candidate` is the stabilization branch. It is cut from `development` when a release
+  is being prepared, and only fixes for that release land on it until it is merged to `main`.
+- `hotfix` is for an urgent fix to a tagged release. It is cut from `main`, fixed, and merged
+  back to both `main` and `development`, so the fix is not lost by the next release.
+
+A short-lived branch is named `<type>/<slug>`, using the same types as the commit convention
+below, for example `feat/afc-push` or `fix/usb-short-transfer`. It is deleted once it merges.
+
 ## Releasing
 
-A release is a tag, and the tag is the release: nothing is published that CI has not built and tested on every platform first.
+A release is a tag, and the tag is the release: nothing is published that CI has not built and tested on every platform first. The release is prepared on `release_candidate`, merged to `main`, and tagged on `main`.
 
 1. Bump `project(VERSION)` in `CMakeLists.txt`.
 2. Add the release's section to [`CHANGELOG.md`](../CHANGELOG.md), newest first.
