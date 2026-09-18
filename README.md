@@ -123,6 +123,8 @@ cmake/                  CMake package configuration
 - [`docs/05-usage.md`](docs/05-usage.md) — usage guide with copy-pasteable code examples
 - [`docs/06-afc-protocol.md`](docs/06-afc-protocol.md) — the `AFC` wire format and how `list` is built on it
 - [`docs/07-error-model.md`](docs/07-error-model.md) — why nothing throws, and what `Result<T>` carries instead
+- [`docs/08-assumptions.md`](docs/08-assumptions.md) — what the implementation assumes but has not yet proven on a device
+- [`docs/09-platform-setup.md`](docs/09-platform-setup.md) — what to install and grant per platform to build and reach a device
 
 ## References
 
