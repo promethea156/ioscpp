@@ -161,6 +161,24 @@ and verify callback, no session, and no hostname. The device is still reset with
 and `IOSCPP_SESSION` echoing the `SessionID` with a valid session version and
 suite, so none of those is the cause on its own.
 
+**Wire capture.** A USBPcap capture of a failing run (device on `USBPcap1`, root hub
+`USBROOT(0)#USB(7)`, address `1.35.0`) shows the sequence at the wire. The ClientHello
+is one bulk `OUT` transfer (frame 1267, record version `0x0303`, 432 bytes), byte
+identical to `IOSCPP_DUMP` except the 32-byte random. The device acknowledges it
+(frame 1268), and 6 ms later the device sends a mux control frame `type=3` reading
+`socketIsClosed sock_receive returned errno 54` (frame 1270) and a data frame reading
+`sessionUpcall connection closed` (frame 1272), then sends nothing more. No ServerHello
+and no TLS alert arrive, so the device's `lockdownd` takes the record layer and closes
+before it answers.
+
+**Reference capture.** Blocked. The reference needs `usbmuxd`, and the
+`libimobiledevice` `usbmuxd` v1.1.1 finds the device and claims the mux interface
+but then dies: a heap corruption (`0xc0000374`) with its bundled libusb 1.0.24, and an
+access violation (`0xc0000005`) once the first client connects to `lockdownd`. Swapping
+in libusb 1.0.30 and starting with `-p -n` lets it list the device
+(`idevice_id -l` returns the UDID) and survive, but the first `lockdownd` connect still
+kills it (`Mux error (-8)`).
+
 ### The ClientHello differs from the OpenSSL reference
 
 **Symptom.** A reference ClientHello, built with the exact `pymobiledevice3` context

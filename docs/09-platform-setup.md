@@ -146,6 +146,17 @@ work around that.
   `USBPcap` captures below the driver, so it sees the traffic whichever driver
   owns the interface. `USBPcap` also captures an `ioscpp` run for the other side of
   the comparison.
+- **Capturing the wire.** `dumpcap -D` may not list the USBPcap interfaces; `tshark -D`
+  does. The device is on `\\.\USBPcap1` (root hub 1). Capture while an example runs:
+
+  ```powershell
+  tshark -i '\\.\USBPcap1' -a duration:30 -w ioscpp_run.pcapng
+  ```
+
+  `tshark -r ioscpp_run.pcapng -Y 'usb.device_address == 35 && usb.src == "host" && usb.data_len > 100'`
+  then finds the ClientHello, and
+  `-Y 'usb.capdata contains 73:65:73:73:69:6f:6e:55:70:63:61:6c:6c'` finds the
+  device's `sessionUpcall connection closed` frame.
 - **No device at all.** `tools/compare-clienthello.py ref` builds the
   `pymobiledevice3` OpenSSL context and captures its ClientHello through
   `ssl.MemoryBIO`, and `diff` names the differences against a file that
@@ -156,6 +167,10 @@ work around that.
   mux interface on a `libusb`-compatible driver, which is what `ioscpp` already
   needs, so it is a reference without a driver change. `pymobiledevice3` can then
   reach that `usbmuxd` over TCP by setting `USBMUXD_SOCKET_ADDRESS`.
+  This `usbmuxd` v1.1.1 crashes after it claims the mux interface. Replace its
+  `libusb-1.0.dll` with libusb 1.0.30 and start it with `-p -n`; it then lists
+  the device (`idevice_id -l`), but the first `lockdownd` connect still kills it
+  with `Mux error (-8)`.
 - **A second host or `WSL`.** `usbipd` attaches the device to `WSL`, where
   `libimobiledevice` runs with `usbmuxd` stopped and `tcpdump` captures the
   link. The device belongs to one host at a time, so this and a native `ioscpp`
