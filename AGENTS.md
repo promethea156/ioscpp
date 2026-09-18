@@ -2,9 +2,19 @@
 
 ## Git
 
-Never commit or push without the user's explicit approval. Do not run `git commit`, `git push`, `git tag`, or any other command that changes remote state unless the user has clearly asked for it in the current request. Preparing changes and then asking is fine.
+Ask before every commit and before every push. Approval is **per action and per
+change**, not a standing permission: a "commit and push" given for one change does
+not cover the next one. After the work is done, stop, propose the commit, and wait for
+the user to say yes; then, after the commit, propose the push and wait again. Do not
+run `git commit`, `git push`, `git tag`, or any other command that changes remote
+state until the user has clearly approved that exact action.
 
-When asking for approval, show the proposed commit message and the list of files that would be included, so the user can review exactly what will be committed.
+When asking for approval, show the proposed commit message and the list of files that
+would be included, so the user can review exactly what will be committed. If a push is
+next, say which branch and remote it would go to.
+
+The one exception is a chain the user spelled out in the same request, for example
+"commit and push": then run the commit, and the push, without stopping in between.
 
 ## Local Tooling
 
