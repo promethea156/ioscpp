@@ -1,5 +1,7 @@
 #include "ioscpp/device.hpp"
 
+#include <cstdio>
+#include <cstdlib>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -10,6 +12,7 @@
 #include "ioscpp/crypto/pairing.hpp"
 #include "ioscpp/error.hpp"
 #include "ioscpp/lockdown.hpp"
+#include "ioscpp/protocol/plist.hpp"
 #include "ioscpp/protocol/usbmux.hpp"
 #include "ioscpp/stream.hpp"
 
@@ -70,6 +73,17 @@ Result<Device> Device::connect(Transport &transport, crypto::Pairing &pairing)
     if (!lockdown)
     {
         return tl::unexpected(lockdown.error());
+    }
+
+    if (std::getenv("IOSCPP_TRACE") != nullptr)
+    {
+        if (auto version = lockdown->get_value({}, "ProductVersion"); version)
+        {
+            if (const protocol::Plist *value = version->find("Value"); value != nullptr)
+            {
+                std::fprintf(stderr, "[device] product version=%s\n", value->string_or().c_str());
+            }
+        }
     }
 
     // The unique id names the pairing record, so it is learned first. A fresh

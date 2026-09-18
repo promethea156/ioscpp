@@ -26,8 +26,9 @@ exchange mux frames, with `usbmuxd` stopped and no daemon or socket in between.
 claim on the same interface. go-ios and pymobiledevice3 do it without `usbmuxd`
 (`02-references.md`).
 
-**Status.** `UsbTransport::open` claims the interface (`src/usb/usb_transport.cpp:393`), but no
-run has confirmed a frame round-trips on hardware. `AGENTS.md` documents that `usbmuxd` holds
+**Status.** `UsbTransport::open` claims the interface (`src/usb/usb_transport.cpp:462`), selects the
+configuration that carries it first, and the mux handshake runs to the first `lockdownd`
+request, but no device reply has been seen yet. `AGENTS.md` documents that `usbmuxd` holds
 the device, which is consistent with one owner.
 
 **Proof.** Run `ioscpp_usb_example` with `usbmuxd` stopped and see a device answer the mux
@@ -36,15 +37,19 @@ version request.
 ### The mux interface is present and stable
 
 **Assumption.** Every supported device and iOS version exposes the interface with class `0xff`,
-subclass `0xfe`, protocol `0x02`, and two bulk endpoints, and it is not necessarily interface 0.
+subclass `0xfe`, protocol `0x02`, and two bulk endpoints, and it is not necessarily interface 0
+or in the configuration the device starts in.
 
 **Why we believe it.** `usbmuxd`'s `src/usb.h` fixes that triple, and
-`docs/04-blockers.md` records the "not the first interface" trap.
+`docs/04-blockers.md` records the "not the first interface" trap. A device in its initial mode
+carries the interface only in a later configuration, so `usbmuxd` selects it.
 
-**Status.** `find_mux_interface` walks the descriptors for the triple
-(`src/usb/usb_transport.cpp:119`), but only on one device would that be shown correct.
+**Status.** `find_mux_interface` walks every configuration for the triple and `open` selects the
+one that carries it before claiming the interface (`src/usb/usb_transport.cpp`). A run reached the
+`lockdownd` request, so the interface is found and claimed, but the device has not answered yet.
 
-**Proof.** A device whose mux interface is not index 0 still connects.
+**Proof.** A device whose mux interface is not index 0, and not in the active configuration,
+still connects and answers.
 
 ### libusb behaves the same on all three platforms
 
@@ -52,7 +57,7 @@ subclass `0xfe`, protocol `0x02`, and two bulk endpoints, and it is not necessar
 serial descriptor work on Windows (WinUSB), macOS, and Linux alike.
 
 **Why we believe it.** libusb is the documented cross-platform path, and the code has a Linux
-detach (`src/usb/usb_transport.cpp:387`).
+detach (`src/usb/usb_transport.cpp:441`).
 
 **Status.** Only compiled, not run, on any platform.
 
@@ -64,7 +69,7 @@ detach (`src/usb/usb_transport.cpp:387`).
 stalled, and the transport must loop or buffer rather than treat it as end of stream.
 
 **Why we believe it.** `docs/04-blockers.md` records this as a known trap, and `read` buffers a
-partial transfer for later reads (`src/usb/usb_transport.cpp:436`).
+partial transfer for later reads (`src/usb/usb_transport.cpp:505`).
 
 **Proof.** A large transfer over the real link reassembles without a desync.
 
@@ -92,8 +97,11 @@ session key.
 
 **Why we believe it.** `docs/04-blockers.md` and the `lockdown.c` reference describe the flow.
 
-**Status.** `crypto::Pairing` and `Lockdown` are written but the device test only reaches
-`Device::connect` and a `ProductType`/`ProductVersion` query (`tests/device_test.cpp:57`).
+**Status.** Pairing completes and the record is saved to `%USERPROFILE%\.ioscpp\<udid>`; a
+second run loads it and passes `StartSession` with `EnableSessionSSL=true`, so the
+pairing exchange and the session start are proven on a device. The TLS handshake is the
+open part: the ClientHello is now well-formed, but the device resets the connection
+after it (`docs/04-blockers.md`).
 
 **Proof.** A device that is already trusted completes the tour's query step.
 
@@ -101,6 +109,9 @@ session key.
 
 **Assumption.** A pairing record written by one run is accepted by `lockdownd` on the next, with no
 re-pair and no trust tap.
+
+**Status.** A second run reads the saved record, completes `StartSession`, and reaches the
+TLS handshake without a trust tap, so it is proven for the pairing and session steps.
 
 **Proof.** Two consecutive device test runs, the second with the device already trusted.
 

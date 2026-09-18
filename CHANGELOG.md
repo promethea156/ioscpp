@@ -23,4 +23,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   dependency.
 - `examples/`, and the design documents under `docs/`.
 
+### Fixed
+
+- `usb::UsbTransport` now searches every USB configuration, selects the one that
+  carries the mux interface, and detaches kernel drivers on Linux, matching
+  `usbmuxd`, so a device in its initial USB mode is found.
+- The v2 mux framing now matches `usbmuxd`: data frames are `ACK` alone, `tx_seq`
+  advances for every frame, and the device's own v2 magic is not checked.
+
 [Unreleased]: https://github.com/promethea156/ioscpp/commits/main

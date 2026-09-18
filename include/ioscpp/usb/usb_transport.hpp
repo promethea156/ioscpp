@@ -47,6 +47,10 @@ struct IOSCPP_API DeviceId
  *
  *   https://github.com/libimobiledevice/usbmuxd/blob/master/src/usb.h
  *
+ * The mux interface lives in a later USB configuration than the one a device
+ * starts in, so @ref open selects the configuration that carries it before
+ * claiming the interface, as `usbmuxd` does.
+ *
  * A read returns the contents of one USB transfer, which may be a partial frame,
  * and the session reads on until it has a whole frame.
  *

@@ -2,12 +2,15 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <memory>
 #include <span>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "ioscpp/protocol/plist.hpp"
@@ -117,10 +120,20 @@ Result<Connection> Connection::open(Transport &transport)
         return tl::unexpected(status.error());
     }
 
-    auto answer = connection.session_.receive();
-    if (!answer)
+    // A device that is still tearing down the previous run's connection can send a
+    // stale frame first, so non-version frames are skipped.
+    Result<Frame> answer = tl::unexpected(protocol_error("the device did not answer the version request"));
+    for (int attempt = 0; attempt < 10; ++attempt)
     {
-        return tl::unexpected(answer.error());
+        answer = connection.session_.receive();
+        if (!answer)
+        {
+            return tl::unexpected(answer.error());
+        }
+        if (answer->header.protocol == static_cast<std::uint32_t>(protocol::MuxProtocol::Version))
+        {
+            break;
+        }
     }
     if (answer->header.protocol != static_cast<std::uint32_t>(protocol::MuxProtocol::Version) ||
         answer->payload.size() < protocol::VersionHeader::kSize)
@@ -137,6 +150,11 @@ Result<Connection> Connection::open(Transport &transport)
         return tl::unexpected(protocol_error("the device reported an unknown mux version"));
     }
 
+    if (std::getenv("IOSCPP_TRACE") != nullptr)
+    {
+        std::fprintf(stderr, "[version] device major=%u minor=%u\n", device_version.major, device_version.minor);
+    }
+
     connection.session_.set_version(device_version.major);
     if (device_version.major >= 2)
     {
@@ -147,6 +165,9 @@ Result<Connection> Connection::open(Transport &transport)
         {
             return tl::unexpected(status.error());
         }
+        // The device brings up the userspace session asynchronously, so a short
+        // pause before the first connection keeps the first frame from racing it.
+        std::this_thread::sleep_for(std::chrono::milliseconds(300));
     }
 
     connection.negotiated_ = true;

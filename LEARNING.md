@@ -26,9 +26,9 @@ Read: [`include/ioscpp/transport.hpp`](include/ioscpp/transport.hpp),
 ## Module 2: Framing
 
 A byte channel has no message boundaries, so a layer above it frames them. The mux
-header is a 16-byte big-endian record with a magic that makes a desynchronized stream
-detectable. `Session` writes a header and its payload as two writes, and validates the
-header before reading the payload.
+header is a 16-byte big-endian record with a magic; `Session` writes the header and its
+payload as one write, and reads the header before the payload. The magic is read but not
+checked, matching `usbmuxd`, because the device's own v2 value differs.
 
 Read: [`include/ioscpp/protocol/usbmux.hpp`](include/ioscpp/protocol/usbmux.hpp),
 [`include/ioscpp/session.hpp`](include/ioscpp/session.hpp).
