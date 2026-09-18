@@ -11,6 +11,7 @@ add_executable(ioscpp_tests
   afc_test.cpp
   plist_test.cpp
   session_test.cpp
+  stream_test.cpp
   usbmux_test.cpp
 )
 target_link_libraries(ioscpp_tests
