@@ -75,13 +75,14 @@ struct Listener
 
         sockaddr_in address{};
         address.sin_family = AF_INET;
-        address.sin_addr.s_addr = ::htonl(INADDR_LOOPBACK);
+        // `htonl` and `ntohs` are macros on Darwin, so no `::` qualifier.
+        address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
         address.sin_port = 0;
         REQUIRE(::bind(socket, reinterpret_cast<const sockaddr *>(&address), sizeof(address)) == 0);
 
         auto length = static_cast<socklen_t>(sizeof(address));
         REQUIRE(::getsockname(socket, reinterpret_cast<sockaddr *>(&address), &length) == 0);
-        port = ::ntohs(address.sin_port);
+        port = ntohs(address.sin_port);
 
         REQUIRE(::listen(socket, 1) == 0);
     }
