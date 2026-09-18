@@ -126,6 +126,7 @@ cmake/                  CMake package configuration
 
 ## References
 
+- [libimobiledevice.org](https://libimobiledevice.org/) — the project home, its API docs, and the device/firmware status list
 - [usbmuxd](https://github.com/libimobiledevice/usbmuxd) — the mux protocol over USB
 - [libimobiledevice](https://github.com/libimobiledevice/libimobiledevice) — `lockdownd`, `AFC`, and the service clients
 - [go-ios](https://github.com/danielpaulus/go-ios) — a working, tested implementation of the protocols in Go

@@ -2,6 +2,18 @@
 
 The following external resources serve as references for understanding the iOS device protocols and their implementation. They are essential for building a client that talks to a device directly, without `usbmuxd` or `libimobiledevice`.
 
+## The libimobiledevice project
+
+### libimobiledevice.org
+
+- **URL**: https://libimobiledevice.org/
+- **What it is**: The home of the whole libimobiledevice stack (`libplist`, `libusbmuxd`, `usbmuxd`, `libimobiledevice`, `ifuse`, and the `idevice*` tools), with the API documentation, the device and firmware status list, and the build instructions for every platform.
+- **Why it matters**:
+  - Its [status page](https://libimobiledevice.org/status/) is the map of what each library and service supports, across firmware versions, which is what the roadmap is drawn from.
+  - Its API documentation is the reference for the service names, the pairing record fields, and the error codes the device returns.
+  - Its build instructions document the same third-party dependencies this library weighed (libusb, OpenSSL, libplist), which is why libusb and mbedTLS are the only ones here.
+  - Its tools (`idevice_id`, `ideviceinfo`, `idevicepair`) are the behavior this library is compared against on a device, since they talk through `usbmuxd` while this library does not.
+
 ## The Mux Protocol
 
 The device exposes a vendor-specific USB interface that multiplexes TCP-like connections. Apple never documented it, but `usbmuxd` implements the host side and its source is the de facto specification.
