@@ -71,6 +71,18 @@ public:
     /// The timeout applied to each `recv` and `send`, in milliseconds.
     unsigned int transfer_timeout() const noexcept;
 
+    /**
+     * @brief Sets the total a read or write waits across retries, in milliseconds.
+     *
+     * A single `recv` or `send` may time out having moved nothing, which is
+     * retried while the budget lasts, so a normal operation fails fast while a
+     * pairing exchange waits for the trust prompt.
+     */
+    void set_transfer_budget(unsigned int milliseconds) noexcept;
+
+    /// The total a read or write waits across retries, in milliseconds.
+    unsigned int transfer_budget() const noexcept;
+
     Result<std::size_t> read(std::span<std::byte> buffer) override;
     Status write(std::span<const std::byte> data) override;
     void close() override;
