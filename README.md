@@ -128,6 +128,7 @@ cmake/                  CMake package configuration
 
 - [usbmuxd](https://github.com/libimobiledevice/usbmuxd) — the mux protocol over USB
 - [libimobiledevice](https://github.com/libimobiledevice/libimobiledevice) — `lockdownd`, `AFC`, and the service clients
+- [go-ios](https://github.com/danielpaulus/go-ios) — a working, tested implementation of the protocols in Go
 - [pymobiledevice3](https://github.com/doronz88/pymobiledevice3) — the protocols, in readable Python
 
 ## License
