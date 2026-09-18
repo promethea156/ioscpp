@@ -65,5 +65,7 @@ vcpkg_installed/
 *.dwo
 
 # test output & cache
-Testing/
+# `/Testing/` is anchored to the root so it does not also ignore the
+# `include/ioscpp/testing/` headers on a case-insensitive filesystem.
+/Testing/
 .cache/

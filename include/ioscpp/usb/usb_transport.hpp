@@ -97,6 +97,19 @@ public:
     /// The timeout applied to each bulk transfer, in milliseconds.
     unsigned int transfer_timeout() const noexcept;
 
+    /**
+     * @brief Sets the total a read waits across retries before it gives up, in
+     * milliseconds.
+     *
+     * A single transfer may time out having moved nothing, which is retried while
+     * the budget lasts, so pairing can wait for the trust prompt while a normal
+     * operation fails fast.
+     */
+    void set_transfer_budget(unsigned int milliseconds) noexcept;
+
+    /// The total a read waits across retries before it gives up, in milliseconds.
+    unsigned int transfer_budget() const noexcept;
+
     Result<std::size_t> read(std::span<std::byte> buffer) override;
     Status write(std::span<const std::byte> data) override;
     void close() override;

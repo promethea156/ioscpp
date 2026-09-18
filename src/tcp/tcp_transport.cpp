@@ -15,6 +15,7 @@
 #else
 #    include <fcntl.h>
 #    include <netdb.h>
+#    include <netinet/tcp.h>
 #    include <sys/select.h>
 #    include <sys/socket.h>
 #    include <sys/time.h>
@@ -126,7 +127,11 @@ bool connect_with_timeout(socket_t socket, const sockaddr *address, int address_
         fd_set writable;
         FD_ZERO(&writable);
         FD_SET(socket, &writable);
-        timeval timeout{static_cast<long>(timeout_ms / 1000), static_cast<long>((timeout_ms % 1000) * 1000)};
+        // The `timeval` member types differ by platform, so the fields are
+        // assigned rather than brace-initialized to avoid a narrowing error.
+        timeval timeout{};
+        timeout.tv_sec = static_cast<decltype(timeout.tv_sec)>(timeout_ms / 1000);
+        timeout.tv_usec = static_cast<decltype(timeout.tv_usec)>((timeout_ms % 1000) * 1000);
         if (::select(static_cast<int>(socket) + 1, nullptr, &writable, nullptr, &timeout) <= 0)
         {
             return false;
@@ -153,7 +158,9 @@ void set_timeout(socket_t socket, int option, unsigned int timeout_ms)
     const DWORD timeout = timeout_ms;
     (void)::setsockopt(socket, SOL_SOCKET, option, reinterpret_cast<const char *>(&timeout), sizeof(timeout));
 #else
-    const timeval timeout{static_cast<long>(timeout_ms / 1000), static_cast<long>((timeout_ms % 1000) * 1000)};
+    timeval timeout{};
+    timeout.tv_sec = static_cast<decltype(timeout.tv_sec)>(timeout_ms / 1000);
+    timeout.tv_usec = static_cast<decltype(timeout.tv_usec)>((timeout_ms % 1000) * 1000);
     (void)::setsockopt(socket, SOL_SOCKET, option, &timeout, sizeof(timeout));
 #endif
 }
@@ -166,6 +173,7 @@ struct TcpTransport::Impl
     std::string endpoint;
     unsigned int transfer_timeout_ms = TcpTransport::kDefaultTransferTimeoutMs;
     unsigned int connect_timeout_ms = TcpTransport::kDefaultConnectTimeoutMs;
+    unsigned int transfer_budget_ms = TcpTransport::kDefaultTransferBudgetMs;
 
     ~Impl()
     {
@@ -189,7 +197,6 @@ TcpTransport::~TcpTransport() = default;
 Result<TcpTransport> TcpTransport::open(std::string_view endpoint, unsigned int connect_timeout_ms,
                                         unsigned int transfer_timeout_ms, unsigned int transfer_budget_ms)
 {
-    (void)transfer_budget_ms;
     if (Status ready = ensure_sockets(); !ready)
     {
         return tl::unexpected(ready.error());
@@ -232,6 +239,7 @@ Result<TcpTransport> TcpTransport::open(std::string_view endpoint, unsigned int 
     transport.impl_->endpoint = std::string(endpoint);
     transport.impl_->transfer_timeout_ms = transfer_timeout_ms;
     transport.impl_->connect_timeout_ms = connect_timeout_ms;
+    transport.impl_->transfer_budget_ms = transfer_budget_ms;
 
     for (addrinfo *address = addresses; address != nullptr; address = address->ai_next)
     {
@@ -281,6 +289,16 @@ unsigned int TcpTransport::transfer_timeout() const noexcept
     return impl_->transfer_timeout_ms;
 }
 
+void TcpTransport::set_transfer_budget(unsigned int milliseconds) noexcept
+{
+    impl_->transfer_budget_ms = milliseconds;
+}
+
+unsigned int TcpTransport::transfer_budget() const noexcept
+{
+    return impl_->transfer_budget_ms;
+}
+
 Result<std::size_t> TcpTransport::read(std::span<std::byte> buffer)
 {
     if (buffer.empty())
@@ -289,8 +307,9 @@ Result<std::size_t> TcpTransport::read(std::span<std::byte> buffer)
     }
 
     // A `recv` returns as soon as any bytes arrive, which may be fewer than
-    // `buffer.size()`. The session reads on until it has a whole frame.
-    const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(impl_->transfer_timeout_ms);
+    // `buffer.size()`. The session reads on until it has a whole frame. A timeout
+    // that moved nothing is retried while the budget lasts.
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(impl_->transfer_budget_ms);
     while (true)
     {
         const int received =
@@ -313,7 +332,7 @@ Result<std::size_t> TcpTransport::read(std::span<std::byte> buffer)
 Status TcpTransport::write(std::span<const std::byte> data)
 {
     std::size_t total = 0;
-    const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(impl_->transfer_timeout_ms);
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(impl_->transfer_budget_ms);
     while (total < data.size())
     {
         const int sent = ::send(impl_->socket, reinterpret_cast<const char *>(data.data()) + total,
@@ -351,7 +370,8 @@ std::string_view TcpTransport::serial() const noexcept
 
 Result<std::unique_ptr<Transport>> TcpTransport::reopen() const
 {
-    auto transport = TcpTransport::open(impl_->endpoint, impl_->connect_timeout_ms, impl_->transfer_timeout_ms);
+    auto transport = TcpTransport::open(impl_->endpoint, impl_->connect_timeout_ms, impl_->transfer_timeout_ms,
+                                        impl_->transfer_budget_ms);
     if (!transport)
     {
         return tl::unexpected(transport.error());

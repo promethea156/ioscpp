@@ -280,6 +280,7 @@ struct UsbTransport::Impl
     std::size_t incoming_offset = 0;
     std::string serial;
     unsigned int transfer_timeout_ms = kDefaultTransferTimeoutMs;
+    unsigned int transfer_budget_ms = kDefaultTransferBudgetMs;
 
     // Runs one bulk transfer, retrying while it times out having moved nothing.
     //
@@ -289,7 +290,7 @@ struct UsbTransport::Impl
     // repeated until the budget runs out.
     int bulk_transfer(unsigned char endpoint, unsigned char *data, int length, int *transferred)
     {
-        const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(kDefaultTransferBudgetMs);
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(transfer_budget_ms);
         while (true)
         {
             const int rc = libusb_bulk_transfer(handle, endpoint, data, length, transferred, transfer_timeout_ms);
@@ -331,9 +332,9 @@ UsbTransport &UsbTransport::operator=(UsbTransport &&) noexcept = default;
 
 Result<UsbTransport> UsbTransport::open(DeviceId id, unsigned int transfer_timeout_ms, unsigned int transfer_budget_ms)
 {
-    (void)transfer_budget_ms;
     UsbTransport transport;
     transport.impl_->transfer_timeout_ms = transfer_timeout_ms;
+    transport.impl_->transfer_budget_ms = transfer_budget_ms;
 
     int rc = libusb_init(&transport.impl_->context);
     if (rc != 0)
@@ -414,6 +415,16 @@ void UsbTransport::set_transfer_timeout(unsigned int milliseconds) noexcept
 unsigned int UsbTransport::transfer_timeout() const noexcept
 {
     return impl_->transfer_timeout_ms;
+}
+
+void UsbTransport::set_transfer_budget(unsigned int milliseconds) noexcept
+{
+    impl_->transfer_budget_ms = milliseconds;
+}
+
+unsigned int UsbTransport::transfer_budget() const noexcept
+{
+    return impl_->transfer_budget_ms;
 }
 
 Result<std::size_t> UsbTransport::read(std::span<std::byte> buffer)

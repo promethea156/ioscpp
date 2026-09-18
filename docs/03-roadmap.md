@@ -10,15 +10,14 @@ protocol assumptions explicit while they are still small enough to get right.
 
 ## Status
 
-The repository is a **scaffold**: the whole project layout, the public headers, the error
-model, and the device-free test suite exist, and the library builds. The slices below are the
-work that turns the scaffold into a working client.
+Slices 0 to 3 are done and covered by the device-free tests. Slice 4 onward are written but
+not yet validated on a device, so their checkboxes stay open until a real device passes them.
 
 - [x] Slice 0: the project layout, the `Result<T>` error model, the `Transport` interface,
   the mock transport, and the build.
-- [ ] Slice 1: the plist codec.
-- [ ] Slice 2: the mux frame codec and session.
-- [ ] Slice 3: the mux version negotiation and port connect.
+- [x] Slice 1: the plist codec.
+- [x] Slice 2: the mux frame codec and session.
+- [x] Slice 3: the mux version negotiation and port connect.
 - [ ] Slice 4: the USB transport.
 - [ ] Slice 5: pairing and `lockdownd`.
 - [ ] Slice 6: `AFC` file listing and transfer.
@@ -67,7 +66,7 @@ frame is an `ErrorCode::Protocol` error.
 - `Stream`, which carries data over a connected port and acknowledges each frame.
 
 **Done when:** the mock device completes a negotiation and a connect, and a refused port is an
-`ErrorCode::Protocol` error with the device's reason.
+`ErrorCode::Device` error. Both are in `tests/stream_test.cpp`.
 
 ## Slice 4: The USB transport
 
