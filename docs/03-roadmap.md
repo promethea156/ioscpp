@@ -52,9 +52,11 @@ return an `ErrorCode::Protocol` instead of crashing.
 
 - `protocol::MuxHeader` and `protocol::TcpHeader`, with encode and decode, big-endian, and
   the `0xfeedface` magic.
-- `Session`, which reads and writes a complete frame over a `Transport` and validates the
-  header before reading its payload.
-- Tests over `MockTransport` for a short read, a bad magic, and a length that does not match.
+- `Session`, which reads and writes a complete frame over a `Transport`, tracks the mux
+  sequence numbers, and reads the header before its payload. The magic is read but not checked,
+  matching `usbmuxd`, because the device's own v2 value differs.
+- Tests over `MockTransport` for a short read, a length that does not match, and the v1 and v2
+  header sizes.
 
 **Done when:** a hand-written frame decodes to the same fields it encoded, and a truncated
 frame is an `ErrorCode::Protocol` error.
@@ -70,8 +72,8 @@ frame is an `ErrorCode::Protocol` error.
 
 ## Slice 4: The USB transport
 
-- `usb::UsbTransport`, backed by libusb, claiming the vendor-specific interface
-  (class `0xff`, subclass `0xfe`, protocol `0x02`).
+- `usb::UsbTransport`, backed by libusb, selecting the configuration that carries the
+  vendor-specific interface (class `0xff`, subclass `0xfe`, protocol `0x02`) and claiming it.
 - `usb::DeviceId` and `usb::list`, so a device is chosen by its USB serial.
 - A device integration test that skips itself when no device is attached.
 

@@ -45,9 +45,10 @@ public:
 
     /// Reads exactly one frame.
     ///
-    /// The header is validated before its payload is read: the magic must match on a
-    /// version-2 device, and `length` must cover the header and not exceed the
-    /// protocol's maximum. Any of these means the byte stream is desynchronized.
+    /// `length` must cover the header and not exceed the protocol's maximum, or
+    /// the byte stream is desynchronized. The v2 magic is read but not checked,
+    /// matching `usbmuxd`, because the device's own value differs from the
+    /// host's.
     Result<Frame> receive();
 
     /// The negotiated mux version: 0 before the handshake, then 1 or 2.

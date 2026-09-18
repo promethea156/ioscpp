@@ -26,8 +26,9 @@ exchange mux frames, with `usbmuxd` stopped and no daemon or socket in between.
 claim on the same interface. go-ios and pymobiledevice3 do it without `usbmuxd`
 (`02-references.md`).
 
-**Status.** `UsbTransport::open` claims the interface (`src/usb/usb_transport.cpp:393`), but no
-run has confirmed a frame round-trips on hardware. `AGENTS.md` documents that `usbmuxd` holds
+**Status.** `UsbTransport::open` claims the interface (`src/usb/usb_transport.cpp:462`), selects the
+configuration that carries it first, and the mux handshake runs to the first `lockdownd`
+request, but no device reply has been seen yet. `AGENTS.md` documents that `usbmuxd` holds
 the device, which is consistent with one owner.
 
 **Proof.** Run `ioscpp_usb_example` with `usbmuxd` stopped and see a device answer the mux
@@ -36,15 +37,19 @@ version request.
 ### The mux interface is present and stable
 
 **Assumption.** Every supported device and iOS version exposes the interface with class `0xff`,
-subclass `0xfe`, protocol `0x02`, and two bulk endpoints, and it is not necessarily interface 0.
+subclass `0xfe`, protocol `0x02`, and two bulk endpoints, and it is not necessarily interface 0
+or in the configuration the device starts in.
 
 **Why we believe it.** `usbmuxd`'s `src/usb.h` fixes that triple, and
-`docs/04-blockers.md` records the "not the first interface" trap.
+`docs/04-blockers.md` records the "not the first interface" trap. A device in its initial mode
+carries the interface only in a later configuration, so `usbmuxd` selects it.
 
-**Status.** `find_mux_interface` walks the descriptors for the triple
-(`src/usb/usb_transport.cpp:119`), but only on one device would that be shown correct.
+**Status.** `find_mux_interface` walks every configuration for the triple and `open` selects the
+one that carries it before claiming the interface (`src/usb/usb_transport.cpp`). A run reached the
+`lockdownd` request, so the interface is found and claimed, but the device has not answered yet.
 
-**Proof.** A device whose mux interface is not index 0 still connects.
+**Proof.** A device whose mux interface is not index 0, and not in the active configuration,
+still connects and answers.
 
 ### libusb behaves the same on all three platforms
 
@@ -52,7 +57,7 @@ subclass `0xfe`, protocol `0x02`, and two bulk endpoints, and it is not necessar
 serial descriptor work on Windows (WinUSB), macOS, and Linux alike.
 
 **Why we believe it.** libusb is the documented cross-platform path, and the code has a Linux
-detach (`src/usb/usb_transport.cpp:387`).
+detach (`src/usb/usb_transport.cpp:441`).
 
 **Status.** Only compiled, not run, on any platform.
 
@@ -64,7 +69,7 @@ detach (`src/usb/usb_transport.cpp:387`).
 stalled, and the transport must loop or buffer rather than treat it as end of stream.
 
 **Why we believe it.** `docs/04-blockers.md` records this as a known trap, and `read` buffers a
-partial transfer for later reads (`src/usb/usb_transport.cpp:436`).
+partial transfer for later reads (`src/usb/usb_transport.cpp:505`).
 
 **Proof.** A large transfer over the real link reassembles without a desync.
 

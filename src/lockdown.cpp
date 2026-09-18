@@ -104,6 +104,14 @@ Stream &Lockdown::stream() noexcept
 
 Result<protocol::Plist> Lockdown::request(protocol::Plist request)
 {
+    if (const protocol::Plist::Dictionary *dict = request.dictionary();
+        dict != nullptr && dict->find("Label") == dict->end())
+    {
+        protocol::Plist::Dictionary labeled = *dict;
+        labeled.emplace("Label", protocol::Plist("ioscpp"));
+        request = protocol::Plist::dictionary(std::move(labeled));
+    }
+
     const std::string body = request.to_xml();
 
     std::vector<std::byte> message(4 + body.size());

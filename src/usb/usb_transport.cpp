@@ -105,34 +105,23 @@ libusb_device *find_device(libusb_device **devices, ssize_t count, DeviceId id)
     return nullptr;
 }
 
-// The mux interface and the bulk endpoints it exposes.
+// The mux interface, the configuration that carries it, and its bulk endpoints.
 struct MuxInterface
 {
+    int config_value = -1;
     int number = -1;
     std::uint8_t endpoint_in = 0;
     std::uint8_t endpoint_out = 0;
 };
 
-// Locates the mux interface (class 0xFF, subclass 0xFE, protocol 0x02) and its
-// bulk endpoints. An empty optional means the device has no mux interface, and an
-// error means the descriptors could not be read at all.
-Result<std::optional<MuxInterface>> find_mux_interface(libusb_device *device)
+// Locates the mux interface (class 0xFF, subclass 0xFE, protocol 0x02) within one
+// configuration. An empty optional means this configuration does not carry it.
+std::optional<MuxInterface> find_mux_in_config(const libusb_config_descriptor &config)
 {
-    libusb_config_descriptor *config = nullptr;
-    int rc = libusb_get_active_config_descriptor(device, &config);
-    if (rc != 0)
-    {
-        rc = libusb_get_config_descriptor(device, 0, &config);
-    }
-    if (rc != 0)
-    {
-        return tl::unexpected(fail("libusb_get_config_descriptor", rc));
-    }
-
     MuxInterface found;
-    for (std::uint8_t i = 0; i < config->bNumInterfaces && found.number < 0; ++i)
+    for (std::uint8_t i = 0; i < config.bNumInterfaces && found.number < 0; ++i)
     {
-        const libusb_interface &interface = config->interface[i];
+        const libusb_interface &interface = config.interface[i];
         for (int j = 0; j < interface.num_altsetting; ++j)
         {
             const libusb_interface_descriptor &altsetting = interface.altsetting[j];
@@ -142,6 +131,7 @@ Result<std::optional<MuxInterface>> find_mux_interface(libusb_device *device)
             {
                 continue;
             }
+            found.config_value = config.bConfigurationValue;
             found.number = altsetting.bInterfaceNumber;
             for (std::uint8_t k = 0; k < altsetting.bNumEndpoints; ++k)
             {
@@ -162,13 +152,55 @@ Result<std::optional<MuxInterface>> find_mux_interface(libusb_device *device)
             break;
         }
     }
-    libusb_free_config_descriptor(config);
 
     if (found.number < 0 || found.endpoint_in == 0 || found.endpoint_out == 0)
     {
         return std::optional<MuxInterface>{};
     }
     return found;
+}
+
+// Locates the mux interface across every configuration, preferring the active
+// one so an already-correct device is left alone. An iOS device in its initial USB
+// mode carries the mux interface only in a later configuration, which the host has
+// to select before it can claim the interface. An empty optional means no
+// configuration carries it, and an error means the descriptors could not be read.
+Result<std::optional<MuxInterface>> find_mux_interface(libusb_device *device)
+{
+    libusb_config_descriptor *active = nullptr;
+    if (libusb_get_active_config_descriptor(device, &active) == 0)
+    {
+        const std::optional<MuxInterface> found = find_mux_in_config(*active);
+        libusb_free_config_descriptor(active);
+        if (found)
+        {
+            return found;
+        }
+    }
+
+    libusb_device_descriptor descriptor{};
+    const int rc = libusb_get_device_descriptor(device, &descriptor);
+    if (rc != 0)
+    {
+        return tl::unexpected(fail("libusb_get_device_descriptor", rc));
+    }
+
+    // The mux-capable configurations are the later ones, so search backwards.
+    for (int i = descriptor.bNumConfigurations - 1; i >= 0; --i)
+    {
+        libusb_config_descriptor *config = nullptr;
+        if (libusb_get_config_descriptor(device, static_cast<std::uint8_t>(i), &config) != 0)
+        {
+            continue;
+        }
+        const std::optional<MuxInterface> found = find_mux_in_config(*config);
+        libusb_free_config_descriptor(config);
+        if (found)
+        {
+            return found;
+        }
+    }
+    return std::optional<MuxInterface>{};
 }
 
 } // namespace
@@ -273,6 +305,7 @@ struct UsbTransport::Impl
     libusb_context *context = nullptr;
     libusb_device_handle *handle = nullptr;
     int interface_number = -1;
+    int config_value = -1;
     std::uint8_t endpoint_in = 0;
     std::uint8_t endpoint_out = 0;
     bool claimed = false;
@@ -368,6 +401,7 @@ Result<UsbTransport> UsbTransport::open(DeviceId id, unsigned int transfer_timeo
         return tl::unexpected(Error{ErrorCode::Transport, "the device has no mux USB interface"});
     }
     transport.impl_->interface_number = (*mux)->number;
+    transport.impl_->config_value = (*mux)->config_value;
     transport.impl_->endpoint_in = (*mux)->endpoint_in;
     transport.impl_->endpoint_out = (*mux)->endpoint_out;
 
@@ -378,11 +412,46 @@ Result<UsbTransport> UsbTransport::open(DeviceId id, unsigned int transfer_timeo
     }
 
     rc = libusb_open(match, &transport.impl_->handle);
-    libusb_free_device_list(devices, 1);
     if (rc != 0)
     {
+        libusb_free_device_list(devices, 1);
         return tl::unexpected(fail("libusb_open", rc));
     }
+
+    // A device in its initial USB mode sits in a configuration without the mux
+    // interface, so the configuration that carries it has to be selected before
+    // the interface can be claimed. This is how `usbmuxd` reaches the device.
+    int current_config = 0;
+    const bool needs_config = libusb_get_configuration(transport.impl_->handle, &current_config) != 0 ||
+                              current_config != transport.impl_->config_value;
+    if (needs_config)
+    {
+#if defined(__linux__)
+        // Changing configuration fails while a kernel driver holds an interface
+        // of the target configuration, so detach each one first.
+        libusb_config_descriptor *config = nullptr;
+        if (libusb_get_config_descriptor_by_value(match, static_cast<std::uint8_t>(transport.impl_->config_value),
+                                                  &config) == 0)
+        {
+            for (std::uint8_t i = 0; i < config->bNumInterfaces; ++i)
+            {
+                const int number = config->interface[i].altsetting[0].bInterfaceNumber;
+                if (libusb_kernel_driver_active(transport.impl_->handle, number) == 1)
+                {
+                    libusb_detach_kernel_driver(transport.impl_->handle, number);
+                }
+            }
+            libusb_free_config_descriptor(config);
+        }
+#endif
+        rc = libusb_set_configuration(transport.impl_->handle, transport.impl_->config_value);
+        if (rc != 0)
+        {
+            libusb_free_device_list(devices, 1);
+            return tl::unexpected(fail("libusb_set_configuration", rc));
+        }
+    }
+    libusb_free_device_list(devices, 1);
 
 #if defined(__linux__)
     libusb_set_auto_detach_kernel_driver(transport.impl_->handle, 1);

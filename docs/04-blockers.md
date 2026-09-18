@@ -7,7 +7,80 @@ The list is empty in the scaffold and fills in as the slices in
 [`03-roadmap.md`](03-roadmap.md) are implemented. The entries below are the ones already known
 from the reference implementations and are expected to be hit.
 
+## Hit blockers
+
+### The device starts in a configuration without the mux interface
+
+**Symptom.** With an iPhone attached and its USB ids present in Device Manager,
+`ioscpp_usb_example` printed `no device attached`. libusb enumerated the
+composite device but its active configuration (value 1) held only the PTP
+interface (class `0x06`, subclass `0x01`, protocol `0x01`). The mux interface
+(`0xff`/`0xfe`/`0x02`) exists only in configurations 3 and 4, and `list` read
+the active configuration alone, so it found no mux and skipped the device.
+
+**Cause.** A device in its initial USB mode does not sit in the configuration that
+carries the mux interface; a host has to select it. `usbmuxd` does this in
+`set_valid_configuration` (`src/usb.c`): it walks the configurations, finds the
+one with the mux interface, detaches the kernel drivers on Linux, and calls
+`libusb_set_configuration`. The library never selected a configuration.
+
+**Fix.** `find_mux_interface` searches every configuration and prefers the active
+one, and `open` calls `libusb_set_configuration` when the active configuration
+differs, detaching kernel drivers on Linux first
+(`src/usb/usb_transport.cpp`). A device that is already in the right
+configuration is left alone.
+
+### A v2 data frame is `ACK` alone, not `PSH|ACK`
+
+**Symptom.** With the configuration selected and the mux handshake done, the
+device answered the first lockdownd request with an immediate RST whose payload read
+`handleMuxTCPInput th.th_flags = 0x18, not TH_ACK(0x10)`.
+
+**Cause.** `usbmuxd`'s `send_tcp` always sets `th_flags = TH_ACK` for a data
+frame; the `PSH` bit is never set. The device's `handleMuxTCPInput` resets a
+connection whose data frame carries any other flag. `Stream::write` sent `PSH|ACK`.
+
+**Fix.** `Stream::write` sets `TcpAck` alone (`src/stream.cpp`).
+
+### The v2 mux sequence numbers must advance for every frame
+
+**Symptom.** The device answered the version request and the setup, then reset the
+connection with a control frame reading `detected duplicate packet. Expected N
+received N-1`. The setup, SYN, and data frames all carried the same mux `tx_seq`.
+
+**Cause.** `usbmuxd`'s `send_packet` increments `dev->tx_seq` for every v2 frame,
+including the setup, the SYN, and the ACK. The library's `Session::send` did not
+advance `tx_seq_` across the setup and the SYN, so the device saw a repeat.
+
+**Fix.** `Session::send` assigns `header.tx_seq = tx_seq_++` for every frame, so the
+setup, the SYN, and the data carry consecutive numbers (`src/session.cpp`).
+
+### The v2 magic is the device's own, so it is not validated
+
+**Symptom.** The device's v2 frames carried `magic = 0xfaceface`, while the host
+sent `0xfeedface`. A strict receive check would reject every device frame.
+
+**Cause.** `usbmuxd` sets the host's magic but never checks the device's. The
+device uses a different value of its own.
+
+**Fix.** `Session::receive` reads the magic but does not compare it, matching
+`usbmuxd` (`src/session.cpp`).
+
+### The device's userspace session answers late
+
+**Symptom.** After the mux handshake, the first lockdownd request is acknowledged
+and then the device resets the connection after roughly 60 to 150 seconds with
+`sessionUpcall connection closed`. No lockdownd reply arrives.
+
+**Cause.** The device's kernel mux delivers the data to a userspace session
+(`sessionUpcall`); when that session is not answered, the connection is closed after
+a long timeout. This is the state the device is in on this host, and it is still
+open.
+
 ## Expected blockers
+
+The entries here are the ones already known from the reference implementations. Some have
+since been hit and are recorded under *Hit blockers* above; the rest are still expected.
 
 ### The device interface is not the first one
 

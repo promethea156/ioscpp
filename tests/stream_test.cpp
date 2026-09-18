@@ -93,7 +93,7 @@ TEST_CASE("a refused port is a device error", "[stream]")
     CHECK(stream.error().code == ErrorCode::Device);
 }
 
-TEST_CASE("a stream write sends a PSH|ACK frame", "[stream]")
+TEST_CASE("a stream write sends an ACK frame", "[stream]")
 {
     testing::MockTransport transport;
     auto connection = open_connection(transport);
@@ -114,6 +114,7 @@ TEST_CASE("a stream write sends a PSH|ACK frame", "[stream]")
         std::span<const std::byte, kTcpHeaderSize>(written.data() + before + kMuxHeaderSizeV1, kTcpHeaderSize));
     CHECK(tcp.source_port == local_port);
     CHECK(tcp.destination_port == port);
-    CHECK(tcp.flags == (TcpPsh | TcpAck));
+    // `usbmuxd` marks a data frame `ACK` alone; the device resets any other flag.
+    CHECK(tcp.flags == TcpAck);
     CHECK(written.back() == data.back());
 }

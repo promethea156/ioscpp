@@ -2,12 +2,13 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
-#include <cstdio>
 #include <memory>
 #include <span>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "ioscpp/protocol/plist.hpp"
@@ -147,6 +148,9 @@ Result<Connection> Connection::open(Transport &transport)
         {
             return tl::unexpected(status.error());
         }
+        // The device brings up the userspace session asynchronously, so a short
+        // pause before the first connection keeps the first frame from racing it.
+        std::this_thread::sleep_for(std::chrono::milliseconds(300));
     }
 
     connection.negotiated_ = true;

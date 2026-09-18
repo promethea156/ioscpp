@@ -4,7 +4,6 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
-#include <cstdio>
 #include <span>
 #include <string>
 #include <utility>
@@ -27,6 +26,10 @@ Error protocol_error(std::string message)
 
 /// The largest payload one mux frame carries, matching `usbmuxd`'s `USB_MTU`.
 constexpr std::size_t kMaxPayload = 3 * 16384 - protocol::kMuxHeaderSize - protocol::kTcpHeaderSize;
+
+/// The advertised receive window, matching `usbmuxd`'s `tx_win` (`131072`). The
+/// header carries the high 16 bits, so the value on the wire is `tx_win >> 8`.
+constexpr std::uint16_t kTcpWindow = 131072 >> 8;
 
 void put_le16(std::span<std::byte> bytes, std::size_t offset, std::uint16_t value) noexcept
 {
@@ -142,7 +145,7 @@ Result<Stream> Stream::open(std::shared_ptr<Connection> connection, std::uint16_
     syn.sequence = 0;
     syn.acknowledgement = 0;
     syn.flags = protocol::TcpSyn;
-    syn.window = 131072 >> 8;
+    syn.window = kTcpWindow;
     if (Status status = connection->send_tcp(syn); !status)
     {
         return tl::unexpected(status.error());
@@ -187,6 +190,7 @@ Result<Stream> Stream::open(std::shared_ptr<Connection> connection, std::uint16_
         ack.sequence = stream.tx_seq_;
         ack.acknowledgement = stream.tx_ack_;
         ack.flags = protocol::TcpAck;
+        ack.window = kTcpWindow;
         if (Status status = connection->send_tcp(ack); !status)
         {
             return tl::unexpected(status.error());
@@ -258,6 +262,7 @@ void Stream::close_now() noexcept
     rst.sequence = tx_seq_;
     rst.acknowledgement = tx_ack_;
     rst.flags = protocol::TcpRst;
+    rst.window = kTcpWindow;
     (void)connection_->send_tcp(rst);
 }
 
@@ -277,7 +282,10 @@ Status Stream::write(std::span<const std::byte> data)
         header.destination_port = remote_port_;
         header.sequence = tx_seq_;
         header.acknowledgement = tx_ack_;
-        header.flags = protocol::TcpPsh | protocol::TcpAck;
+        // `usbmuxd` marks every data frame `ACK` alone; the device resets a
+        // connection whose data frame carries any other flag.
+        header.flags = protocol::TcpAck;
+        header.window = kTcpWindow;
         if (Status status = connection_->send_tcp(header, data.subspan(offset, chunk)); !status)
         {
             return tl::unexpected(status.error());
@@ -343,6 +351,7 @@ Result<bool> Stream::receive_more()
         ack.sequence = tx_seq_;
         ack.acknowledgement = tx_ack_;
         ack.flags = protocol::TcpAck;
+        ack.window = kTcpWindow;
         if (Status status = connection_->send_tcp(ack); !status)
         {
             return tl::unexpected(status.error());

@@ -98,18 +98,27 @@ automatically (`CMakeLists.txt`).
 ### USB driver
 
 libusb on Windows cannot open the device through Apple's `usbaapl64` driver; the mux
-interface needs a WinUSB-compatible driver bound to it. Bind one to the interface only, so the
+interface needs a libusb-compatible driver bound to it. Bind one to the interface only, so the
 rest of the device keeps Apple's driver.
 
 1. Install [Zadig](https://zadig.akeo.ie/).
 2. Put the device in the normal (unlocked) mode and plug it in.
-3. In Zadig, enable *List All Devices*, pick the Apple device's mux interface (its
-   class/subclass/protocol is `0xff`/`0xfe`/`0x02`; Zadig shows it as a composite
-   interface, not the whole device), and install **WinUSB**.
+3. In Zadig, enable *List All Devices*, pick the Apple device, and install a driver.
 4. Replug the device.
 
 Replacing the whole composite device's driver instead of one interface can make iTunes
 re-pair it; binding the single interface avoids that.
+
+**Use libusb-win32, not WinUSB.** libusb's WinUSB backend never sends
+`SET_CONFIGURATION` to the device; its libusb0 backend does. A device in its initial
+USB mode does not sit in the configuration that carries the mux interface, so a WinUSB
+driver leaves the mux interface unreachable, and `list` reports `no device attached`.
+libusb-win32 (`libusb0.sys`) is needed for `ioscpp` to select the configuration
+itself, as `usbmuxd` does. A device that is already in the right configuration, for
+example because Apple Mobile Device Support selected it, works with either.
+
+The libusb0 driver also needs `libusbK.dll` in `System32`; the libusbK setup
+provides it.
 
 ### Stop the daemon
 

@@ -3,7 +3,6 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
-#include <cstdio>
 #include <memory>
 #include <span>
 #include <string>
@@ -92,10 +91,6 @@ Result<Frame> Session::receive()
     const protocol::MuxHeader header =
         protocol::MuxHeader::decode(std::span<const std::byte>(header_bytes).first(header_size), version_);
 
-    if (version_ >= 2 && header.magic != protocol::kMuxMagic)
-    {
-        return tl::unexpected(protocol_error("the mux magic does not match"));
-    }
     if (header.length < header_size || header.length > kMaxFrameSize)
     {
         return tl::unexpected(protocol_error("the mux frame length is out of range"));
@@ -109,7 +104,7 @@ Result<Frame> Session::receive()
         return tl::unexpected(status.error());
     }
 
-    rx_seq_ = header.tx_seq;
+    rx_seq_ = header.rx_seq;
     return frame;
 }
 
