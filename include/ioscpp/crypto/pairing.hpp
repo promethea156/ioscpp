@@ -69,6 +69,12 @@ public:
     /// Sets the device's unique id, which the pairing exchange learns from the device.
     void set_udid(std::string udid);
 
+    /// The session id the device handed out with `StartSession`.
+    std::string_view session_id() const noexcept;
+
+    /// Sets the session id the device handed out with `StartSession`.
+    void set_session_id(std::string session_id);
+
     /// The system build id, a random string shared by every record on this host.
     std::string_view system_buid() const noexcept;
 
@@ -83,6 +89,9 @@ public:
 
     /// The device's DER-encoded root certificate.
     std::span<const std::byte> root_certificate() const noexcept;
+
+    /// The host's DER-encoded root private key.
+    std::span<const std::byte> root_private_key() const noexcept;
 
     /// The 20-byte AES session key derived by the pairing exchange.
     std::span<const std::byte> session_key() const noexcept;

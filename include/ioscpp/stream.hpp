@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <memory>
 #include <span>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -75,6 +76,14 @@ public:
         return remote_port_;
     }
 
+    /// The diagnostic the device sent with its reset, if it reset the port. The
+    /// device puts a human-readable reason in the RST payload, the same string
+    /// `usbmuxd` logs as `RST reason`, so it is kept for the error message.
+    std::string_view reset_reason() const noexcept
+    {
+        return reset_reason_;
+    }
+
 private:
     friend class Connection;
 
@@ -88,12 +97,18 @@ private:
     // the buffer. Returns false when the device reset the connection instead.
     Result<bool> receive_more();
 
+    // Records the diagnostic the device attached to an RST, if any, for a later
+    // error message. A payload is a NUL-terminated string that may carry a
+    // trailing newline.
+    void remember_reset_reason(std::span<const std::byte> payload);
+
     std::shared_ptr<Connection> connection_;
     std::uint16_t local_port_;
     std::uint16_t remote_port_;
     std::uint32_t tx_seq_ = 1;
     std::uint32_t tx_ack_ = 1;
     bool closed_ = false;
+    std::string reset_reason_;
 
     // The `usbmuxd` path: the stream owns its socket and speaks raw bytes.
     bool usbmuxd_ = false;

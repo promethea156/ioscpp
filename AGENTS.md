@@ -42,6 +42,8 @@ brew services stop usbmuxd
 
 The `idevice*` tools (`idevice_id`, `ideviceinfo`, `idevicepair`) talk through `usbmuxd`, so they are useful to compare against but cannot run at the same time as `ioscpp` on the same device.
 
+On Windows the same is true of Apple's stack: the *Apple Mobile Device Service* holds the device, and the mux interface is bound to Apple's driver, which libusb cannot open. Stop the service and bind a libusb-compatible driver to the mux interface alone with Zadig (`docs/09-platform-setup.md`).
+
 Per-platform build, USB access, and driver steps are in `docs/09-platform-setup.md`.
 
 ### The device asks for trust

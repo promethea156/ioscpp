@@ -65,7 +65,7 @@ public:
      * The pairing record must be complete. After this, `request` speaks TLS, which
      * `lockdownd` requires before it will start a service.
      */
-    Status start_session(const crypto::Pairing &pairing);
+    Status start_session(crypto::Pairing &pairing);
 
     /**
      * @brief Starts the service `name` and returns the port it was given.
