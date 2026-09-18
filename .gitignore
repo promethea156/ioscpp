@@ -59,6 +59,10 @@ compile_commands.json
 *.bak
 *.swp
 
+# Python bytecode
+__pycache__/
+*.pyc
+
 # vcpkg
 vcpkg_installed/
 

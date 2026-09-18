@@ -146,6 +146,11 @@ work around that.
   `USBPcap` captures below the driver, so it sees the traffic whichever driver
   owns the interface. `USBPcap` also captures an `ioscpp` run for the other side of
   the comparison.
+- **No device at all.** `tools/compare-clienthello.py ref` builds the
+  `pymobiledevice3` OpenSSL context and captures its ClientHello through
+  `ssl.MemoryBIO`, and `diff` names the differences against a file that
+  `IOSCPP_TRACE=1 IOSCPP_DUMP=<file> ioscpp_usb_example` writes. It separates a
+  stack default from a fault without a device or a second host.
 - **A `usbmuxd` of your own.** The `libimobiledevice-win32` release ships a
   `libusb`-backed `usbmuxd` and the `idevice*` tools. On Windows it needs the
   mux interface on a `libusb`-compatible driver, which is what `ioscpp` already

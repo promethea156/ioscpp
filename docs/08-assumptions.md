@@ -100,8 +100,9 @@ session key.
 **Status.** Pairing completes and the record is saved to `%USERPROFILE%\.ioscpp\<udid>`; a
 second run loads it and passes `StartSession` with `EnableSessionSSL=true`, so the
 pairing exchange and the session start are proven on a device. The TLS handshake is the
-open part: the ClientHello is now well-formed, but the device resets the connection
-after it (`docs/04-blockers.md`).
+open part: the ClientHello is now well-formed and its extension set matches a device-free
+OpenSSL reference bar stack defaults, but the device resets the connection after it
+(`docs/04-blockers.md`).
 
 **Proof.** A device that is already trusted completes the tour's query step.
 

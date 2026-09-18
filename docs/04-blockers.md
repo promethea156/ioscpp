@@ -115,6 +115,29 @@ The ClientHello record header is written from `ssl->tls_version`
 (`src/crypto/pairing.cpp`). A device-free test pins the trap and the escape in
 `tests/tls_client_hello_test.cpp`.
 
+### The generated certificates carry an empty serial number
+
+**Symptom.** OpenSSL 3.0 rejects every certificate in the pair record with
+`[SSL] PEM lib`. Python's `ssl.SSLContext.load_cert_chain` fails, and the Rust
+`cryptography` parser reports `TbsCertificate::serial` as `InvalidValue`. mbedTLS
+accepts them. The DER `tbsCertificate` holds `02 00`, an `INTEGER` with a
+zero-length value.
+
+**Cause.** `generate_certificate` sets the serial with `mbedtls_mpi_lset(&serial, 0)`,
+and mbedTLS writes a zero MPI as a zero-length `INTEGER`. RFC 5280 requires a
+positive serial, and OpenSSL 3.0 enforces it while mbedTLS does not
+(`src/crypto/pairing.cpp`).
+
+**Impact.** A tool that reads the pair record with OpenSSL, such as a
+`pymobiledevice3` comparison or `libimobiledevice`, cannot load the host
+certificate. `ioscpp` itself is unaffected because it uses mbedTLS.
+
+**Workaround.** The ClientHello comparison falls back to a freshly generated
+self-signed certificate; the client certificate does not change the ClientHello.
+
+**Fix.** Still open. Set a non-zero serial, so mbedTLS writes `02 01 01`
+(`src/crypto/pairing.cpp`).
+
 ### The device resets the TLS handshake after the ClientHello
 
 **Symptom.** With a well-formed ClientHello (record version `0x0303`, the full
@@ -127,12 +150,43 @@ and `mbedtls_ssl_handshake` returns `MBEDTLS_ERR_SSL_CONN_EOF`.
 not the client identity (the host leaf and the root both fail), not the pre-TLS delay,
 and not the verify mode. The device is on iOS 18.7.8.
 
+A device-free reference ClientHello was captured and diffed against `IOSCPP_DUMP`
+(see the entry below); the differences are named there. The ClientHello is therefore
+well formed, and the reset is either one of those differences or something after it.
+
 **State.** `TlsSession::start` presents the host leaf certificate and key (the
 `pymobiledevice3` choice) with `config_defaults`, the `libimobiledevice` auth mode
 and verify callback, no session, and no hostname. The device is still reset with
 `IOSCPP_TLS12` pinning TLS 1.2, `IOSCPP_NO_VERIFY` disabling the peer verify,
 and `IOSCPP_SESSION` echoing the `SessionID` with a valid session version and
 suite, so none of those is the cause on its own.
+
+### The ClientHello differs from the OpenSSL reference
+
+**Symptom.** A reference ClientHello, built with the exact `pymobiledevice3` context
+(`PROTOCOL_TLS_CLIENT`, min TLS 1.2, max TLS 1.3, `ALL:!aNULL:!eNULL:@SECLEVEL=0`,
+`OP_LEGACY_SERVER_CONNECT`, `CERT_NONE`, no hostname) and captured through
+`ssl.MemoryBIO`, is 517 bytes; `ioscpp`'s is 432 bytes. Both are well formed and the
+device acks both, so this is the closest named lead, not a proven cause.
+
+**Named differences.**
+
+| Item | Reference (OpenSSL) | `ioscpp` (mbedTLS) |
+| --- | --- | --- |
+| record version | `0x0301` | `0x0303` |
+| cipher suites | 75, `0x1302` first | 109, `0x1303` first |
+| `supported_groups` | no brainpool, `x25519` first | adds `0x001a`/`0x001b`/`0x001c` |
+| `signature_algorithms` | 22, includes `ed25519`, `ed448`, `rsa_pss_pss_*`, SHA1 | 9, `rsa_pss_rsae_*` and `rsa_pkcs1_*` only |
+| `ec_point_formats` | `uncompressed` + both compressed | `uncompressed` only |
+| `psk_key_exchange_modes` | `psk_dhe_ke` | `psk_dhe_ke` + `psk_ke` |
+| `padding` | 126 bytes, record padded to 512 | absent |
+| `key_share`, `supported_versions`, `session_ticket` | same | same |
+
+The reference is OpenSSL, so the differences are mostly stack defaults; the next step
+is a real capture of the reference on the wire, and a reference built with mbedTLS (the
+same library as `ioscpp` and `libimobiledevice`) to separate a stack default from a
+fault.
+
 
 ## Expected blockers
 
