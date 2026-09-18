@@ -23,6 +23,10 @@ release, and `hotfix` carries an urgent fix from `main` back to `main` and `deve
 short-lived branch is `<type>/<slug>`. See `docs/01-objective.md` for the full model. Do not
 switch the current branch or create a branch without saying so.
 
+Squash-merge a short-lived branch into its target, but merge two long-lived branches with a
+merge commit, not a squash; a squash between long-lived branches makes them diverge, so the target
+must be merged back immediately if it happens. See `docs/01-objective.md#merging`.
+
 ## Local Tooling
 
 ### `usbmuxd` and `libimobiledevice` can hold the device

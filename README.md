@@ -6,6 +6,21 @@ A small, self-contained **iOS device client, as a C++20 library**.
 
 > **Status: 0.1.0 (scaffold).** The project layout, the public headers, the `Result<T>` error model, and the device-free test suite exist and build. The protocol slices are tracked in [`docs/03-roadmap.md`](docs/03-roadmap.md). Every fallible operation returns a `Result<T>` instead of throwing.
 
+## Platform support
+
+| Platform | Status | Notes |
+|----------|--------|-------|
+| Windows  | ![Windows: tested](https://img.shields.io/badge/Windows-tested-brightgreen) | Developed and exercised here. |
+| Linux    | ![Linux: untested](https://img.shields.io/badge/Linux-untested-yellow) | Expected to work; not yet verified. |
+| macOS    | ![macOS: untested](https://img.shields.io/badge/macOS-untested-yellow) | Expected to work; not yet verified. |
+
+**`Windows` is the only platform this project has been built and run on so far.** The
+Linux and macOS instructions below are written from the toolchain and standard-library
+APIs the code targets, but no one has confirmed them on a real machine yet — expect
+rough edges. If you have either, please build it and
+[report the result](https://github.com/promethea156/ioscpp/issues/new?template=platform_verification.yml);
+a green run is just as useful as a red one, and see [Contributing](#contributing).
+
 ## What it can do
 
 - **Files**: list a directory, `stat` a path, and pull or push a file over `AFC`.
@@ -15,7 +30,9 @@ A small, self-contained **iOS device client, as a C++20 library**.
 
 ## Build it
 
-You need a **C++20 compiler**, **CMake 3.24 or newer**, and **Git** (the test framework and the dependencies are fetched automatically at configure time). The build is the same everywhere; only the toolchain setup differs.
+You need a **C++20 compiler**, **CMake 3.24 or newer**, and **Git** (the test framework and the dependencies are fetched automatically at configure time). The build is the same everywhere; only the toolchain setup differs. Only **Windows** is known to work so far — see [Platform support](#platform-support).
+
+Every dependency is fetched by CMake, so there is nothing else to install. The compiler, USB driver, device permission, and daemon steps for each platform are in [`docs/09-platform-setup.md`](docs/09-platform-setup.md).
 
 From the repository root:
 
@@ -28,7 +45,7 @@ ctest --test-dir build --output-on-failure -C Release
 The `--config Release` flag is used by multi-config generators (Visual Studio, Xcode) and ignored by single-config generators (Makefiles, Ninja). The tests that need a device skip themselves when none is attached, so the build and the suite pass on any machine.
 
 <details>
-<summary><b>Linux</b></summary>
+<summary><b>Linux</b> — untested</summary>
 
 Install the toolchain and libusb's build dependency:
 
@@ -41,7 +58,7 @@ Then run the three commands above.
 </details>
 
 <details>
-<summary><b>macOS</b></summary>
+<summary><b>macOS</b> — untested</summary>
 
 Install the Xcode Command Line Tools (Clang) and CMake:
 
@@ -54,7 +71,7 @@ Then run the three commands above.
 </details>
 
 <details>
-<summary><b>Windows</b></summary>
+<summary><b>Windows</b> — tested</summary>
 
 Install **Visual Studio 2022** with the *Desktop development with C++* workload, and CMake 3.24 or newer. Then run the three commands above from a **Developer PowerShell for VS 2022**.
 </details>
@@ -125,6 +142,15 @@ cmake/                  CMake package configuration
 - [`docs/07-error-model.md`](docs/07-error-model.md) — why nothing throws, and what `Result<T>` carries instead
 - [`docs/08-assumptions.md`](docs/08-assumptions.md) — what the implementation assumes but has not yet proven on a device
 - [`docs/09-platform-setup.md`](docs/09-platform-setup.md) — what to install and grant per platform to build and reach a device
+
+## Contributing
+
+Contributions are welcome, and the most useful ones often need no new code: verifying a
+platform, reporting a failure, or fixing a document. See [`CONTRIBUTING.md`](CONTRIBUTING.md)
+for how to build, test, and open a pull request, and the
+[roadmap](docs/03-roadmap.md) for what is planned. Issues labelled
+[`good first issue`](https://github.com/promethea156/ioscpp/labels/good%20first%20issue)
+are a good place to start.
 
 ## References
 
