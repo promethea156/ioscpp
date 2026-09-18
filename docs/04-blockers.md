@@ -77,6 +77,46 @@ and then the device resets the connection after roughly 60 to 150 seconds with
 a long timeout. This is the state the device is in on this host, and it is still
 open.
 
+### The hand-built TLS session poisons the ClientHello
+
+**Symptom.** After pairing, the TLS handshake sent a ClientHello whose record
+version read `0x0000` and whose cipher suite list held only the `00ff` SCSV, and
+the device reset the connection. mbedTLS logged
+`client hello, add ciphersuite` for no suite but the SCSV.
+
+**Cause.** `TlsSession::start` built a throwaway `mbedtls_ssl_session` that only
+carried the `StartSession` `SessionID` and passed it to `mbedtls_ssl_set_session`.
+`mbedtls_ssl_set_session` copies the session into `session_negotiate` and sets
+`handshake->resume`, and a session whose `tls_version` is still zero makes
+`ssl_write_client_hello` take the resume branch and set `ssl->tls_version` to zero.
+The ClientHello record header is written from `ssl->tls_version`
+(`ssl_msg.c:2955`), and every suite is filtered against it
+(`ssl_client.c:356`), so only the SCSV survives.
+
+**Fix.** `TlsSession::start` no longer passes a session, matching
+`idevice_connection_enable_ssl`, which never calls `mbedtls_ssl_set_session`
+(`src/crypto/pairing.cpp`). A device-free test pins the trap and the escape in
+`tests/tls_client_hello_test.cpp`.
+
+### The device resets the TLS handshake after the ClientHello
+
+**Symptom.** With a well-formed ClientHello (record version `0x0303`, the full
+suite list, and a valid `key_share`), the device acknowledges it and then sends a
+mux control frame `type=3 socketIsClosed sock_receive returned errno 54` and a
+reset whose reason is `sessionUpcall connection closed`. No ServerHello arrives,
+and `mbedtls_ssl_handshake` returns `MBEDTLS_ERR_SSL_CONN_EOF`.
+
+**Cause.** Still open. It is not the TLS version (it happens pinned to TLS 1.2 too),
+not the client identity (the host leaf and the root both fail), not the pre-TLS delay,
+and not the verify mode. The device is on iOS 18.7.8.
+
+**State.** `TlsSession::start` presents the host leaf certificate and key (the
+`pymobiledevice3` choice) with `config_defaults`, the `libimobiledevice` auth mode
+and verify callback, no session, and no hostname. The device is still reset with
+`IOSCPP_TLS12` pinning TLS 1.2, `IOSCPP_NO_VERIFY` disabling the peer verify,
+and `IOSCPP_SESSION` echoing the `SessionID` with a valid session version and
+suite, so none of those is the cause on its own.
+
 ## Expected blockers
 
 The entries here are the ones already known from the reference implementations. Some have

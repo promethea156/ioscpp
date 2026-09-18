@@ -2,13 +2,17 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
+#include <cstdlib>
 #include <memory>
 #include <optional>
 #include <span>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <vector>
 
 #include "ioscpp/crypto/pairing.hpp"
@@ -114,8 +118,16 @@ Result<protocol::Plist> Lockdown::request(protocol::Plist request)
 
     const std::string body = request.to_xml();
 
+    if (std::getenv("IOSCPP_TRACE") != nullptr)
+    {
+        std::fprintf(stderr, "[lockdown req] %s\n", body.c_str());
+    }
+
+    // The 4-byte length prefix is the plist size alone, not including the
+    // prefix itself, and is big-endian. This is `internal_plist_send`:
+    //   https://github.com/libimobiledevice/libimobiledevice/blob/master/src/property_list_service.c
     std::vector<std::byte> message(4 + body.size());
-    put_be32(message, static_cast<std::uint32_t>(message.size()));
+    put_be32(message, static_cast<std::uint32_t>(body.size()));
     std::copy(reinterpret_cast<const std::byte *>(body.data()),
               reinterpret_cast<const std::byte *>(body.data() + body.size()), message.begin() + 4);
 
@@ -145,6 +157,11 @@ Result<protocol::Plist> Lockdown::request(protocol::Plist request)
     if (!answer_plist)
     {
         return tl::unexpected(answer_plist.error());
+    }
+
+    if (std::getenv("IOSCPP_TRACE") != nullptr)
+    {
+        std::fprintf(stderr, "[lockdown] %s\n", answer_plist->to_xml().c_str());
     }
 
     if (const protocol::Plist *error = answer_plist->find("Error"); error != nullptr)
@@ -177,7 +194,7 @@ Result<protocol::Plist> Lockdown::get_value(std::string_view domain, std::string
     return this->request(protocol::Plist::dictionary(std::move(request)));
 }
 
-Status Lockdown::start_session(const crypto::Pairing &pairing)
+Status Lockdown::start_session(crypto::Pairing &pairing)
 {
     protocol::Plist::Dictionary request{
         {"HostID", protocol::Plist(pairing.host_id())},
@@ -189,6 +206,12 @@ Status Lockdown::start_session(const crypto::Pairing &pairing)
     if (!answer)
     {
         return tl::unexpected(answer.error());
+    }
+
+    if (const protocol::Plist *session_id = answer->find("SessionID");
+        session_id != nullptr && session_id->string().has_value())
+    {
+        pairing.set_session_id(std::string(*session_id->string()));
     }
 
     const protocol::Plist *enable_ssl = answer->find("EnableSessionSSL");

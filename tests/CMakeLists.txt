@@ -12,12 +12,16 @@ add_executable(ioscpp_tests
   plist_test.cpp
   session_test.cpp
   stream_test.cpp
+  tls_client_hello_test.cpp
   transport_test.cpp
   usbmux_test.cpp
 )
 target_link_libraries(ioscpp_tests
   PRIVATE ioscpp::ioscpp
     Catch2::Catch2WithMain
+    # `tls_client_hello_test.cpp` inspects the first flight directly, so it
+    # reaches mbedTLS, which is otherwise private to `ioscpp`.
+    MbedTLS::mbedtls
 )
 
 list(APPEND CMAKE_MODULE_PATH "${catch2_SOURCE_DIR}/extras")

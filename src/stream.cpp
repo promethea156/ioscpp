@@ -2,10 +2,14 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
+#include <cstdlib>
 #include <span>
 #include <string>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -69,6 +73,37 @@ Status read_exact(Transport &transport, std::span<std::byte> buffer)
         offset += *read;
     }
     return {};
+}
+
+/// The human-readable diagnostic a device may attach to a reset, as a string.
+std::string reset_text(std::span<const std::byte> payload)
+{
+    std::string text(reinterpret_cast<const char *>(payload.data()), payload.size());
+    while (!text.empty() && (text.back() == '\0' || text.back() == '\n' || text.back() == '\r'))
+    {
+        text.pop_back();
+    }
+    return text;
+}
+
+/// Prints a received TCP frame when `IOSCPP_TRACE` is set.
+void trace_tcp(const char *where, const protocol::TcpHeader &tcp, std::span<const std::byte> payload)
+{
+    if (std::getenv("IOSCPP_TRACE") == nullptr)
+    {
+        return;
+    }
+    std::fprintf(stderr, "[%s] sport=%u dport=%u seq=%u ack=%u flags=0x%02x win=%u len=%zu", where, tcp.source_port,
+                 tcp.destination_port, tcp.sequence, tcp.acknowledgement, tcp.flags, tcp.window, payload.size());
+    if ((tcp.flags & protocol::TcpRst) != 0)
+    {
+        std::fprintf(stderr, " reason=\"%s\" hex=", reset_text(payload).c_str());
+        for (const std::byte byte : payload)
+        {
+            std::fprintf(stderr, "%02x", static_cast<unsigned>(byte));
+        }
+    }
+    std::fprintf(stderr, "\n");
 }
 
 constexpr std::uint32_t kConnect = 2;
@@ -170,10 +205,14 @@ Result<Stream> Stream::open(std::shared_ptr<Connection> connection, std::uint16_
         {
             continue;
         }
+        trace_tcp("connect", tcp, std::span<const std::byte>(frame->payload).subspan(protocol::kTcpHeaderSize));
 
         if ((tcp.flags & protocol::TcpRst) != 0)
         {
-            return tl::unexpected(Error{ErrorCode::Device, "the device refused the port"});
+            const std::string reason =
+                reset_text(std::span<const std::byte>(frame->payload).subspan(protocol::kTcpHeaderSize));
+            return tl::unexpected(Error{ErrorCode::Device, reason.empty() ? "the device refused the port"
+                                                                          : "the device refused the port: " + reason});
         }
         if (tcp.flags != (protocol::TcpSyn | protocol::TcpAck))
         {
@@ -195,6 +234,10 @@ Result<Stream> Stream::open(std::shared_ptr<Connection> connection, std::uint16_
         {
             return tl::unexpected(status.error());
         }
+        // The device's userspace mux creates the session for a port asynchronously
+        // after it answers the SYN, so a short pause keeps the first data frame
+        // from racing the session's creation.
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
         return stream;
     }
 }
@@ -206,6 +249,7 @@ Stream::Stream(Stream &&other) noexcept
     , tx_seq_(other.tx_seq_)
     , tx_ack_(other.tx_ack_)
     , closed_(other.closed_)
+    , reset_reason_(std::move(other.reset_reason_))
     , usbmuxd_(other.usbmuxd_)
     , owned_transport_(std::move(other.owned_transport_))
     , incoming_(std::move(other.incoming_))
@@ -225,6 +269,7 @@ Stream &Stream::operator=(Stream &&other) noexcept
         tx_seq_ = other.tx_seq_;
         tx_ack_ = other.tx_ack_;
         closed_ = other.closed_;
+        reset_reason_ = std::move(other.reset_reason_);
         usbmuxd_ = other.usbmuxd_;
         owned_transport_ = std::move(other.owned_transport_);
         incoming_ = std::move(other.incoming_);
@@ -296,6 +341,11 @@ Status Stream::write(std::span<const std::byte> data)
     return {};
 }
 
+void Stream::remember_reset_reason(std::span<const std::byte> payload)
+{
+    reset_reason_ = reset_text(payload);
+}
+
 Result<bool> Stream::receive_more()
 {
     if (usbmuxd_)
@@ -333,9 +383,11 @@ Result<bool> Stream::receive_more()
         {
             continue;
         }
+        trace_tcp("data", tcp, std::span<const std::byte>(frame->payload).subspan(protocol::kTcpHeaderSize));
 
         if ((tcp.flags & protocol::TcpRst) != 0)
         {
+            remember_reset_reason(std::span<const std::byte>(frame->payload).subspan(protocol::kTcpHeaderSize));
             closed_ = true;
             return false;
         }
@@ -382,7 +434,9 @@ Status Stream::read(std::span<std::byte> buffer)
             if (!*more)
             {
                 return tl::unexpected(
-                    Error{ErrorCode::Protocol, "the device reset the port before the read was satisfied"});
+                    Error{ErrorCode::Protocol, reset_reason_.empty()
+                                                   ? "the device reset the port before the read was satisfied"
+                                                   : "the device reset the port: " + reset_reason_});
             }
         }
 

@@ -97,8 +97,11 @@ session key.
 
 **Why we believe it.** `docs/04-blockers.md` and the `lockdown.c` reference describe the flow.
 
-**Status.** `crypto::Pairing` and `Lockdown` are written but the device test only reaches
-`Device::connect` and a `ProductType`/`ProductVersion` query (`tests/device_test.cpp:57`).
+**Status.** Pairing completes and the record is saved to `%USERPROFILE%\.ioscpp\<udid>`; a
+second run loads it and passes `StartSession` with `EnableSessionSSL=true`, so the
+pairing exchange and the session start are proven on a device. The TLS handshake is the
+open part: the ClientHello is now well-formed, but the device resets the connection
+after it (`docs/04-blockers.md`).
 
 **Proof.** A device that is already trusted completes the tour's query step.
 
@@ -106,6 +109,9 @@ session key.
 
 **Assumption.** A pairing record written by one run is accepted by `lockdownd` on the next, with no
 re-pair and no trust tap.
+
+**Status.** A second run reads the saved record, completes `StartSession`, and reaches the
+TLS handshake without a trust tap, so it is proven for the pairing and session steps.
 
 **Proof.** Two consecutive device test runs, the second with the device already trusted.
 

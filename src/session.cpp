@@ -3,6 +3,8 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
+#include <cstdlib>
 #include <memory>
 #include <span>
 #include <string>
@@ -25,6 +27,17 @@ constexpr std::uint32_t kMaxFrameSize = 3 * 16384;
 Error protocol_error(std::string message)
 {
     return Error{ErrorCode::Protocol, std::move(message)};
+}
+
+/// Prints a mux header when `IOSCPP_TRACE` is set.
+void trace_mux(const char *direction, const protocol::MuxHeader &header, std::size_t payload)
+{
+    if (std::getenv("IOSCPP_TRACE") == nullptr)
+    {
+        return;
+    }
+    std::fprintf(stderr, "[mux %s] protocol=%u length=%u magic=0x%08x tx_seq=%u rx_seq=%u payload=%zu\n", direction,
+                 header.protocol, header.length, header.magic, header.tx_seq, header.rx_seq, payload);
 }
 
 /// Reads exactly `buffer.size()` bytes, or fails.
@@ -69,6 +82,8 @@ Status Session::send(protocol::MuxProtocol protocol, std::span<const std::byte> 
     header.tx_seq = tx_seq_++;
     header.rx_seq = rx_seq_;
 
+    trace_mux("send", header, payload.size());
+
     const std::array<std::byte, protocol::kMuxHeaderSize> encoded = header.encode(version_);
 
     // A frame is written as one transport write, matching `usbmuxd`, which builds
@@ -96,12 +111,28 @@ Result<Frame> Session::receive()
         return tl::unexpected(protocol_error("the mux frame length is out of range"));
     }
 
+    trace_mux("recv", header, header.length - header_size);
+
+    if (std::getenv("IOSCPP_TRACE") != nullptr &&
+        header.protocol == static_cast<std::uint32_t>(protocol::MuxProtocol::Control))
+    {
+        // The control payload is not read yet, so read it here and buffer it.
+    }
+
     Frame frame;
     frame.header = header;
     frame.payload.resize(header.length - header_size);
     if (Status status = read_exact(*transport_, frame.payload); !status)
     {
         return tl::unexpected(status.error());
+    }
+
+    if (std::getenv("IOSCPP_TRACE") != nullptr &&
+        header.protocol == static_cast<std::uint32_t>(protocol::MuxProtocol::Control) && !frame.payload.empty())
+    {
+        std::fprintf(stderr, "[mux control] type=%u text=%.*s\n", static_cast<unsigned>(frame.payload[0]),
+                     static_cast<int>(frame.payload.size() - 1),
+                     reinterpret_cast<const char *>(frame.payload.data() + 1));
     }
 
     rx_seq_ = header.rx_seq;

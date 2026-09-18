@@ -10,8 +10,10 @@ protocol assumptions explicit while they are still small enough to get right.
 
 ## Status
 
-Slices 0 to 3 are done and covered by the device-free tests. Slice 4 onward are written but
+Slices 0 to 3 are done and covered by the device-free tests. Slices 4 onward are written but
 not yet validated on a device, so their checkboxes stay open until a real device passes them.
+Slice 4 and the pairing and `StartSession` parts of Slice 5 are proven on a device; the TLS
+handshake that follows `StartSession` is the current blocker (`04-blockers.md`).
 
 - [x] Slice 0: the project layout, the `Result<T>` error model, the `Transport` interface,
   the mock transport, and the build.

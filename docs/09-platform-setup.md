@@ -132,6 +132,30 @@ interface.
 - Optional API docs need [Doxygen](https://www.doxygen.nl/), then
   `cmake --build build --target ioscpp_docs`.
 
+## Comparing against a reference
+
+`libimobiledevice`, `pymobiledevice3`, and `go-ios` reach the same protocols, so
+one of them is a second opinion when `ioscpp` disagrees with a device. Only one
+process can own the mux interface at a time, so a reference and `ioscpp` cannot talk
+to the same device together on the host where `usbmuxd` lives; the options below
+work around that.
+
+- **On a host with a `usbmuxd`.** `libimobiledevice` and `pymobiledevice3` reach
+  the device through it, so run `usbmuxd`, point them at it, and capture the USB
+  traffic with **USBPcap** (Wireshark) instead of `ioscpp` to compare the bytes.
+  `USBPcap` captures below the driver, so it sees the traffic whichever driver
+  owns the interface. `USBPcap` also captures an `ioscpp` run for the other side of
+  the comparison.
+- **A `usbmuxd` of your own.** The `libimobiledevice-win32` release ships a
+  `libusb`-backed `usbmuxd` and the `idevice*` tools. On Windows it needs the
+  mux interface on a `libusb`-compatible driver, which is what `ioscpp` already
+  needs, so it is a reference without a driver change. `pymobiledevice3` can then
+  reach that `usbmuxd` over TCP by setting `USBMUXD_SOCKET_ADDRESS`.
+- **A second host or `WSL`.** `usbipd` attaches the device to `WSL`, where
+  `libimobiledevice` runs with `usbmuxd` stopped and `tcpdump` captures the
+  link. The device belongs to one host at a time, so this and a native `ioscpp`
+  run are exclusive.
+
 ## Verify
 
 With a device attached and trusted:
