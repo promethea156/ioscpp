@@ -24,6 +24,7 @@ work that turns the scaffold into a working client.
 - [ ] Slice 6: `AFC` file listing and transfer.
 - [ ] Slice 7: app install, uninstall, and control.
 - [ ] Slice 8: the guided tour and the device integration test.
+- [ ] Slice 9: the iOS 17+ `RSD` tunnel, so the CoreDevice services are reachable.
 
 ## Slice 0: Layout, error model, and transport
 
@@ -106,3 +107,49 @@ frame is an `ErrorCode::Protocol` error.
   with code 77 when none is attached.
 
 **Done when:** the demo and the device test pass against a real device.
+
+## Slice 9: The iOS 17+ `RSD` tunnel
+
+iOS 17 moved the developer services off `lockdownd` and onto **CoreDevice** over
+**RemoteXPC**, and a CoreDevice service is only reachable over an **RSD** (Remote Service
+Discovery) tunnel to the device. On a device of 17.4 or later, `lockdownd` exposes the
+`com.apple.internal.devicecompute.CoreDeviceProxy` service, whose handshake returns the
+tunnel interface's address and port and then carries the tunnel's IPv6 packets as data. On
+17.0–17.3.1 the same tunnel is reached over the Wi-Fi **RemotePairing** route instead.
+
+The tunnel is what every later CoreDevice feature needs, so it is the next slice after the
+USB stack, and it is built the same way the rest of the library is: no `usbmuxd`, no `tunneld`
+daemon, and no TUN interface. The device's own tunnel address is only reachable from this
+process, which is the userspace model; a kernel-routable tunnel is a later improvement.
+
+- `Connection`'s `CoreDeviceProxy` handshake, which returns the `RSD` address and port.
+- `protocol::RemoteXpc`, the 16-byte frame header and the `xpc` dictionary codec, which is
+  the CoreDevice counterpart of the mux frame and the plist codec.
+- `Rsd`, the RSD connection: `GetService` and the service dictionary, and a `Stream` to a
+  named service on the tunnel.
+- A device integration test that skips itself on a pre-17 device.
+
+The references are [`pymobiledevice3`'s RemoteXPC notes](https://doronz88.github.io/pymobiledevice3/internals/remotexpc/)
+and its iOS 17+ tunnel guide, and go-ios's `ios tunnel start --userspace`. Both create
+the same tunnel the same way, so either is a working second opinion.
+
+**Done when:** a device of iOS 17.4 or later lists the RSD services and reaches one over
+the tunnel.
+
+## Slice 10: CoreDevice and `DTX` developer services
+
+The services Slice 9 opens are the CoreDevice ones (`com.apple.dvt.*`), which speak `DTX`
+rather than the `lockdownd` plists. `dvt` and `fetch-symbols` are the first two.
+
+- `protocol::Dtx`, the `DTX` message codec.
+- `dvt` and `fetch-symbols` over the RSD `Stream` from Slice 9.
+
+**Done when:** the tour lists the DVT services and runs one of them.
+
+## Non-goals (for now)
+
+- The privileged `tunneld` daemon and the kernel `utun` interface; the userspace tunnel is
+  the first target, because it needs no root and no extra driver.
+- The device-initiated AV/HID paths, and WebDriverAgent.
+- iOS 17.0–17.3.1 over Wi-Fi, which needs the RemotePairing route rather than
+  `CoreDeviceProxy`.

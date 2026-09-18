@@ -63,3 +63,28 @@ non-UTF-8 path fails with an opaque `AFC_E_*` status.
 `installation_proxy` does not take a local path. The IPA is first uploaded over `AFC` into the
 staging directory and then installed from the device-side path. Installing without the upload, or
 from a path the host can see but the device cannot, fails.
+
+### A CoreDevice service is not on the mux link, but on the RSD tunnel
+
+On iOS 17.4 and later, a `com.apple.dvt.*` service is not on a `lockdownd` port at all: it is on
+an **RSD** address and port that a `CoreDeviceProxy` handshake hands out, and the tunnel carries
+the device's IPv6 packets as data. Connecting to the service over the mux link, or reusing the
+`lockdownd` port, fails.
+
+### The RSD tunnel address is IPv6 and route-less
+
+The address `CoreDeviceProxy` returns is a device-local IPv6 address that no host route covers, so a
+socket to it is bound to the tunnel and sent over it by hand. Letting the host's routing table carry
+the packets, or assuming the tunnel address is reachable, fails.
+
+### RemoteXPC frames are not plists, and the flags word must be exact
+
+RemoteXPC is the CoreDevice counterpart of the mux framing, not of the plist codec: a 16-byte header
+whose flags word must be set exactly, then an `xpc` dictionary. Treating a RemoteXPC frame as a plist,
+or mis-setting the flags word, makes the device drop the connection.
+
+### A CoreDevice service speaks `DTX`, not a plist
+
+A `com.apple.dvt.*` service does not exchange plists. It exchanges `DTX` messages, which have their
+own header and payload types. Sending a plist to a `dvt` service, or reading its first reply as one,
+fails.
