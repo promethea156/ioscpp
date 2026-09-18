@@ -30,6 +30,23 @@ differs, detaching kernel drivers on Linux first
 (`src/usb/usb_transport.cpp`). A device that is already in the right
 configuration is left alone.
 
+### The mux interface is bound to Apple's driver on Windows
+
+**Symptom.** On Windows, `ioscpp_usb_example` printed `no device attached`, or
+`libusb_claim_interface` failed with `LIBUSB_ERROR_NOT_SUPPORTED` or
+`LIBUSB_ERROR_BUSY`, while the device was present in Device Manager under Apple's
+driver.
+
+**Cause.** On Windows the device is freed differently than on Linux, where `usbmuxd`
+is the only holder: the *Apple Mobile Device Service* claims the device, and the mux
+interface is bound to Apple's `usbaapl64` driver, which libusb cannot open.
+
+**Fix.** Stop *Apple Mobile Device Service*, bind a libusb-compatible driver to the
+mux interface alone with Zadig, and replug. Bind the interface, not the composite
+device, so the rest of the device keeps Apple's driver. Use `libusb-win32`, not
+WinUSB: its libusb0 backend sends `SET_CONFIGURATION`, which the device's initial USB
+mode needs (`docs/09-platform-setup.md`).
+
 ### A v2 data frame is `ACK` alone, not `PSH|ACK`
 
 **Symptom.** With the configuration selected and the mux handshake done, the
