@@ -1,0 +1,97 @@
+name: Platform verification
+description: Report the result of building and running ioscpp on your platform.
+title: "[verify] <platform>: <pass|fail>"
+labels: ["help wanted"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for verifying `ioscpp`. Windows is the only platform it has been built
+        and run on, so a Linux or macOS result — green **or** red — is the most useful
+        thing you can report. A failure is a contribution, not a nuisance.
+
+        The device-free suite needs no hardware, so you can run it even without an iPhone
+        or iPad. See [`docs/09-platform-setup.md`](../blob/development/docs/09-platform-setup.md)
+        for the per-platform USB access and the daemon to stop.
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      description: Where you ran it.
+      options:
+        - Linux
+        - macOS
+        - Windows
+        - Other (say which below)
+    validations:
+      required: true
+
+  - type: input
+    id: platform-version
+    attributes:
+      label: Platform version
+      description: OS and version, e.g. "Ubuntu 24.04" or "macOS 15.1 (arm64)".
+      placeholder: Ubuntu 24.04 (x86_64)
+    validations:
+      required: true
+
+  - type: input
+    id: toolchain
+    attributes:
+      label: Compiler and CMake version
+      description: Output of `c++ --version` and `cmake --version`.
+      placeholder: g++ 13.3.0, cmake 3.29.6
+    validations:
+      required: true
+
+  - type: dropdown
+    id: result
+    attributes:
+      label: Result
+      options:
+        - Build and full suite pass
+        - Build passes, some tests fail
+        - Build fails
+        - Build or tests could not be run (say why below)
+    validations:
+      required: true
+
+  - type: textarea
+    id: commands
+    attributes:
+      label: What you ran
+      description: The exact commands, including any deviation from the README.
+      render: shell
+      value: |
+        cmake -S . -B build -DIOSCPP_BUILD_TESTS=ON -DIOSCPP_BUILD_EXAMPLES=ON
+        cmake --build build --config Release
+        ctest --test-dir build -C Release -E "^device$" --output-on-failure
+    validations:
+      required: true
+
+  - type: textarea
+    id: output
+    attributes:
+      label: Output
+      description: The full output, especially the first error if one occurred.
+      render: shell
+    validations:
+      required: true
+
+  - type: input
+    id: device
+    attributes:
+      label: Device, if one was attached
+      description: Model, iOS version, and whether the *Trust This Computer?* prompt appeared.
+      placeholder: iPhone 13, iOS 17.5 — already trusted
+    validations:
+      required: false
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes
+      description: Anything else — a warning that looked suspicious, a workaround, a doc step that was wrong.
+    validations:
+      required: false

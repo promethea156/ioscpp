@@ -1,0 +1,58 @@
+name: Feature request
+description: Propose a capability, an improvement, or a documentation change.
+title: "[feature] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        [`docs/03-roadmap.md`](../blob/development/docs/03-roadmap.md) lists what is
+        already planned. If your idea is there, a comment on its issue is better than a new
+        one. The [non-goals](../blob/development/docs/01-objective.md#non-goals-for-now)
+        and the [key constraint](../blob/development/docs/01-objective.md#key-constraint)
+        (no `usbmuxd`, no `libimobiledevice`, no external binary) rule some proposals out.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: The use case, not the implementation.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What you would add or change, and roughly where it fits in the layers.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Other approaches, and why this one is better. Include the impact on the core library's dependencies.
+    validations:
+      required: false
+
+  - type: dropdown
+    id: scope
+    attributes:
+      label: What kind of change is this?
+      options:
+        - New public API
+        - New protocol or transport capability
+        - Documentation
+        - Build or CI
+        - Other
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: willing
+    attributes:
+      label: Would you like to work on it?
+      options:
+        - label: I am willing to open a pull request for this
+          required: false

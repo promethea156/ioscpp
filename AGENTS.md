@@ -23,6 +23,10 @@ release, and `hotfix` carries an urgent fix from `main` back to `main` and `deve
 short-lived branch is `<type>/<slug>`. See `docs/01-objective.md` for the full model. Do not
 switch the current branch or create a branch without saying so.
 
+Squash-merge a short-lived branch into its target, but merge two long-lived branches with a
+merge commit, not a squash; a squash between long-lived branches makes them diverge, so the target
+must be merged back immediately if it happens. See `docs/01-objective.md#merging`.
+
 ## Local Tooling
 
 ### `usbmuxd` and `libimobiledevice` can hold the device
@@ -37,6 +41,8 @@ brew services stop usbmuxd
 ```
 
 The `idevice*` tools (`idevice_id`, `ideviceinfo`, `idevicepair`) talk through `usbmuxd`, so they are useful to compare against but cannot run at the same time as `ioscpp` on the same device.
+
+Per-platform build, USB access, and driver steps are in `docs/09-platform-setup.md`.
 
 ### The device asks for trust
 

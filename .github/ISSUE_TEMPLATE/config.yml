@@ -1,0 +1,11 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Roadmap and open questions
+    url: https://github.com/promethea156/ioscpp/blob/development/docs/03-roadmap.md
+    about: Check what is already planned before proposing a feature.
+  - name: Blockers and solutions
+    url: https://github.com/promethea156/ioscpp/blob/development/docs/04-blockers.md
+    about: The non-obvious iOS protocol problems and how they were solved. Your bug may be known.
+  - name: Unproven assumptions
+    url: https://github.com/promethea156/ioscpp/blob/development/docs/08-assumptions.md
+    about: What the code depends on that no device run has confirmed yet.
