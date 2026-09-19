@@ -126,7 +126,9 @@ zero-length value.
 **Cause.** `generate_certificate` sets the serial with `mbedtls_mpi_lset(&serial, 0)`,
 and mbedTLS writes a zero MPI as a zero-length `INTEGER`. RFC 5280 requires a
 positive serial, and OpenSSL 3.0 enforces it while mbedTLS does not
-(`src/crypto/pairing.cpp`).
+(`src/crypto/pairing.cpp`). The reference `pymobiledevice3` certificate carries the
+same zero value as `02 01 00`, a one-byte `INTEGER`, so the value is not the trap and
+the zero-length encoding is.
 
 **Impact.** A tool that reads the pair record with OpenSSL, such as a
 `pymobiledevice3` comparison or `libimobiledevice`, cannot load the host
@@ -150,9 +152,10 @@ and `mbedtls_ssl_handshake` returns `MBEDTLS_ERR_SSL_CONN_EOF`.
 not the client identity (the host leaf and the root both fail), not the pre-TLS delay,
 and not the verify mode. The device is on iOS 18.7.8.
 
-A device-free reference ClientHello was captured and diffed against `IOSCPP_DUMP`
-(see the entry below); the differences are named there. The ClientHello is therefore
-well formed, and the reset is either one of those differences or something after it.
+A reference ClientHello was captured and diffed against `IOSCPP_DUMP` (see the entry
+below); the differences are named there. A capture of the reference on the wire then showed
+the device answers the reference ClientHello and resets `ioscpp`'s (see the entry below), so
+the reset is one of those differences, not the device or the state before it.
 
 **State.** `TlsSession::start` presents the host leaf certificate and key (the
 `pymobiledevice3` choice) with `config_defaults`, the `libimobiledevice` auth mode
@@ -171,13 +174,45 @@ identical to `IOSCPP_DUMP` except the 32-byte random. The device acknowledges it
 and no TLS alert arrive, so the device's `lockdownd` takes the record layer and closes
 before it answers.
 
-**Reference capture.** Blocked. The reference needs `usbmuxd`, and the
-`libimobiledevice` `usbmuxd` v1.1.1 finds the device and claims the mux interface
-but then dies: a heap corruption (`0xc0000374`) with its bundled libusb 1.0.24, and an
-access violation (`0xc0000005`) once the first client connects to `lockdownd`. Swapping
-in libusb 1.0.30 and starting with `-p -n` lets it list the device
-(`idevice_id -l` returns the UDID) and survive, but the first `lockdownd` connect still
-kills it (`Mux error (-8)`).
+**Reference capture.** Reached through Apple's own stack. Installing the *Apple Mobile
+Device Support* package and putting the device back on Apple's driver starts the
+*Apple Mobile Device Service*, and `pymobiledevice3` then reaches the device through
+Apple's `usbmuxd` (`docs/09-platform-setup.md`). `USBPcap` captures below the driver, so
+the reference is captured on the same device and the same host as the failing run.
+
+The `libimobiledevice` `usbmuxd` v1.1.1 was the earlier route and did not get there:
+it finds the device and claims the mux interface, but then dies with a heap corruption
+(`0xc0000374`) on its bundled libusb 1.0.24, an access violation (`0xc0000005`) with
+libusb 1.0.30 once the first client connects, and `Mux error (-8)` on the first
+`lockdownd` connect.
+
+### The device answers the reference ClientHello with a ServerHello
+
+**Result.** The decisive capture for the reset above. With the device on Apple's driver and
+`pymobiledevice3` driving it through Apple's `usbmuxd`, the device **does** answer. The
+host's ClientHello is frame 531 (record version `0x0301`, 512 bytes), and the device answers
+with a ServerHello in frame 537 (handshake type `0x02`, server version `0x0303`, a 32-byte
+session id, suite `0xc030`, and the `renegotiation_info` and `extended_master_secret`
+extensions), then its Certificate in frame 541. No reset follows.
+
+**Conclusion.** The device accepts an OpenSSL ClientHello and resets mbedTLS's, so the fault
+is in `ioscpp`'s ClientHello or in the framing before it, and not in the device, the pairing,
+the session, or the mux state. The named differences in the entry below are the candidate
+causes.
+
+**Artifacts.** The reference run, the failing run, both ClientHellos, and the ServerHello
+are in [`captures/`](captures/).
+
+**Reproduce.** Capture while `pymobiledevice3 lockdown info` runs, then read the two frames:
+
+```powershell
+tshark -i '\\.\USBPcap1' -a duration:30 -w reference-run.pcapng
+tshark -r reference-run.pcapng -Y 'usb.src == "host" && usb.data_len > 200'
+```
+
+The ClientHello is the frame whose payload reads `16 03 01` and handshake type `01`;
+`tools/compare-clienthello.py parse` decodes it and `diff` names the differences from
+`IOSCPP_DUMP`.
 
 ### The ClientHello differs from the OpenSSL reference
 
@@ -200,10 +235,12 @@ device acks both, so this is the closest named lead, not a proven cause.
 | `padding` | 126 bytes, record padded to 512 | absent |
 | `key_share`, `supported_versions`, `session_ticket` | same | same |
 
-The reference is OpenSSL, so the differences are mostly stack defaults; the next step
-is a real capture of the reference on the wire, and a reference built with mbedTLS (the
-same library as `ioscpp` and `libimobiledevice`) to separate a stack default from a
-fault.
+The reference is OpenSSL, so the differences are mostly stack defaults. The capture in the
+entry above shows the device answers the reference ClientHello, so the reset is on `ioscpp`'s
+side and one of these differences is the cause. The next step is to bisect them, cheapest
+first: the record version, the cipher list order and length, the absent `padding`, and the
+`ec_point_formats` value. A reference built with mbedTLS (the same library as `ioscpp` and
+`libimobiledevice`) separates a stack default from a fault.
 
 
 ## Expected blockers
