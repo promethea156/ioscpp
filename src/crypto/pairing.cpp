@@ -699,7 +699,8 @@ int tls_send(void *context, const unsigned char *data, std::size_t length)
         const bool padding = std::getenv("IOSCPP_REFERENCE_PADDING") != nullptr;
         if (version || formats || padding)
         {
-            record.assign(reinterpret_cast<const std::byte *>(data), reinterpret_cast<const std::byte *>(data) + length);
+            record.assign(reinterpret_cast<const std::byte *>(data),
+                          reinterpret_cast<const std::byte *>(data) + length);
             auto *bytes = reinterpret_cast<unsigned char *>(record.data());
             if (version)
             {
@@ -720,7 +721,7 @@ int tls_send(void *context, const unsigned char *data, std::size_t length)
                         bytes[i + 4] == 0x01 && bytes[i + 5] == 0x00)
                     {
                         record.insert(record.begin() + static_cast<std::ptrdiff_t>(i + 6),
-                                      { std::byte{ 0x01 }, std::byte{ 0x02 } });
+                                      {std::byte{0x01}, std::byte{0x02}});
                         bytes = reinterpret_cast<unsigned char *>(record.data());
                         bytes[i + 2] = 0x00;
                         bytes[i + 3] = 0x04;
@@ -736,11 +737,11 @@ int tls_send(void *context, const unsigned char *data, std::size_t length)
                 // Pad to 512 bytes, the length the reference pads to.
                 const std::size_t padded = 512 - record.size();
                 const std::size_t data_length = padded - 4;
-                record.push_back(std::byte{ 0x00 });
-                record.push_back(std::byte{ 0x15 });
+                record.push_back(std::byte{0x00});
+                record.push_back(std::byte{0x15});
                 record.push_back(static_cast<std::byte>(data_length >> 8));
                 record.push_back(static_cast<std::byte>(data_length & 0xff));
-                record.resize(record.size() + data_length, std::byte{ 0 });
+                record.resize(record.size() + data_length, std::byte{0});
                 delta += padded;
             }
             bytes = reinterpret_cast<unsigned char *>(record.data());
@@ -897,17 +898,12 @@ Result<TlsSession> TlsSession::start(Stream &stream, const Pairing &pairing)
     if (std::getenv("IOSCPP_REFERENCE_CIPHERS") != nullptr)
     {
         static const int reference_ciphers[] = {
-            0x1302, 0x1303, 0x1301, 0xc02c, 0xc030, 0x00a3, 0x009f, 0xcca9,
-            0xcca8, 0xccaa, 0xc0af, 0xc0ad, 0xc0a3, 0xc09f, 0xc05d, 0xc061,
-            0xc057, 0xc053, 0xc02b, 0xc02f, 0x00a2, 0x009e, 0xc0ae, 0xc0ac,
-            0xc0a2, 0xc09e, 0xc05c, 0xc060, 0xc056, 0xc052, 0xc024, 0xc028,
-            0x006b, 0x006a, 0xc073, 0xc077, 0x00c4, 0x00c3, 0xc023, 0xc027,
-            0x0067, 0x0040, 0xc072, 0xc076, 0x00be, 0x00bd, 0xc00a, 0xc014,
-            0x0039, 0x0038, 0x0088, 0x0087, 0xc009, 0xc013, 0x0033, 0x0032,
-            0x0045, 0x0044, 0x009d, 0xc0a1, 0xc09d, 0xc051, 0x009c, 0xc0a0,
-            0xc09c, 0xc050, 0x003d, 0x00c0, 0x003c, 0x00ba, 0x0035, 0x0084,
-            0x002f, 0x0041, 0x00ff,
-            0x0000,
+            0x1302, 0x1303, 0x1301, 0xc02c, 0xc030, 0x00a3, 0x009f, 0xcca9, 0xcca8, 0xccaa, 0xc0af, 0xc0ad, 0xc0a3,
+            0xc09f, 0xc05d, 0xc061, 0xc057, 0xc053, 0xc02b, 0xc02f, 0x00a2, 0x009e, 0xc0ae, 0xc0ac, 0xc0a2, 0xc09e,
+            0xc05c, 0xc060, 0xc056, 0xc052, 0xc024, 0xc028, 0x006b, 0x006a, 0xc073, 0xc077, 0x00c4, 0x00c3, 0xc023,
+            0xc027, 0x0067, 0x0040, 0xc072, 0xc076, 0x00be, 0x00bd, 0xc00a, 0xc014, 0x0039, 0x0038, 0x0088, 0x0087,
+            0xc009, 0xc013, 0x0033, 0x0032, 0x0045, 0x0044, 0x009d, 0xc0a1, 0xc09d, 0xc051, 0x009c, 0xc0a0, 0xc09c,
+            0xc050, 0x003d, 0x00c0, 0x003c, 0x00ba, 0x0035, 0x0084, 0x002f, 0x0041, 0x00ff, 0x0000,
         };
         mbedtls_ssl_conf_ciphersuites(&impl.conf, reference_ciphers);
     }
@@ -921,9 +917,9 @@ Result<TlsSession> TlsSession::start(Stream &stream, const Pairing &pairing)
             0x001d, 0x0017, 0x001e, 0x0019, 0x0018, 0x0100, 0x0101, 0x0102, 0x0103, 0x0104, 0x0000,
         };
         static const uint16_t reference_sig_algs[] = {
-            0x0403, 0x0503, 0x0603, 0x0807, 0x0808, 0x0809, 0x080a, 0x080b, 0x0804, 0x0805, 0x0806,
-            0x0401, 0x0501, 0x0601, 0x0303, 0x0203, 0x0301, 0x0201, 0x0302, 0x0202, 0x0402, 0x0502,
-            0x0602, MBEDTLS_TLS1_3_SIG_NONE,
+            0x0403, 0x0503, 0x0603, 0x0807, 0x0808, 0x0809, 0x080a, 0x080b,
+            0x0804, 0x0805, 0x0806, 0x0401, 0x0501, 0x0601, 0x0303, 0x0203,
+            0x0301, 0x0201, 0x0302, 0x0202, 0x0402, 0x0502, 0x0602, MBEDTLS_TLS1_3_SIG_NONE,
         };
         mbedtls_ssl_conf_groups(&impl.conf, reference_groups);
         mbedtls_ssl_conf_sig_algs(&impl.conf, reference_sig_algs);
