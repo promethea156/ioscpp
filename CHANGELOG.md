@@ -22,6 +22,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `TcpTransport`, a socket transport to a running `usbmuxd`, with no third-party
   dependency.
 - `examples/`, and the design documents under `docs/`.
+- `tests/device_test.cpp`, the device integration test that skips with code `77`
+  when no matching device is attached.
+
+### Changed
+
+- The TLS experiment knobs are retired, so the default path reads no experiment
+  environment variables; `IOSCPP_TRACE` and `IOSCPP_DUMP` remain.
+- The client identity is settled as the host leaf certificate, and the auth mode as
+  `MBEDTLS_SSL_VERIFY_REQUIRED` with a callback that accepts the device
+  certificate, matching `idevice_connection_enable_ssl`.
+
+### Removed
+
+- `crypto::Pairing::root_private_key()`; the root key is still in the pairing
+  record.
 
 ### Fixed
 
@@ -30,5 +45,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `usbmuxd`, so a device in its initial USB mode is found.
 - The v2 mux framing now matches `usbmuxd`: data frames are `ACK` alone, `tx_seq`
   advances for every frame, and the device's own v2 magic is not checked.
+- The pairing chain writes a non-zero certificate serial, so the device stops
+  resetting the TLS handshake after the ClientHello and answers with a ServerHello.
+- `usb::UsbTransport` trims the serial descriptor's trailing NUL padding, so the
+  pairing record is written as `<serial>.plist` and is found again on the next run.
 
 [Unreleased]: https://github.com/promethea156/ioscpp/commits/main

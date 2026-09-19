@@ -44,10 +44,13 @@ a green run is just as useful as a red one, and see [Contributing](#contributing
 
 ## What it can do
 
-- **Files**: list a directory, `stat` a path, and pull or push a file over `AFC`.
-- **Apps**: install and uninstall an app, launch it, check whether it is running, and close it.
 - **Connect**: discover a device over USB, pair with it, and reach any `lockdownd` service.
 - **Info**: query the device's model, iOS version, and unique id.
+- **Files**: list a directory, `stat` a path, and pull or push a file over `AFC`.
+- **Apps**: install and uninstall an app, launch it, check whether it is running, and close it.
+
+Connect and Info are proven on a device. Files and Apps are written but not yet validated on
+hardware, which is the goal of Slices 6 and 7 in [`docs/03-roadmap.md`](docs/03-roadmap.md).
 
 ## Build it
 
@@ -108,25 +111,23 @@ cmake --build build --target ioscpp_docs
 
 The fastest way to learn the library is to run [`examples/demo/main.cpp`](examples/demo/main.cpp) and read it as it runs. It is one file, and every step is commented with what the call does on the device and which protocol it speaks, so the source is the walkthrough. It:
 
-1. finds an attached device and connects to it, with the mux negotiation;
-2. pairs with it if it is not paired, and opens `lockdownd`;
-3. queries the device's model and iOS version;
-4. lists a directory over `AFC`;
-5. pushes a file, stats it, and pulls it back;
-6. installs an app, uninstalling an old copy first;
-7. launches the app;
-8. checks that it stays running for ten seconds;
-9. closes it.
+1. finds an attached device and opens its USB interface, with the mux negotiation;
+2. pairs with it if it is not paired, starts the `lockdownd` session, and reads the identity;
+3. opens `AFC` and lists the media root;
+4. pushes a file into `/PublicStaging`;
+5. installs an app from an IPA, replacing an existing copy;
+6. launches it;
+7. closes it.
 
-To run it, you need a device with **a trusted host** (tap *Trust* on the device when asked) and an IPA to install. It uninstalls the bundle first, so it loses that bundle's data.
+To run it, you need a device with **a trusted host** (tap *Trust* on the device when asked) and an IPA to install. The install replaces that bundle, so it loses the bundle's data.
 
 ```
-build/examples/Release/ioscpp_demo_example <bundle-id> <app.ipa> [--serial <serial>]
+build/examples/Release/ioscpp_demo_example <bundle-id> <app.ipa>
 ```
 
 The binary is under `build/examples/Release/` for a multi-config generator (Visual Studio, Xcode) and `build/examples/` for a single-config one (Makefiles, Ninja).
 
-With no `--serial`, it prints the attached devices and uses the first. When it finishes, open the source and read it next to the output: each `step(...)` in the source is one of the nine steps above.
+It uses the first attached device. When it finishes, open the source and read it next to the output: each `step(...)` in the source is one of the seven steps above.
 
 ## Project Layout
 

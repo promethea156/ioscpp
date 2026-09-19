@@ -187,9 +187,9 @@ fix; the `IOSCPP_REPLAY` probe sends a captured ClientHello in place of the buil
 framing as the cause. All of them are retired (issue #20), so only `IOSCPP_TRACE` and
 `IOSCPP_DUMP` remain.
 
-**Reproduce.** Delete `%USERPROFILE%\.ioscpp\<udid>` so the next run re-pairs, then run
-`ioscpp_usb_example` and answer the trust prompt. With the zero-length serial the device
-resets after the ClientHello; with the serial fixed it answers and the run completes.
+**Reproduce.** Delete `%USERPROFILE%\.ioscpp\<serial>.plist` so the next run re-pairs, then
+run `ioscpp_usb_example` and answer the trust prompt. With the zero-length serial the
+device resets after the ClientHello; with the serial fixed it answers and the run completes.
 
 **Wire capture.** A USBPcap capture of a failing run (device on `USBPcap1`, root hub
 `USBROOT(0)#USB(7)`, address `1.35.0`) shows the sequence at the wire. The ClientHello
@@ -273,8 +273,8 @@ mbedTLS stack defaults `ioscpp` keeps.
 
 ## Expected blockers
 
-The entries here are the ones already known from the reference implementations. Some have
-since been hit and are recorded under *Hit blockers* above; the rest are still expected.
+The entries here are the ones already known from the reference implementations. Most have
+since been hit and are marked **Hit** below; the rest are still expected.
 
 ### The device interface is not the first one
 
@@ -284,11 +284,17 @@ interfaces. The mux protocol lives on the vendor-specific interface with class `
 default configuration, leaves the reads empty. The fix is to walk the descriptors and claim the
 interface that matches the triple.
 
+**Hit.** The transport searches every configuration and claims the matching interface
+(`src/usb/usb_transport.cpp`), and the device answers on a real device (`tests/device_test.cpp`).
+
 ### A read shorter than a frame is not an error
 
 libusb may return a transfer shorter than the requested length; it is not a short read in the
 sense of a POSIX `read`. The transport must loop until it has the requested number of bytes or
 the device stalls, rather than treating a partial transfer as end of stream.
+
+**Hit.** `UsbTransport::read` buffers a partial transfer, and the TLS records arrive as several
+short transfers and reassemble (`src/usb/usb_transport.cpp`).
 
 ### The mux header is big-endian and length includes the header
 
@@ -296,11 +302,17 @@ Every field in the mux header is network byte order, and `length` covers the who
 header included. Reading `length` as the payload size over-reads by 16 bytes and desynchronizes
 the stream. The payload length is `length - kMuxHeaderSize`.
 
+**Hit.** `protocol::MuxHeader::decode` is big-endian and `Session` reads
+`length - kMuxHeaderSize` (`src/session.cpp`), and the device answers.
+
 ### The v2 magic and sequence numbers are only for v2
 
 `magic` (`0xfeedface`) and `tx_seq`/`rx_seq` exist only once the device negotiated mux
 version 2. A v1 device has an 8-byte header, not 16. Sending a v2 header to a v1 device
 desynchronizes it, so the header size depends on the negotiated version.
+
+**Hit.** `Session::send` sets the v2 magic and advances `tx_seq` per frame
+(`src/session.cpp`), and the device accepts the frames.
 
 ### The setup packet is required for v2
 
@@ -308,16 +320,25 @@ After the device answers the version request with major version 2, the host must
 `MUX_PROTO_SETUP` packet with payload `\x07` before any connect. Skipping it makes the
 device ignore the connect.
 
+**Hit.** `Connection::open` sends the setup packet after a v2 answer
+(`src/connection.cpp`), and the device answers the connect.
+
 ### `lockdownd` closes an unpaired session
 
 `StartSession` on an unpaired host fails, and the device then drops the connection. Pairing must
 complete, and the pairing record must be saved and reused, before any service is started.
+
+**Hit.** `Device::connect` pairs and saves the record before `StartSession`
+(`src/device.cpp`), and the device starts the session.
 
 ### `lockdownd` speaks TLS after the session starts
 
 After `StartSession`, every `lockdownd` message is wrapped in TLS, using the session key from
 pairing. Sending a plaintext plist after the session starts is read as a TLS record and the
 handshake fails.
+
+**Hit.** `StartSession` switches the stream to `TlsSession`, and the handshake completes
+(`src/crypto/pairing.cpp`).
 
 ### AFC paths are relative to the service root, and are UTF-8
 
