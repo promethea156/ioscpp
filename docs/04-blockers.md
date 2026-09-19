@@ -164,11 +164,12 @@ certificate.
 
 **State.** `TlsSession::start` presents the host leaf certificate and key (the
 `pymobiledevice3` choice) with `config_defaults`, the `libimobiledevice` auth mode
-and verify callback, no session, and no hostname. `IOSCPP_TLS12`, `IOSCPP_NO_VERIFY`,
-and `IOSCPP_SESSION` still reset with the old certificate and are not needed for the
-fix. The `IOSCPP_REPLAY` probe sends a captured ClientHello in place of the built one,
-and `IOSCPP_MUX_V1` pins the mux to v1; both reset, which rules out the ClientHello
-and the framing as the cause. Neither is needed for the fix.
+and verify callback, no session, and no hostname. The `IOSCPP_TLS12`, `IOSCPP_NO_VERIFY`,
+and `IOSCPP_SESSION` probes still reset with the old certificate and are not needed for the
+fix; the `IOSCPP_REPLAY` probe sends a captured ClientHello in place of the built one, and
+`IOSCPP_MUX_V1` pins the mux to v1; both reset, which rules out the ClientHello and the
+framing as the cause. All of them are retired (issue #20), so only `IOSCPP_TRACE` and
+`IOSCPP_DUMP` remain.
 
 **Reproduce.** Delete `%USERPROFILE%\.ioscpp\<udid>` so the next run re-pairs, then run
 `ioscpp_usb_example` and answer the trust prompt. With the zero-length serial the device
@@ -247,8 +248,8 @@ device acks both, so this is the closest named lead, not a proven cause.
 
 The reference is OpenSSL, so the differences are mostly stack defaults. The capture in the
 entry above shows the device answers the reference ClientHello, so the reset looked like one of
-these differences. Bisecting them with the `IOSCPP_REFERENCE_*` knobs then showed that none is
-the cause on its own: even a ClientHello matching the reference on the record version, the
+these differences. Bisecting them with the `IOSCPP_REFERENCE_*` knobs (since retired, issue #20)
+then showed that none is the cause on its own: even a ClientHello matching the reference on the record version, the
 extension set, and `ec_point_formats` is reset, and so is a byte-for-byte replay of the reference
 ClientHello. The reset was the certificate serial in the entry above, and these differences are the
 mbedTLS stack defaults `ioscpp` keeps.
