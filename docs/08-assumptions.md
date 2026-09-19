@@ -116,6 +116,31 @@ TLS handshake without a trust tap, so it is proven for the pairing and session s
 
 **Proof.** Two consecutive device test runs, the second with the device already trusted.
 
+## Connection lifecycle
+
+### A dropped link is recoverable by re-discovery, not by the old handle
+
+**Assumption.** After the device resets the mux link, or is unplugged and replugged, a reconnect
+rediscovers the device by its USB serial and runs `Device::connect` again, because the device
+re-enumerates and its USB address changes.
+
+**Why we believe it.** The wire capture in `04-blockers.md` shows the device reset the mux connection, and
+`usb::DeviceId` already selects a device by serial, so discovery is the same call the first connect uses.
+
+**Status.** Not implemented. Teardown is RAII only, and `Transport::reopen` means "a fresh `usbmuxd`
+socket per port", not a reconnect.
+
+**Proof.** A device test unplugs and replugs the device and reconnects with no stale handle.
+
+### `disconnect` is idempotent and ordered
+
+**Assumption.** `Device::disconnect` closes innermost first (TLS `close_notify`, then streams, mux, and
+transport) and a second call is a no-op.
+
+**Status.** Not implemented; only the destructors close today.
+
+**Proof.** Two `disconnect` calls leave nothing open, and the mock transport reports the ordered close.
+
 ## AFC
 
 ### The AFC wire format is as implemented
@@ -149,10 +174,18 @@ references describe it.
 **Assumption.** The `CoreDeviceProxy` handshake returns an RSD address and port, and the device's
 IPv6 packets can be carried as data over a `Stream` with no `tunneld` and no `utun` interface.
 
-**Why we believe it.** go-ios's `ios tunnel start --userspace` and pymobiledevice3's tunnel guide do
-exactly this (`03-roadmap.md`, slice 9).
+**Why we believe it.** go-ios's `ios tunnel start --userspace` does exactly this in pure Go: it starts
+the `com.apple.internal.devicecompute.CoreDeviceProxy` lockdown service, exchanges the `CDTunnel`-framed
+JSON handshake for the address, MTU, and RSD port, re-frames the raw byte stream into IPv6 packets
+(`ios/tunnel/framing.go`), and runs a userspace TCP/IP stack over that link. pymobiledevice3 does the
+same with PyTCP. Both then speak RemoteXPC/RSD over a normal socket, so the tunnel is proven reachable
+with no root.
 
-**Status.** Not implemented.
+**The one new piece.** The tunnel's link is a raw IPv6 packet stream, so a userspace TCP/IP stack is
+required. In C++ that is `lwIP` behind a custom `netif`, or a minimal IPv6 + TCP client: the tunnel needs
+only outbound TCP connections to a few RSD ports, so no ARP, DHCP, routing, or ICMP is needed.
+
+**Status.** Not implemented; `CoreDeviceProxy` needs iOS 17.4 or later, which the device has.
 
 **Proof.** A device of iOS 17.4 or later lists the RSD services over the tunnel.
 
