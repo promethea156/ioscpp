@@ -1,5 +1,7 @@
 cmake_minimum_required(VERSION 3.24)
 
+# `project(VERSION)` takes numbers only, so a pre-release keeps the numeric base
+# here and the `-<pre-release>` suffix lives in the tag and the changelog.
 project(
   ioscpp
   VERSION 0.1.0
