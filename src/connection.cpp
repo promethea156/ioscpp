@@ -111,14 +111,9 @@ Result<Connection> Connection::open(Transport &transport)
         return connection;
     }
 
-    // A direct link negotiates a mux version. The first request is written with
-    // the v1 header, because the version is not known yet, which is exactly what
-    // `usbmuxd` does (`dev->version` is 0 until the device answers).
+    // A direct link negotiates a mux version. The request proposes the version
+    // this host speaks, and the device's answer settles it, matching `usbmuxd`.
     protocol::VersionHeader host_version;
-    if (std::getenv("IOSCPP_MUX_V1") != nullptr)
-    {
-        host_version.major = 1;
-    }
     if (Status status = connection.session_.send(protocol::MuxProtocol::Version, host_version.encode()); !status)
     {
         return tl::unexpected(status.error());
@@ -159,9 +154,8 @@ Result<Connection> Connection::open(Transport &transport)
         std::fprintf(stderr, "[version] device major=%u minor=%u\n", device_version.major, device_version.minor);
     }
 
-    const std::uint32_t version = std::getenv("IOSCPP_MUX_V1") != nullptr ? 1 : device_version.major;
-    connection.session_.set_version(version);
-    if (version >= 2)
+    connection.session_.set_version(device_version.major);
+    if (device_version.major >= 2)
     {
         // The v2 setup packet enables the v2 framing and resets the sequences.
         connection.session_.reset_sequences();

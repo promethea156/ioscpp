@@ -21,14 +21,13 @@ handshake that follows `StartSession` now completes, so `ioscpp_usb_example` pri
 The reset after the ClientHello was the host certificate's zero-length serial
 (`04-blockers.md`). The ClientHello was ruled out by replaying the captured reference
 ClientHello byte for byte, and the framing, version, TLS version, and pre-TLS state were
-each ruled out in turn. The temporary `IOSCPP_REFERENCE_*` experiment knobs and the
-`IOSCPP_REPLAY` and `IOSCPP_MUX_V1` probes stay in `src/crypto/pairing.cpp` until the
-TLS configuration is settled and they are retired (issue #20), which is the next work (P1).
+each ruled out in turn. The temporary experiment knobs that did the ruling out are retired
+(issue #20): the TLS configuration is settled, and only `IOSCPP_TRACE` and `IOSCPP_DUMP`
+remain, so the default path has no experiment env vars.
 
-The open work is ordered P1 to P10, lowest first: retire the TLS knobs (#20), validate
-Slices 4 to 7 on a device (#3, #4, #5, #6), add the explicit disconnect and reconnect
-(#24), then the guided tour (#7), the CoreDevice tunnel plan and implementation (#23, #8),
-and DTX (#9).
+The open work is ordered P2 to P10, lowest first: validate Slices 4 to 7 on a device
+(#3, #4, #5, #6), add the explicit disconnect and reconnect (#24), then the guided tour
+(#7), the CoreDevice tunnel plan and implementation (#23, #8), and DTX (#9).
 
 - [x] Slice 0: the project layout, the `Result<T>` error model, the `Transport` interface,
   the mock transport, and the build.
