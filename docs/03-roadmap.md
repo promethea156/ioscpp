@@ -23,7 +23,12 @@ The reset after the ClientHello was the host certificate's zero-length serial
 ClientHello byte for byte, and the framing, version, TLS version, and pre-TLS state were
 each ruled out in turn. The temporary `IOSCPP_REFERENCE_*` experiment knobs and the
 `IOSCPP_REPLAY` and `IOSCPP_MUX_V1` probes stay in `src/crypto/pairing.cpp` until the
-TLS configuration is settled and they are retired (issue #20).
+TLS configuration is settled and they are retired (issue #20), which is the next work (P1).
+
+The open work is ordered P1 to P10, lowest first: retire the TLS knobs (#20), validate
+Slices 4 to 7 on a device (#3, #4, #5, #6), add the explicit disconnect and reconnect
+(#24), then the guided tour (#7), the CoreDevice tunnel plan and implementation (#23, #8),
+and DTX (#9).
 
 - [x] Slice 0: the project layout, the `Result<T>` error model, the `Transport` interface,
   the mock transport, and the build.
@@ -136,8 +141,9 @@ handshake returns the tunnel interface's address, MTU, and RSD port and then car
 tunnel's IPv6 packets as data. On 17.0–17.3.1 the same tunnel is reached over the Wi-Fi
 **RemotePairing** route instead.
 
-The tunnel is what every later CoreDevice feature needs, so it is the next slice after the
-USB stack, and it is built the same way the rest of the library is: no `usbmuxd`, no `tunneld`
+The tunnel is what every later CoreDevice feature needs, so it is scheduled after the
+`lockdownd`, AFC, app install, and guided-tour work that runs over the plain mux (P8), and
+it is built the same way the rest of the library is: no `usbmuxd`, no `tunneld`
 daemon, and no TUN interface. The device's own tunnel address is only reachable from this
 process, which is the userspace model; a kernel-routable tunnel is a later improvement.
 
