@@ -19,12 +19,12 @@ passes it.
 
 ### Current work
 
-The reset after the ClientHello was the host certificate's zero-length serial
-(`04-blockers.md`). The ClientHello was ruled out by replaying the captured reference
-ClientHello byte for byte, and the framing, version, TLS version, and pre-TLS state were
-each ruled out in turn. The temporary experiment knobs that did the ruling out are retired
-(issue #20): the TLS configuration is settled, and only `IOSCPP_TRACE` and `IOSCPP_DUMP`
-remain, so the default path has no experiment env vars.
+Slices 4 and 5 are done and proven, so the next work is Slice 6: validate `AFC` listing and
+transfer against a real device (#5). The reset after the ClientHello that held Slices 4 and 5 back
+was the host certificate's zero-length serial (`04-blockers.md`); the ClientHello was ruled out by
+replaying the captured reference ClientHello byte for byte, and the framing, version, TLS version,
+and pre-TLS state were each ruled out in turn. The temporary experiment knobs that did the ruling
+out are retired (issue #20), so the default path reads no experiment env vars.
 
 The open work is ordered P4 to P10, lowest first: validate Slices 6 and 7 on a device
 (#5, #6), add the explicit disconnect and reconnect (#24), then the guided tour
