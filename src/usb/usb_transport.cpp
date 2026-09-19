@@ -64,7 +64,16 @@ std::string device_serial(libusb_device *device, const libusb_device_descriptor 
     {
         return {};
     }
-    return std::string(reinterpret_cast<const char *>(buffer.data()), static_cast<std::size_t>(length));
+    // The `iSerial` descriptor is a fixed-size field whose tail is NUL padded, and
+    // some backends return that field's length rather than the string's, so the
+    // trailing NULs are trimmed. They matter because a path built from the serial
+    // is a C string, and `fopen` stops at the first NUL.
+    std::size_t size = static_cast<std::size_t>(length);
+    while (size > 0 && buffer[size - 1] == 0)
+    {
+        --size;
+    }
+    return std::string(reinterpret_cast<const char *>(buffer.data()), size);
 }
 
 // Whether `descriptor` can satisfy `id`. A zero vendor or product id matches any,

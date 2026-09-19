@@ -99,12 +99,12 @@ session key.
 
 **Why we believe it.** `docs/04-blockers.md` and the `lockdown.c` reference describe the flow.
 
-**Status.** Pairing completes and the record is saved to `%USERPROFILE%\.ioscpp\<udid>`; a
-second run loads it and passes `StartSession` with `EnableSessionSSL=true`, so the
-pairing exchange and the session start are proven on a device. The TLS handshake that
-follows completes, so `ioscpp_usb_example` prints the device's `ProductType` and
-`ProductVersion`. The reset after the ClientHello was the host certificate's zero-length
-serial (`docs/04-blockers.md`).
+**Status.** Proven. The pairing exchange completes (with the trust prompt when the device is
+untrusted), the record is saved to `%USERPROFILE%\.ioscpp\<serial>.plist`, and a later run loads it
+and passes `StartSession` with `EnableSessionSSL=true`. The TLS handshake that follows completes, so
+the device reports its `ProductType` and `ProductVersion` (`tests/device_test.cpp`). The reset after the
+ClientHello was the host certificate's zero-length serial, and the record path was the USB serial's
+trailing NUL padding (`docs/04-blockers.md`).
 
 The client identity is settled as the host leaf certificate, which is what `lockdownd` paired
 against, and the auth mode as `REQUIRED` with a callback that accepts the device certificate
@@ -117,8 +117,8 @@ whatever its chain says, matching `idevice_connection_enable_ssl` (`src/crypto/p
 **Assumption.** A pairing record written by one run is accepted by `lockdownd` on the next, with no
 re-pair and no trust tap.
 
-**Status.** A second run reads the saved record, completes `StartSession`, and reaches the
-TLS handshake without a trust tap, so it is proven for the pairing and session steps.
+**Status.** Proven. The device test connects, then loads the saved record again and finds it already
+paired, so a second run needs no trust tap (`tests/device_test.cpp`).
 
 **Proof.** Two consecutive device test runs, the second with the device already trusted.
 

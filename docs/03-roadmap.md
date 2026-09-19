@@ -10,12 +10,12 @@ protocol assumptions explicit while they are still small enough to get right.
 
 ## Status
 
-Slices 0 to 4 are done. Slice 4 is proven on a device: `ioscpp_device_tests` walks the
+Slices 0 to 5 are done. Slice 4 is proven on a device: `ioscpp_device_tests` walks the
 descriptors, claims the mux interface, connects, and reads the device's identity, and it skips with
-code 77 when no matching device is attached. The pairing and `StartSession` parts of Slice 5 are also
-proven, and the TLS handshake that follows `StartSession` completes, so `ioscpp_usb_example` prints
-the device's `ProductType` and `ProductVersion`. Slice 5 onward stays open until a real device passes
-the rest.
+code 77 when no matching device is attached. Slice 5 is proven too: the pairing exchange completes, the
+record is saved and reused, `StartSession` wraps `lockdownd` in TLS, and the device reports its
+`ProductType` and `ProductVersion` through `GetValue`. Slice 6 onward stays open until a real device
+passes it.
 
 ### Current work
 
@@ -26,8 +26,8 @@ each ruled out in turn. The temporary experiment knobs that did the ruling out a
 (issue #20): the TLS configuration is settled, and only `IOSCPP_TRACE` and `IOSCPP_DUMP`
 remain, so the default path has no experiment env vars.
 
-The open work is ordered P3 to P10, lowest first: validate Slices 5 to 7 on a device
-(#4, #5, #6), add the explicit disconnect and reconnect (#24), then the guided tour
+The open work is ordered P4 to P10, lowest first: validate Slices 6 and 7 on a device
+(#5, #6), add the explicit disconnect and reconnect (#24), then the guided tour
 (#7), the CoreDevice tunnel plan and implementation (#23, #8), and DTX (#9).
 
 - [x] Slice 0: the project layout, the `Result<T>` error model, the `Transport` interface,
@@ -36,7 +36,7 @@ The open work is ordered P3 to P10, lowest first: validate Slices 5 to 7 on a de
 - [x] Slice 2: the mux frame codec and session.
 - [x] Slice 3: the mux version negotiation and port connect.
 - [x] Slice 4: the USB transport.
-- [ ] Slice 5: pairing and `lockdownd`.
+- [x] Slice 5: pairing and `lockdownd`.
 - [ ] Slice 6: `AFC` file listing and transfer.
 - [ ] Slice 7: app install, uninstall, and control.
 - [ ] Slice 8: the guided tour and the device integration test.

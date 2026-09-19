@@ -137,6 +137,22 @@ certificate. The device itself also rejects the handshake (see the entry below).
 (`src/crypto/pairing.cpp`). The device then answers the ClientHello and the handshake
 completes.
 
+### The USB serial descriptor carries its trailing NUL padding
+
+**Symptom.** The pairing record was written as `%USERPROFILE%\.ioscpp\<serial>`
+with no `.plist` suffix, so the next run did not find it and paired again. The serial
+printed with 20 trailing spaces, and the path held 20 NUL bytes before `.plist`.
+
+**Cause.** The device's `iSerial` string descriptor is a fixed 44-byte field whose tail
+is NUL padded, and `libusb_get_string_descriptor_ascii` returns that field's length
+rather than the string's, so `device_serial` built a 44-byte `std::string` of which 20
+bytes are NUL. `std::filesystem` keeps the NULs, but `fopen` is a C string and stops
+at the first one, so `...<serial>.plist` was written as `...<serial>`
+(`src/usb/usb_transport.cpp`).
+
+**Fix.** `device_serial` trims the trailing NULs, so the serial is the 24 characters
+`idevice_id -l` prints and the record is `<serial>.plist`.
+
 ### The device resets the TLS handshake after the ClientHello
 
 **Symptom.** With a well-formed ClientHello (record version `0x0303`, the full
