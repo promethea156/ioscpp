@@ -29,7 +29,7 @@ namespace ioscpp::crypto
  * service, until it has accepted this record.
  *
  * The record is persisted as a plist. The default path is
- * `~/.ioscpp/<udid>.plist`, mirroring how `libimobiledevice` stores its records.
+ * `~/.ioscpp/<serial>.plist`, mirroring how `libimobiledevice` stores its records.
  *
  * `load` loads the record when the file exists and generates a fresh key pair and
  * certificate when it does not; `pair` completes the record against the device. After a
@@ -51,7 +51,8 @@ public:
     /// Loads the record at `record_path`, generating it when absent.
     static Result<Pairing> load(const std::filesystem::path &record_path);
 
-    /// Loads the record for `udid` from the default directory, generating it when absent.
+    /// Loads the record for the device with this USB serial, which is its udid without
+    /// the dash, from the default directory, generating it when absent.
     static Result<Pairing> load_for_udid(std::string_view udid);
 
     /// Writes the record to the path it was loaded from.
