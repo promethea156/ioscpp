@@ -146,15 +146,68 @@ work around that.
   `USBPcap` captures below the driver, so it sees the traffic whichever driver
   owns the interface. `USBPcap` also captures an `ioscpp` run for the other side of
   the comparison.
+- **Capturing the wire.** `dumpcap -D` may not list the USBPcap interfaces; `tshark -D`
+  does. The device is on `\\.\USBPcap1` (root hub 1). Capture while an example runs:
+
+  ```powershell
+  tshark -i '\\.\USBPcap1' -a duration:30 -w ioscpp_run.pcapng
+  ```
+
+  `tshark -r ioscpp_run.pcapng -Y 'usb.device_address == 35 && usb.src == "host" && usb.data_len > 100'`
+  then finds the ClientHello, and
+  `-Y 'usb.capdata contains 73:65:73:73:69:6f:6e:55:70:63:61:6c:6c'` finds the
+  device's `sessionUpcall connection closed` frame.
+- **No device at all.** `tools/compare-clienthello.py ref` builds the
+  `pymobiledevice3` OpenSSL context and captures its ClientHello through
+  `ssl.MemoryBIO`, and `diff` names the differences against a file that
+  `IOSCPP_TRACE=1 IOSCPP_DUMP=<file> ioscpp_usb_example` writes. It separates a
+  stack default from a fault without a device or a second host.
 - **A `usbmuxd` of your own.** The `libimobiledevice-win32` release ships a
   `libusb`-backed `usbmuxd` and the `idevice*` tools. On Windows it needs the
   mux interface on a `libusb`-compatible driver, which is what `ioscpp` already
   needs, so it is a reference without a driver change. `pymobiledevice3` can then
   reach that `usbmuxd` over TCP by setting `USBMUXD_SOCKET_ADDRESS`.
+  This `usbmuxd` v1.1.1 crashes after it claims the mux interface. Replace its
+  `libusb-1.0.dll` with libusb 1.0.30 and start it with `-p -n`; it then lists
+  the device (`idevice_id -l`), but the first `lockdownd` connect still kills it
+  with `Mux error (-8)`.
 - **A second host or `WSL`.** `usbipd` attaches the device to `WSL`, where
   `libimobiledevice` runs with `usbmuxd` stopped and `tcpdump` captures the
   link. The device belongs to one host at a time, so this and a native `ioscpp`
   run are exclusive.
+
+### Reaching a reference through Apple Mobile Device Support
+
+Apple's own stack is the most faithful reference, and it needs no second host. It
+does need the device back on Apple's driver, which `Zadig` cannot install, and it
+is exclusive with `ioscpp` on the device, so capture the reference and switch back.
+
+1. Install the **desktop** iTunes support package, not the Microsoft Store build,
+   which is a UWP package and does not register the driver or the service the same
+   way. `iTunes64Setup.exe /extract` unpacks it, then install
+   `AppleMobileDeviceSupport64.msi`, which registers `Apple Mobile Device Service`
+   and the `usbaapl64` driver.
+2. Restore the driver in **Device Manager**, since `Zadig` only installs its own
+   drivers: *Update driver* -> *Browse my computer* -> *Let me pick from a list* ->
+   *Apple Mobile Device USB Driver*. Do not uninstall with *delete the driver
+   software* ticked, or the `libusb0` binding is lost and the `Zadig` step is
+   redone.
+3. Start the service, answer the trust prompt, and confirm the reference reaches the
+   device:
+
+   ```powershell
+   Start-Service 'Apple Mobile Device Service'
+   pymobiledevice3 usbmux list
+   pymobiledevice3 lockdown info
+   ```
+
+   If the daemon is not found, point `pymobiledevice3` at its TCP socket with
+   `USBMUXD_SOCKET_ADDRESS` set to `127.0.0.1:27015`.
+4. Capture the reference as above, and read the device's answer with
+   `tshark -r ref_run.pcapng -Y 'usb.src == "device" && usb.data_len > 40'`.
+   Whether the device sends a ServerHello at all is the decisive result.
+5. Stop the service, rebind the mux interface to `libusb-win32` in `Zadig`, and
+   run `ioscpp` again.
 
 ## Verify
 

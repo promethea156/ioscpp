@@ -15,6 +15,31 @@ not yet validated on a device, so their checkboxes stay open until a real device
 Slice 4 and the pairing and `StartSession` parts of Slice 5 are proven on a device; the TLS
 handshake that follows `StartSession` is the current blocker (`04-blockers.md`).
 
+### Current work
+
+A reference run through Apple's own stack proved the device answers the reference ClientHello and
+resets `ioscpp`'s (`04-blockers.md`), so the fault is on our side. The named ClientHello
+differences were then bisected, one at a time, with temporary `IOSCPP_REFERENCE_*` environment
+knobs in `src/crypto/pairing.cpp`, each of which makes our ClientHello offer the reference's value:
+
+| Knob | Makes our ClientHello | Result |
+| --- | --- | --- |
+| `IOSCPP_REFERENCE_CIPHERS` | offer the reference's suite list | still resets |
+| `IOSCPP_REFERENCE_RECORD` | send record version `0x0301` | still resets |
+| `IOSCPP_REFERENCE_EXTENSIONS` | offer the reference's groups, sig algs, and psk modes | still resets |
+| `IOSCPP_REFERENCE_POINT_FORMATS` | offer `ec_point_formats` `03000102` | still resets |
+| `IOSCPP_REFERENCE_PADDING` | pad the record to 512 bytes | still resets |
+
+With all five set, the ClientHello matches the reference on the record version, the extension set,
+and `ec_point_formats`; only `signature_algorithms` (mbedTLS drops 13 of the reference's 22) and the
+padding fill differ. The device still resets, so matching the ClientHello content does not fix it, and the
+fault is likely not in the ClientHello but in the framing or the session state before it.
+
+The next step is to capture the failing run with the knobs set and compare the frames before the
+ClientHello (the `StartSession` exchange, the mux setup, and the sequence numbers) against
+`captures/reference-run.pcapng`. The knobs are temporary and are removed once the cause is known and
+the values are settled.
+
 - [x] Slice 0: the project layout, the `Result<T>` error model, the `Transport` interface,
   the mock transport, and the build.
 - [x] Slice 1: the plist codec.
@@ -86,6 +111,8 @@ frame is an `ErrorCode::Protocol` error.
 - `crypto::Pairing`, the host key pair, the self-signed certificate, the pairing exchange,
   and the TLS session that `lockdownd` requires afterwards.
 - `Lockdown`, the `lockdownd` client: `query`, `get_value`, and `start_service`.
+- `Device::disconnect`, an idempotent, innermost-first teardown (TLS, streams, mux, transport),
+  so the connection closes in order and the destructor shares it.
 
 **Done when:** the tour queries the device's `ProductType` and `ProductVersion`.
 
@@ -108,33 +135,47 @@ frame is an `ErrorCode::Protocol` error.
 - `examples/demo/main.cpp`, the commented walkthrough.
 - `tests/device_test.cpp`, which runs every feature against one device and skips itself
   with code 77 when none is attached.
+- A reconnect for a dropped link: a reset or replug re-enumerates the device, so the test
+  rediscovers it by serial and connects again rather than reusing a stale handle.
 
-**Done when:** the demo and the device test pass against a real device.
+**Done when:** the demo and the device test pass against a real device, including a replug
+between steps.
 
 ## Slice 9: The iOS 17+ `RSD` tunnel
 
 iOS 17 moved the developer services off `lockdownd` and onto **CoreDevice** over
 **RemoteXPC**, and a CoreDevice service is only reachable over an **RSD** (Remote Service
 Discovery) tunnel to the device. On a device of 17.4 or later, `lockdownd` exposes the
-`com.apple.internal.devicecompute.CoreDeviceProxy` service, whose handshake returns the
-tunnel interface's address and port and then carries the tunnel's IPv6 packets as data. On
-17.0–17.3.1 the same tunnel is reached over the Wi-Fi **RemotePairing** route instead.
+`com.apple.internal.devicecompute.CoreDeviceProxy` service, whose `CDTunnel`-framed JSON
+handshake returns the tunnel interface's address, MTU, and RSD port and then carries the
+tunnel's IPv6 packets as data. On 17.0–17.3.1 the same tunnel is reached over the Wi-Fi
+**RemotePairing** route instead.
 
 The tunnel is what every later CoreDevice feature needs, so it is the next slice after the
 USB stack, and it is built the same way the rest of the library is: no `usbmuxd`, no `tunneld`
 daemon, and no TUN interface. The device's own tunnel address is only reachable from this
 process, which is the userspace model; a kernel-routable tunnel is a later improvement.
 
+The hard part is the link: `CoreDeviceProxy` hands over a **raw IPv6 packet stream with no
+packet boundaries**, so the library must re-frame it by the IPv6 payload-length field and run a
+**userspace TCP/IP stack** over it, so that an ordinary socket can reach the RSD port. Only
+outbound TCP to a few ports is needed, so `lwIP` behind a custom `netif` (or a minimal IPv6 +
+TCP client) is enough; no ARP, DHCP, routing, or ICMP.
+
 - `Connection`'s `CoreDeviceProxy` handshake, which returns the `RSD` address and port.
+- The `CDTunnel` frame and the raw-IPv6 re-framer, from the handshake to a stream of whole
+  IPv6 packets.
+- The userspace TCP/IP link, so `connect` reaches the RSD port with no root and no driver.
 - `protocol::RemoteXpc`, the 16-byte frame header and the `xpc` dictionary codec, which is
   the CoreDevice counterpart of the mux frame and the plist codec.
 - `Rsd`, the RSD connection: `GetService` and the service dictionary, and a `Stream` to a
   named service on the tunnel.
 - A device integration test that skips itself on a pre-17 device.
 
-The references are [`pymobiledevice3`'s RemoteXPC notes](https://doronz88.github.io/pymobiledevice3/internals/remotexpc/)
-and its iOS 17+ tunnel guide, and go-ios's `ios tunnel start --userspace`. Both create
-the same tunnel the same way, so either is a working second opinion.
+go-ios already does all of this in pure Go, and is the reference for every step:
+`ios/tunnel/tunnel_lockdown.go` for the handshake, `ios/tunnel/framing.go` for the
+re-framer, and gVisor `netstack` for the userspace stack. pymobiledevice3 does the same
+with PyTCP, and its RemoteXPC notes and tunnel guide describe the layers.
 
 **Done when:** a device of iOS 17.4 or later lists the RSD services and reaches one over
 the tunnel.
