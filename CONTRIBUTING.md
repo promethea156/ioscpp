@@ -35,7 +35,7 @@ output is already a contribution — [open a bug](https://github.com/promethea15
 ### Pick up a roadmap item
 
 [`docs/03-roadmap.md`](docs/03-roadmap.md) is the plan. The remaining slices each have an
-issue, and most of them are blocked on one thing: **a run against a real device**. Slices 4 to 8
+issue, and most of them are blocked on one thing: **a run against a real device**. Slices 6 to 8
 are written but not yet validated on hardware, so the most useful work is running them and reporting
 what happens. Items labelled
 [`good first issue`](https://github.com/promethea156/ioscpp/labels/good%20first%20issue)
@@ -43,11 +43,10 @@ need little context; those labelled
 [`help wanted`](https://github.com/promethea156/ioscpp/labels/help%20wanted) are broader.
 Reasonable starting points today:
 
-- **Record the Windows USB driver and service trap** ([#2](https://github.com/promethea156/ioscpp/issues/2)).
-- **Validate the USB transport against a real device** ([#3](https://github.com/promethea156/ioscpp/issues/3)).
-- **Validate pairing and `lockdownd`** ([#4](https://github.com/promethea156/ioscpp/issues/4)).
 - **Validate AFC listing and transfer** ([#5](https://github.com/promethea156/ioscpp/issues/5)).
 - **Validate app install, uninstall, and control** ([#6](https://github.com/promethea156/ioscpp/issues/6)).
+- **Add the explicit disconnect and reconnect** ([#24](https://github.com/promethea156/ioscpp/issues/24)).
+- **Build the guided tour and the device integration test** ([#7](https://github.com/promethea156/ioscpp/issues/7)).
 - **Build the iOS 17+ `RSD` tunnel** ([#8](https://github.com/promethea156/ioscpp/issues/8)) — the largest remaining slice.
 
 If an issue looks stale or already done, say so in it rather than guessing.
@@ -98,11 +97,12 @@ so an unformatted file fails the build there.
 ## The device test
 
 `ioscpp_device_tests` is the one test that needs hardware. It exits with code 77 (a CTest
-skip) when no matching device is attached, so it never fails a machine without one. It always checks
-the stat failure path, which touches no app, and it runs the install and uninstall round trip only when
-`IOSCPP_TEST_IPA` and `IOSCPP_TEST_BUNDLE` name a disposable app. That round trip uninstalls and
-reinstalls the bundle and loses its data, so only set those variables for an app you have agreed to
-replace.
+skip) when no matching device is attached, so it never fails a machine without one;
+`IOSCPP_TEST_SERIAL` names the device to match when several are attached, and the first is used
+otherwise. Today it connects and reads the device's identity; the stat failure path and the install
+and uninstall round trip are the goal of Slices 6 and 7, and the round trip runs only when
+`IOSCPP_TEST_IPA` and `IOSCPP_TEST_BUNDLE` name a disposable app. It uninstalls and reinstalls the
+bundle and loses its data, so only set those variables for an app you have agreed to replace.
 
 A device that has not been trusted by this host shows the *Trust This Computer?* prompt, and the pairing
 exchange blocks until it is answered, so run the device test from an interactive terminal.

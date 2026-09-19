@@ -142,3 +142,14 @@ ioscpp::testing::MockTransport transport;
 transport.feed(response_bytes);
 auto connection = ioscpp::Connection::open(transport).value();
 ```
+
+## Trace a run
+
+`IOSCPP_TRACE` prints the protocol steps to `stderr`, and `IOSCPP_DUMP` appends the
+TLS records the host sends to a file. Both are unset by default, and they are the only
+environment variables the library reads.
+
+```powershell
+$env:IOSCPP_TRACE = "1"
+$env:IOSCPP_DUMP = "clienthello.bin"
+```

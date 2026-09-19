@@ -111,10 +111,9 @@ Result<Connection> Connection::open(Transport &transport)
         return connection;
     }
 
-    // A direct link negotiates a mux version. The first request is written with
-    // the v1 header, because the version is not known yet, which is exactly what
-    // `usbmuxd` does (`dev->version` is 0 until the device answers).
-    const protocol::VersionHeader host_version;
+    // A direct link negotiates a mux version. The request proposes the version
+    // this host speaks, and the device's answer settles it, matching `usbmuxd`.
+    protocol::VersionHeader host_version;
     if (Status status = connection.session_.send(protocol::MuxProtocol::Version, host_version.encode()); !status)
     {
         return tl::unexpected(status.error());

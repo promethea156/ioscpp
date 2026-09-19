@@ -205,7 +205,8 @@ is exclusive with `ioscpp` on the device, so capture the reference and switch ba
    `USBMUXD_SOCKET_ADDRESS` set to `127.0.0.1:27015`.
 4. Capture the reference as above, and read the device's answer with
    `tshark -r ref_run.pcapng -Y 'usb.src == "device" && usb.data_len > 40'`.
-   Whether the device sends a ServerHello at all is the decisive result.
+   The device answers with a ServerHello, which is the reference the host's own
+   handshake was compared against (`04-blockers.md`).
 5. Stop the service, rebind the mux interface to `libusb-win32` in `Zadig`, and
    run `ioscpp` again.
 
@@ -217,9 +218,11 @@ With a device attached and trusted:
 cmake -S . -B build -DIOSCPP_BUILD_TESTS=ON -DIOSCPP_BUILD_EXAMPLES=ON
 cmake --build build --config Release
 ctest --test-dir build -C Release -E "^device$" --output-on-failure
+ctest --test-dir build -C Release -R "^device$" --output-on-failure
 build/examples/Release/ioscpp_usb_example
 ```
 
-`ioscpp_device_tests` exits `77` when no device is attached, so the same commands
-pass on a machine without one. See [`08-assumptions.md`](08-assumptions.md) for the
+The `device` test exits `77` when no matching device is attached, so the whole
+suite passes on a machine without one; `IOSCPP_TEST_SERIAL` names the device to
+match when several are attached. See [`08-assumptions.md`](08-assumptions.md) for the
 parts of this path that are not yet proven on a device.

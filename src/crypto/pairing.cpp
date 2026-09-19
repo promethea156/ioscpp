@@ -155,14 +155,17 @@ Result<std::vector<std::byte>> write_certificate(mbedtls_pk_context &subject_key
     mbedtls_x509write_cert certificate;
     mbedtls_x509write_crt_init(&certificate);
     mbedtls_x509write_crt_set_version(&certificate, MBEDTLS_X509_CRT_VERSION_3);
-    // The pairing chain uses SHA-1, an empty distinguished name, and serial 0,
-    // matching `generate_pairing_cert_chain`:
+    // The pairing chain uses SHA-256, matching `generate_pairing_cert_chain`:
     //   https://github.com/doronz88/pymobiledevice3/blob/master/pymobiledevice3/ca.py
+    // The reference uses an empty distinguished name; `CN=ioscpp` is our own.
     mbedtls_x509write_crt_set_md_alg(&certificate, MBEDTLS_MD_SHA256);
 
+    // The reference serial is one (`_SERIAL`). A zero serial is written as a
+    // zero-length `INTEGER`, which RFC 5280 forbids and OpenSSL 3.0 and the
+    // device reject, so the serial is one here too.
     mbedtls_mpi serial;
     mbedtls_mpi_init(&serial);
-    (void)mbedtls_mpi_lset(&serial, 0);
+    (void)mbedtls_mpi_lset(&serial, 1);
     (void)mbedtls_x509write_crt_set_serial(&certificate, &serial);
 
     (void)mbedtls_x509write_crt_set_subject_name(&certificate, "CN=ioscpp");
@@ -510,11 +513,6 @@ std::span<const std::byte> Pairing::root_certificate() const noexcept
     return impl_->root_certificate;
 }
 
-std::span<const std::byte> Pairing::root_private_key() const noexcept
-{
-    return impl_->root_private_key;
-}
-
 std::span<const std::byte> Pairing::session_key() const noexcept
 {
     return impl_->session_key;
@@ -683,83 +681,6 @@ namespace
 int tls_send(void *context, const unsigned char *data, std::size_t length)
 {
     auto *stream = static_cast<Stream *>(context);
-    // `IOSCPP_REFERENCE_RECORD` rewrites the first handshake record's version
-    // to `0x0301`, the value the OpenSSL reference sends for its ClientHello,
-    // to tell whether the device's reset depends on it. The records after the
-    // ClientHello keep `0x0303`, as the reference's do.
-    //
-    // `IOSCPP_REFERENCE_PADDING` pads the ClientHello to 512 bytes with an
-    // empty `padding` extension, the length the reference pads it to.
-    static bool first_record = true;
-    std::vector<std::byte> record;
-    if (first_record && length >= 9 && data[0] == 0x16 && data[5] == 0x01)
-    {
-        const bool version = std::getenv("IOSCPP_REFERENCE_RECORD") != nullptr;
-        const bool formats = std::getenv("IOSCPP_REFERENCE_POINT_FORMATS") != nullptr;
-        const bool padding = std::getenv("IOSCPP_REFERENCE_PADDING") != nullptr;
-        if (version || formats || padding)
-        {
-            record.assign(reinterpret_cast<const std::byte *>(data),
-                          reinterpret_cast<const std::byte *>(data) + length);
-            auto *bytes = reinterpret_cast<unsigned char *>(record.data());
-            if (version)
-            {
-                bytes[1] = 0x03;
-                bytes[2] = 0x01;
-            }
-            // The extensions length is the field before the first extension, and
-            // it stays at this offset as everything added follows it.
-            std::size_t position = 43;
-            position = 44 + bytes[position];
-            position += 2 + ((bytes[position] << 8) | bytes[position + 1]);
-            position += 1 + bytes[position];
-            if (formats)
-            {
-                for (std::size_t i = position + 2; i + 6 <= record.size(); ++i)
-                {
-                    if (bytes[i] == 0x00 && bytes[i + 1] == 0x0b && bytes[i + 2] == 0x00 && bytes[i + 3] == 0x02 &&
-                        bytes[i + 4] == 0x01 && bytes[i + 5] == 0x00)
-                    {
-                        record.insert(record.begin() + static_cast<std::ptrdiff_t>(i + 6),
-                                      {std::byte{0x01}, std::byte{0x02}});
-                        bytes = reinterpret_cast<unsigned char *>(record.data());
-                        bytes[i + 2] = 0x00;
-                        bytes[i + 3] = 0x04;
-                        bytes[i + 4] = 0x03;
-                        bytes[i + 5] = 0x00;
-                        break;
-                    }
-                }
-            }
-            std::size_t delta = record.size() - length;
-            if (padding)
-            {
-                // Pad to 512 bytes, the length the reference pads to.
-                const std::size_t padded = 512 - record.size();
-                const std::size_t data_length = padded - 4;
-                record.push_back(std::byte{0x00});
-                record.push_back(std::byte{0x15});
-                record.push_back(static_cast<std::byte>(data_length >> 8));
-                record.push_back(static_cast<std::byte>(data_length & 0xff));
-                record.resize(record.size() + data_length, std::byte{0});
-                delta += padded;
-            }
-            bytes = reinterpret_cast<unsigned char *>(record.data());
-            const std::size_t record_length = record.size() - 5;
-            const std::size_t handshake_length = record.size() - 9;
-            const std::size_t extensions = ((bytes[position] << 8) | bytes[position + 1]) + delta;
-            bytes[3] = static_cast<unsigned char>(record_length >> 8);
-            bytes[4] = static_cast<unsigned char>(record_length & 0xff);
-            bytes[6] = static_cast<unsigned char>(handshake_length >> 16);
-            bytes[7] = static_cast<unsigned char>((handshake_length >> 8) & 0xff);
-            bytes[8] = static_cast<unsigned char>(handshake_length & 0xff);
-            bytes[position] = static_cast<unsigned char>(extensions >> 8);
-            bytes[position + 1] = static_cast<unsigned char>(extensions & 0xff);
-            data = reinterpret_cast<const unsigned char *>(record.data());
-            length = record.size();
-        }
-    }
-    first_record = false;
     if (std::getenv("IOSCPP_TRACE") != nullptr)
     {
         std::fprintf(stderr, "[tls send] len=%zu first=%02x%02x%02x%02x%02x\n", length, data[0], data[1], data[2],
@@ -778,6 +699,8 @@ int tls_send(void *context, const unsigned char *data, std::size_t length)
             }
         }
     }
+    // The stream write is exact and blocks until it has the bytes or the link
+    // breaks, so the whole record is reported as sent.
     const Status status = stream->write(std::span<const std::byte>(reinterpret_cast<const std::byte *>(data), length));
     return status ? static_cast<int>(length) : MBEDTLS_ERR_SSL_WANT_WRITE;
 }
@@ -876,54 +799,16 @@ Result<TlsSession> TlsSession::start(Stream &stream, const Pairing &pairing)
     {
         return tl::unexpected(crypto_error("the TLS configuration could not be set"));
     }
-    mbedtls_ssl_conf_authmode(
-        &impl.conf, std::getenv("IOSCPP_NO_VERIFY") != nullptr ? MBEDTLS_SSL_VERIFY_NONE : MBEDTLS_SSL_VERIFY_REQUIRED);
+    // The device certificate is accepted whatever its chain says, matching
+    // `cert_verify_cb` in `idevice_connection_enable_ssl`, so the mode is
+    // required with a callback that always accepts.
+    mbedtls_ssl_conf_authmode(&impl.conf, MBEDTLS_SSL_VERIFY_REQUIRED);
     mbedtls_ssl_conf_verify(&impl.conf, tls_verify, nullptr);
     mbedtls_ssl_conf_rng(&impl.conf, rng, nullptr);
     mbedtls_ssl_conf_ca_chain(&impl.conf, authority, nullptr);
     if (mbedtls_ssl_conf_own_cert(&impl.conf, &impl.host_certificate, &impl.host_key) != 0)
     {
         return tl::unexpected(crypto_error("the host certificate could not be configured"));
-    }
-    // `IOSCPP_TLS12` pins the maximum version to TLS 1.2, for an experiment
-    // against a device whose `lockdownd` may not speak TLS 1.3.
-    if (std::getenv("IOSCPP_TLS12") != nullptr)
-    {
-        mbedtls_ssl_conf_max_tls_version(&impl.conf, MBEDTLS_SSL_VERSION_TLS1_2);
-    }
-    // `IOSCPP_REFERENCE_CIPHERS` offers exactly the suite list the OpenSSL
-    // reference offers, in the same order, to tell whether the device's reset
-    // depends on it. The list is the reference ClientHello's, captured on the
-    // wire (`docs/captures/reference-clienthello.bin`).
-    if (std::getenv("IOSCPP_REFERENCE_CIPHERS") != nullptr)
-    {
-        static const int reference_ciphers[] = {
-            0x1302, 0x1303, 0x1301, 0xc02c, 0xc030, 0x00a3, 0x009f, 0xcca9, 0xcca8, 0xccaa, 0xc0af, 0xc0ad, 0xc0a3,
-            0xc09f, 0xc05d, 0xc061, 0xc057, 0xc053, 0xc02b, 0xc02f, 0x00a2, 0x009e, 0xc0ae, 0xc0ac, 0xc0a2, 0xc09e,
-            0xc05c, 0xc060, 0xc056, 0xc052, 0xc024, 0xc028, 0x006b, 0x006a, 0xc073, 0xc077, 0x00c4, 0x00c3, 0xc023,
-            0xc027, 0x0067, 0x0040, 0xc072, 0xc076, 0x00be, 0x00bd, 0xc00a, 0xc014, 0x0039, 0x0038, 0x0088, 0x0087,
-            0xc009, 0xc013, 0x0033, 0x0032, 0x0045, 0x0044, 0x009d, 0xc0a1, 0xc09d, 0xc051, 0x009c, 0xc0a0, 0xc09c,
-            0xc050, 0x003d, 0x00c0, 0x003c, 0x00ba, 0x0035, 0x0084, 0x002f, 0x0041, 0x00ff, 0x0000,
-        };
-        mbedtls_ssl_conf_ciphersuites(&impl.conf, reference_ciphers);
-    }
-    // `IOSCPP_REFERENCE_EXTENSIONS` offers the reference's `supported_groups`,
-    // `signature_algorithms`, and `psk_key_exchange_modes`, the remaining named
-    // differences from the reference ClientHello once the suite list and the record
-    // version are matched.
-    if (std::getenv("IOSCPP_REFERENCE_EXTENSIONS") != nullptr)
-    {
-        static const uint16_t reference_groups[] = {
-            0x001d, 0x0017, 0x001e, 0x0019, 0x0018, 0x0100, 0x0101, 0x0102, 0x0103, 0x0104, 0x0000,
-        };
-        static const uint16_t reference_sig_algs[] = {
-            0x0403, 0x0503, 0x0603, 0x0807, 0x0808, 0x0809, 0x080a, 0x080b,
-            0x0804, 0x0805, 0x0806, 0x0401, 0x0501, 0x0601, 0x0303, 0x0203,
-            0x0301, 0x0201, 0x0302, 0x0202, 0x0402, 0x0502, 0x0602, MBEDTLS_TLS1_3_SIG_NONE,
-        };
-        mbedtls_ssl_conf_groups(&impl.conf, reference_groups);
-        mbedtls_ssl_conf_sig_algs(&impl.conf, reference_sig_algs);
-        mbedtls_ssl_conf_tls13_key_exchange_modes(&impl.conf, MBEDTLS_SSL_TLS1_3_KEY_EXCHANGE_MODE_PSK_EPHEMERAL);
     }
 #if defined(MBEDTLS_DEBUG_C)
     mbedtls_ssl_conf_dbg(&impl.conf, tls_debug, nullptr);
@@ -945,21 +830,6 @@ Result<TlsSession> TlsSession::start(Stream &stream, const Pairing &pairing)
     // only carries an id leaves `tls_version` at zero, so the ClientHello is then
     // written with legacy version `0x0000` and no cipher suite but the SCSV.
     //   https://github.com/libimobiledevice/libimobiledevice/blob/master/src/idevice.c
-    //
-    // `IOSCPP_SESSION` echoes the `StartSession` `SessionID` as the TLS session
-    // id instead, with the version and suite a bare session is missing.
-    if (std::getenv("IOSCPP_SESSION") != nullptr)
-    {
-        const std::string_view session_id = pairing.session_id();
-        mbedtls_ssl_session session;
-        mbedtls_ssl_session_init(&session);
-        session.MBEDTLS_PRIVATE(tls_version) = MBEDTLS_SSL_VERSION_TLS1_3;
-        session.MBEDTLS_PRIVATE(ciphersuite) = 0x1301;
-        session.MBEDTLS_PRIVATE(id_len) = std::min(session_id.size(), sizeof(session.MBEDTLS_PRIVATE(id)));
-        std::memcpy(session.MBEDTLS_PRIVATE(id), session_id.data(), session.MBEDTLS_PRIVATE(id_len));
-        mbedtls_ssl_set_session(&impl.ssl, &session);
-        mbedtls_ssl_session_free(&session);
-    }
 
     int result = 0;
     while ((result = mbedtls_ssl_handshake(&impl.ssl)) != 0)

@@ -10,43 +10,33 @@ protocol assumptions explicit while they are still small enough to get right.
 
 ## Status
 
-Slices 0 to 3 are done and covered by the device-free tests. Slices 4 onward are written but
-not yet validated on a device, so their checkboxes stay open until a real device passes them.
-Slice 4 and the pairing and `StartSession` parts of Slice 5 are proven on a device; the TLS
-handshake that follows `StartSession` is the current blocker (`04-blockers.md`).
+Slices 0 to 5 are done. Slice 4 is proven on a device: `ioscpp_device_tests` walks the
+descriptors, claims the mux interface, connects, and reads the device's identity, and it skips with
+code 77 when no matching device is attached. Slice 5 is proven too: the pairing exchange completes, the
+record is saved and reused, `StartSession` wraps `lockdownd` in TLS, and the device reports its
+`ProductType` and `ProductVersion` through `GetValue`. Slice 6 onward stays open until a real device
+passes it.
 
 ### Current work
 
-A reference run through Apple's own stack proved the device answers the reference ClientHello and
-resets `ioscpp`'s (`04-blockers.md`), so the fault is on our side. The named ClientHello
-differences were then bisected, one at a time, with temporary `IOSCPP_REFERENCE_*` environment
-knobs in `src/crypto/pairing.cpp`, each of which makes our ClientHello offer the reference's value:
+Slices 4 and 5 are done and proven, so the next work is Slice 6: validate `AFC` listing and
+transfer against a real device (#5). The reset after the ClientHello that held Slices 4 and 5 back
+was the host certificate's zero-length serial (`04-blockers.md`); the ClientHello was ruled out by
+replaying the captured reference ClientHello byte for byte, and the framing, version, TLS version,
+and pre-TLS state were each ruled out in turn. The temporary experiment knobs that did the ruling
+out are retired (issue #20), so the default path reads no experiment env vars.
 
-| Knob | Makes our ClientHello | Result |
-| --- | --- | --- |
-| `IOSCPP_REFERENCE_CIPHERS` | offer the reference's suite list | still resets |
-| `IOSCPP_REFERENCE_RECORD` | send record version `0x0301` | still resets |
-| `IOSCPP_REFERENCE_EXTENSIONS` | offer the reference's groups, sig algs, and psk modes | still resets |
-| `IOSCPP_REFERENCE_POINT_FORMATS` | offer `ec_point_formats` `03000102` | still resets |
-| `IOSCPP_REFERENCE_PADDING` | pad the record to 512 bytes | still resets |
-
-With all five set, the ClientHello matches the reference on the record version, the extension set,
-and `ec_point_formats`; only `signature_algorithms` (mbedTLS drops 13 of the reference's 22) and the
-padding fill differ. The device still resets, so matching the ClientHello content does not fix it, and the
-fault is likely not in the ClientHello but in the framing or the session state before it.
-
-The next step is to capture the failing run with the knobs set and compare the frames before the
-ClientHello (the `StartSession` exchange, the mux setup, and the sequence numbers) against
-`captures/reference-run.pcapng`. The knobs are temporary and are removed once the cause is known and
-the values are settled.
+The open work is ordered P4 to P10, lowest first: validate Slices 6 and 7 on a device
+(#5, #6), add the explicit disconnect and reconnect (#24), then the guided tour
+(#7), the CoreDevice tunnel plan and implementation (#23, #8), and DTX (#9).
 
 - [x] Slice 0: the project layout, the `Result<T>` error model, the `Transport` interface,
   the mock transport, and the build.
 - [x] Slice 1: the plist codec.
 - [x] Slice 2: the mux frame codec and session.
 - [x] Slice 3: the mux version negotiation and port connect.
-- [ ] Slice 4: the USB transport.
-- [ ] Slice 5: pairing and `lockdownd`.
+- [x] Slice 4: the USB transport.
+- [x] Slice 5: pairing and `lockdownd`.
 - [ ] Slice 6: `AFC` file listing and transfer.
 - [ ] Slice 7: app install, uninstall, and control.
 - [ ] Slice 8: the guided tour and the device integration test.
@@ -151,8 +141,9 @@ handshake returns the tunnel interface's address, MTU, and RSD port and then car
 tunnel's IPv6 packets as data. On 17.0–17.3.1 the same tunnel is reached over the Wi-Fi
 **RemotePairing** route instead.
 
-The tunnel is what every later CoreDevice feature needs, so it is the next slice after the
-USB stack, and it is built the same way the rest of the library is: no `usbmuxd`, no `tunneld`
+The tunnel is what every later CoreDevice feature needs, so it is scheduled after the
+`lockdownd`, AFC, app install, and guided-tour work that runs over the plain mux (P8), and
+it is built the same way the rest of the library is: no `usbmuxd`, no `tunneld`
 daemon, and no TUN interface. The device's own tunnel address is only reachable from this
 process, which is the userspace model; a kernel-routable tunnel is a later improvement.
 
