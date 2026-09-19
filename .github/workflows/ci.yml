@@ -57,8 +57,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # The notes are the section whose header names the tag, so a new
+      # `## [Unreleased]` above it does not leak into the release.
       - name: Extract the release notes
-        run: awk '/^## \[/{count++} count == 1' CHANGELOG.md > notes.md
+        run: |
+          awk -v tag="$GITHUB_REF_NAME" '
+            /^## \[/ { if (found) exit; if (index($0, "[" substr(tag, 2) "]")) found = 1 }
+            found
+          ' CHANGELOG.md > notes.md
 
       - name: Create the release
         env:
