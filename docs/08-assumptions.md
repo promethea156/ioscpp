@@ -26,13 +26,11 @@ exchange mux frames, with `usbmuxd` stopped and no daemon or socket in between.
 claim on the same interface. go-ios and pymobiledevice3 do it without `usbmuxd`
 (`02-references.md`).
 
-**Status.** `UsbTransport::open` claims the interface (`src/usb/usb_transport.cpp:462`), selects the
-configuration that carries it first, and the mux handshake runs to the first `lockdownd`
-request, but no device reply has been seen yet. `AGENTS.md` documents that `usbmuxd` holds
-the device, which is consistent with one owner.
+**Status.** Proven. `UsbTransport::open` claims the interface (`src/usb/usb_transport.cpp:462`),
+selects the configuration that carries it first, and the device answers the mux version
+request (`tests/device_test.cpp`).
 
-**Proof.** Run `ioscpp_usb_example` with `usbmuxd` stopped and see a device answer the mux
-version request.
+**Proof.** `ioscpp_usb_example` with `usbmuxd` stopped answers the mux version request.
 
 ### The mux interface is present and stable
 
@@ -44,9 +42,9 @@ or in the configuration the device starts in.
 `docs/04-blockers.md` records the "not the first interface" trap. A device in its initial mode
 carries the interface only in a later configuration, so `usbmuxd` selects it.
 
-**Status.** `find_mux_interface` walks every configuration for the triple and `open` selects the
-one that carries it before claiming the interface (`src/usb/usb_transport.cpp`). A run reached the
-`lockdownd` request, so the interface is found and claimed, but the device has not answered yet.
+**Status.** Proven. `find_mux_interface` walks every configuration for the triple and `open` selects
+the one that carries it before claiming the interface (`src/usb/usb_transport.cpp`), and the device
+answers (`tests/device_test.cpp`). On this device the interface is not index 0.
 
 **Proof.** A device whose mux interface is not index 0, and not in the active configuration,
 still connects and answers.
@@ -59,7 +57,8 @@ serial descriptor work on Windows (WinUSB), macOS, and Linux alike.
 **Why we believe it.** libusb is the documented cross-platform path, and the code has a Linux
 detach (`src/usb/usb_transport.cpp:441`).
 
-**Status.** Only compiled, not run, on any platform.
+**Status.** Proven on Windows: the device test claims the interface and connects
+(`tests/device_test.cpp`). macOS and Linux are still only compiled.
 
 **Proof.** The device test passes on all three CI platforms.
 
@@ -70,6 +69,9 @@ stalled, and the transport must loop or buffer rather than treat it as end of st
 
 **Why we believe it.** `docs/04-blockers.md` records this as a known trap, and `read` buffers a
 partial transfer for later reads (`src/usb/usb_transport.cpp:505`).
+
+**Status.** Proven. The TLS handshake records arrive as several short transfers and reassemble
+(`tests/device_test.cpp`).
 
 **Proof.** A large transfer over the real link reassembles without a desync.
 
@@ -82,8 +84,8 @@ partial transfer for later reads (`src/usb/usb_transport.cpp:505`).
 
 **Why we believe it.** `usbmuxd`'s `src/device.c` and `docs/04-blockers.md` describe it.
 
-**Status.** `Connection` implements it (`src/connection.cpp`) and `tests/stream_test.cpp` covers it
-over a mock only.
+**Status.** Proven. A real device completes the v2 negotiation and a port connect
+(`tests/device_test.cpp`).
 
 **Proof.** A real device completes the negotiation and a port connect.
 
@@ -97,12 +99,16 @@ session key.
 
 **Why we believe it.** `docs/04-blockers.md` and the `lockdown.c` reference describe the flow.
 
-**Status.** Pairing completes and the record is saved to `%USERPROFILE%\.ioscpp\<udid>`; a
-second run loads it and passes `StartSession` with `EnableSessionSSL=true`, so the
-pairing exchange and the session start are proven on a device. The TLS handshake is the
-open part: the ClientHello is now well-formed and its extension set matches a device-free
-OpenSSL reference bar stack defaults, but the device resets the connection after it
-(`docs/04-blockers.md`).
+**Status.** Proven. The pairing exchange completes (with the trust prompt when the device is
+untrusted), the record is saved to `%USERPROFILE%\.ioscpp\<serial>.plist`, and a later run loads it
+and passes `StartSession` with `EnableSessionSSL=true`. The TLS handshake that follows completes, so
+the device reports its `ProductType` and `ProductVersion` (`tests/device_test.cpp`). The reset after the
+ClientHello was the host certificate's zero-length serial, and the record path was the USB serial's
+trailing NUL padding (`docs/04-blockers.md`).
+
+The client identity is settled as the host leaf certificate, which is what `lockdownd` paired
+against, and the auth mode as `REQUIRED` with a callback that accepts the device certificate
+whatever its chain says, matching `idevice_connection_enable_ssl` (`src/crypto/pairing.cpp`).
 
 **Proof.** A device that is already trusted completes the tour's query step.
 
@@ -111,8 +117,8 @@ OpenSSL reference bar stack defaults, but the device resets the connection after
 **Assumption.** A pairing record written by one run is accepted by `lockdownd` on the next, with no
 re-pair and no trust tap.
 
-**Status.** A second run reads the saved record, completes `StartSession`, and reaches the
-TLS handshake without a trust tap, so it is proven for the pairing and session steps.
+**Status.** Proven. The device test connects, then loads the saved record again and finds it already
+paired, so a second run needs no trust tap (`tests/device_test.cpp`).
 
 **Proof.** Two consecutive device test runs, the second with the device already trusted.
 

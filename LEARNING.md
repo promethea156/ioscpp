@@ -79,7 +79,8 @@ Read: [`include/ioscpp/app.hpp`](include/ioscpp/app.hpp).
 ## Module 8: Putting it together
 
 `Device` composes the modules: a transport, a mux connection, a pairing, a `lockdownd`
-client, and the device's identity. The demo walks every feature once.
+client, and the device's identity. The demo walks the implemented features once; walking
+every feature once is the goal of Slice 8 (`03-roadmap.md`).
 
 Read: [`include/ioscpp/device.hpp`](include/ioscpp/device.hpp),
 [`examples/demo/main.cpp`](examples/demo/main.cpp).

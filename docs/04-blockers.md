@@ -124,21 +124,34 @@ accepts them. The DER `tbsCertificate` holds `02 00`, an `INTEGER` with a
 zero-length value.
 
 **Cause.** `generate_certificate` sets the serial with `mbedtls_mpi_lset(&serial, 0)`,
-and mbedTLS writes a zero MPI as a zero-length `INTEGER`. RFC 5280 requires a
-positive serial, and OpenSSL 3.0 enforces it while mbedTLS does not
-(`src/crypto/pairing.cpp`). The reference `pymobiledevice3` certificate carries the
-same zero value as `02 01 00`, a one-byte `INTEGER`, so the value is not the trap and
-the zero-length encoding is.
+and mbedTLS writes a zero MPI as a zero-length `INTEGER` (`02 00`). RFC 5280
+requires a positive serial, and OpenSSL 3.0 enforces it while mbedTLS does not
+(`src/crypto/pairing.cpp`). The reference `pymobiledevice3` sets the serial to one
+(`_SERIAL` in `ca.py`), so the value is not the trap and the zero-length encoding is.
 
 **Impact.** A tool that reads the pair record with OpenSSL, such as a
 `pymobiledevice3` comparison or `libimobiledevice`, cannot load the host
-certificate. `ioscpp` itself is unaffected because it uses mbedTLS.
+certificate. The device itself also rejects the handshake (see the entry below).
 
-**Workaround.** The ClientHello comparison falls back to a freshly generated
-self-signed certificate; the client certificate does not change the ClientHello.
+**Fix.** `generate_certificate` sets the serial to one, so mbedTLS writes `02 01 01`
+(`src/crypto/pairing.cpp`). The device then answers the ClientHello and the handshake
+completes.
 
-**Fix.** Still open. Set a non-zero serial, so mbedTLS writes `02 01 01`
-(`src/crypto/pairing.cpp`).
+### The USB serial descriptor carries its trailing NUL padding
+
+**Symptom.** The pairing record was written as `%USERPROFILE%\.ioscpp\<serial>`
+with no `.plist` suffix, so the next run did not find it and paired again. The serial
+printed with 20 trailing spaces, and the path held 20 NUL bytes before `.plist`.
+
+**Cause.** The device's `iSerial` string descriptor is a fixed 44-byte field whose tail
+is NUL padded, and `libusb_get_string_descriptor_ascii` returns that field's length
+rather than the string's, so `device_serial` built a 44-byte `std::string` of which 20
+bytes are NUL. `std::filesystem` keeps the NULs, but `fopen` is a C string and stops
+at the first one, so `...<serial>.plist` was written as `...<serial>`
+(`src/usb/usb_transport.cpp`).
+
+**Fix.** `device_serial` trims the trailing NULs, so the serial is the 24 characters
+`idevice_id -l` prints and the record is `<serial>.plist`.
 
 ### The device resets the TLS handshake after the ClientHello
 
@@ -148,21 +161,35 @@ mux control frame `type=3 socketIsClosed sock_receive returned errno 54` and a
 reset whose reason is `sessionUpcall connection closed`. No ServerHello arrives,
 and `mbedtls_ssl_handshake` returns `MBEDTLS_ERR_SSL_CONN_EOF`.
 
-**Cause.** Still open. It is not the TLS version (it happens pinned to TLS 1.2 too),
-not the client identity (the host leaf and the root both fail), not the pre-TLS delay,
-and not the verify mode. The device is on iOS 18.7.8.
+**Cause.** The host certificate's serial number. The pairing chain wrote the serial as
+a zero-length `INTEGER` (`02 00`), which the device's TLS rejects as the client
+identity, so it closes the connection before the handshake finishes. The device is on
+iOS 18.7.8.
 
-A reference ClientHello was captured and diffed against `IOSCPP_DUMP` (see the entry
-below); the differences are named there. A capture of the reference on the wire then showed
-the device answers the reference ClientHello and resets `ioscpp`'s (see the entry below), so
-the reset is one of those differences, not the device or the state before it.
+The ClientHello itself is not the cause: replaying the captured reference
+ClientHello byte for byte over the same link still resets. Nor is the mux framing or
+the version (v1 and v2 both reset), the TLS version (TLS 1.2 and 1.3 both reset), the
+pre-TLS delay, the verify mode, or the session id echo. Bisecting the named ClientHello
+differences (`IOSCPP_REFERENCE_*`) also left the reset in place.
+
+**Fix.** `generate_certificate` writes a non-zero serial (`src/crypto/pairing.cpp`,
+see the entry above). With it, the device answers with a ServerHello, the handshake
+completes, and `ioscpp_usb_example` prints the device's `ProductType` and
+`ProductVersion`. The pair record must be regenerated, because it carries the old
+certificate.
 
 **State.** `TlsSession::start` presents the host leaf certificate and key (the
 `pymobiledevice3` choice) with `config_defaults`, the `libimobiledevice` auth mode
-and verify callback, no session, and no hostname. The device is still reset with
-`IOSCPP_TLS12` pinning TLS 1.2, `IOSCPP_NO_VERIFY` disabling the peer verify,
-and `IOSCPP_SESSION` echoing the `SessionID` with a valid session version and
-suite, so none of those is the cause on its own.
+and verify callback, no session, and no hostname. The `IOSCPP_TLS12`, `IOSCPP_NO_VERIFY`,
+and `IOSCPP_SESSION` probes still reset with the old certificate and are not needed for the
+fix; the `IOSCPP_REPLAY` probe sends a captured ClientHello in place of the built one, and
+`IOSCPP_MUX_V1` pins the mux to v1; both reset, which rules out the ClientHello and the
+framing as the cause. All of them are retired (issue #20), so only `IOSCPP_TRACE` and
+`IOSCPP_DUMP` remain.
+
+**Reproduce.** Delete `%USERPROFILE%\.ioscpp\<serial>.plist` so the next run re-pairs, then
+run `ioscpp_usb_example` and answer the trust prompt. With the zero-length serial the
+device resets after the ClientHello; with the serial fixed it answers and the run completes.
 
 **Wire capture.** A USBPcap capture of a failing run (device on `USBPcap1`, root hub
 `USBROOT(0)#USB(7)`, address `1.35.0`) shows the sequence at the wire. The ClientHello
@@ -195,10 +222,10 @@ with a ServerHello in frame 537 (handshake type `0x02`, server version `0x0303`,
 session id, suite `0xc030`, and the `renegotiation_info` and `extended_master_secret`
 extensions), then its Certificate in frame 541. No reset follows.
 
-**Conclusion.** The device accepts an OpenSSL ClientHello and resets mbedTLS's, so the fault
-is in `ioscpp`'s ClientHello or in the framing before it, and not in the device, the pairing,
-the session, or the mux state. The named differences in the entry below are the candidate
-causes.
+**Conclusion.** The device accepts an OpenSSL ClientHello and resets mbedTLS's, so the fault is
+on `ioscpp`'s side and not in the device, the pairing, the session, or the mux state. The named
+differences in the entry below are the candidate causes, and the certificate serial behind them is
+the actual one.
 
 **Artifacts.** The reference run, the failing run, both ClientHellos, and the ServerHello
 are in [`captures/`](captures/).
@@ -236,17 +263,18 @@ device acks both, so this is the closest named lead, not a proven cause.
 | `key_share`, `supported_versions`, `session_ticket` | same | same |
 
 The reference is OpenSSL, so the differences are mostly stack defaults. The capture in the
-entry above shows the device answers the reference ClientHello, so the reset is on `ioscpp`'s
-side and one of these differences is the cause. The next step is to bisect them, cheapest
-first: the record version, the cipher list order and length, the absent `padding`, and the
-`ec_point_formats` value. A reference built with mbedTLS (the same library as `ioscpp` and
-`libimobiledevice`) separates a stack default from a fault.
+entry above shows the device answers the reference ClientHello, so the reset looked like one of
+these differences. Bisecting them with the `IOSCPP_REFERENCE_*` knobs (since retired, issue #20)
+then showed that none is the cause on its own: even a ClientHello matching the reference on the record version, the
+extension set, and `ec_point_formats` is reset, and so is a byte-for-byte replay of the reference
+ClientHello. The reset was the certificate serial in the entry above, and these differences are the
+mbedTLS stack defaults `ioscpp` keeps.
 
 
 ## Expected blockers
 
-The entries here are the ones already known from the reference implementations. Some have
-since been hit and are recorded under *Hit blockers* above; the rest are still expected.
+The entries here are the ones already known from the reference implementations. Most have
+since been hit and are marked **Hit** below; the rest are still expected.
 
 ### The device interface is not the first one
 
@@ -256,11 +284,17 @@ interfaces. The mux protocol lives on the vendor-specific interface with class `
 default configuration, leaves the reads empty. The fix is to walk the descriptors and claim the
 interface that matches the triple.
 
+**Hit.** The transport searches every configuration and claims the matching interface
+(`src/usb/usb_transport.cpp`), and the device answers on a real device (`tests/device_test.cpp`).
+
 ### A read shorter than a frame is not an error
 
 libusb may return a transfer shorter than the requested length; it is not a short read in the
 sense of a POSIX `read`. The transport must loop until it has the requested number of bytes or
 the device stalls, rather than treating a partial transfer as end of stream.
+
+**Hit.** `UsbTransport::read` buffers a partial transfer, and the TLS records arrive as several
+short transfers and reassemble (`src/usb/usb_transport.cpp`).
 
 ### The mux header is big-endian and length includes the header
 
@@ -268,11 +302,17 @@ Every field in the mux header is network byte order, and `length` covers the who
 header included. Reading `length` as the payload size over-reads by 16 bytes and desynchronizes
 the stream. The payload length is `length - kMuxHeaderSize`.
 
+**Hit.** `protocol::MuxHeader::decode` is big-endian and `Session` reads
+`length - kMuxHeaderSize` (`src/session.cpp`), and the device answers.
+
 ### The v2 magic and sequence numbers are only for v2
 
 `magic` (`0xfeedface`) and `tx_seq`/`rx_seq` exist only once the device negotiated mux
 version 2. A v1 device has an 8-byte header, not 16. Sending a v2 header to a v1 device
 desynchronizes it, so the header size depends on the negotiated version.
+
+**Hit.** `Session::send` sets the v2 magic and advances `tx_seq` per frame
+(`src/session.cpp`), and the device accepts the frames.
 
 ### The setup packet is required for v2
 
@@ -280,16 +320,25 @@ After the device answers the version request with major version 2, the host must
 `MUX_PROTO_SETUP` packet with payload `\x07` before any connect. Skipping it makes the
 device ignore the connect.
 
+**Hit.** `Connection::open` sends the setup packet after a v2 answer
+(`src/connection.cpp`), and the device answers the connect.
+
 ### `lockdownd` closes an unpaired session
 
 `StartSession` on an unpaired host fails, and the device then drops the connection. Pairing must
 complete, and the pairing record must be saved and reused, before any service is started.
+
+**Hit.** `Device::connect` pairs and saves the record before `StartSession`
+(`src/device.cpp`), and the device starts the session.
 
 ### `lockdownd` speaks TLS after the session starts
 
 After `StartSession`, every `lockdownd` message is wrapped in TLS, using the session key from
 pairing. Sending a plaintext plist after the session starts is read as a TLS record and the
 handshake fails.
+
+**Hit.** `StartSession` switches the stream to `TlsSession`, and the handshake completes
+(`src/crypto/pairing.cpp`).
 
 ### AFC paths are relative to the service root, and are UTF-8
 
