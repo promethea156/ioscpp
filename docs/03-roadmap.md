@@ -15,6 +15,31 @@ not yet validated on a device, so their checkboxes stay open until a real device
 Slice 4 and the pairing and `StartSession` parts of Slice 5 are proven on a device; the TLS
 handshake that follows `StartSession` is the current blocker (`04-blockers.md`).
 
+### Current work
+
+A reference run through Apple's own stack proved the device answers the reference ClientHello and
+resets `ioscpp`'s (`04-blockers.md`), so the fault is on our side. The named ClientHello
+differences were then bisected, one at a time, with temporary `IOSCPP_REFERENCE_*` environment
+knobs in `src/crypto/pairing.cpp`, each of which makes our ClientHello offer the reference's value:
+
+| Knob | Makes our ClientHello | Result |
+| --- | --- | --- |
+| `IOSCPP_REFERENCE_CIPHERS` | offer the reference's suite list | still resets |
+| `IOSCPP_REFERENCE_RECORD` | send record version `0x0301` | still resets |
+| `IOSCPP_REFERENCE_EXTENSIONS` | offer the reference's groups, sig algs, and psk modes | still resets |
+| `IOSCPP_REFERENCE_POINT_FORMATS` | offer `ec_point_formats` `03000102` | still resets |
+| `IOSCPP_REFERENCE_PADDING` | pad the record to 512 bytes | still resets |
+
+With all five set, the ClientHello matches the reference on the record version, the extension set,
+and `ec_point_formats`; only `signature_algorithms` (mbedTLS drops 13 of the reference's 22) and the
+padding fill differ. The device still resets, so matching the ClientHello content does not fix it, and the
+fault is likely not in the ClientHello but in the framing or the session state before it.
+
+The next step is to capture the failing run with the knobs set and compare the frames before the
+ClientHello (the `StartSession` exchange, the mux setup, and the sequence numbers) against
+`captures/reference-run.pcapng`. The knobs are temporary and are removed once the cause is known and
+the values are settled.
+
 - [x] Slice 0: the project layout, the `Result<T>` error model, the `Transport` interface,
   the mock transport, and the build.
 - [x] Slice 1: the plist codec.
