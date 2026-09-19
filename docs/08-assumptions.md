@@ -104,6 +104,10 @@ follows completes, so `ioscpp_usb_example` prints the device's `ProductType` and
 `ProductVersion`. The reset after the ClientHello was the host certificate's zero-length
 serial (`docs/04-blockers.md`).
 
+The client identity is settled as the host leaf certificate, which is what `lockdownd` paired
+against, and the auth mode as `REQUIRED` with a callback that accepts the device certificate
+whatever its chain says, matching `idevice_connection_enable_ssl` (`src/crypto/pairing.cpp`).
+
 **Proof.** A device that is already trusted completes the tour's query step.
 
 ### A pairing record saved once is reusable

@@ -90,9 +90,6 @@ public:
     /// The device's DER-encoded root certificate.
     std::span<const std::byte> root_certificate() const noexcept;
 
-    /// The host's DER-encoded root private key.
-    std::span<const std::byte> root_private_key() const noexcept;
-
     /// The 20-byte AES session key derived by the pairing exchange.
     std::span<const std::byte> session_key() const noexcept;
 

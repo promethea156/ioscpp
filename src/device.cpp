@@ -75,17 +75,6 @@ Result<Device> Device::connect(Transport &transport, crypto::Pairing &pairing)
         return tl::unexpected(lockdown.error());
     }
 
-    if (std::getenv("IOSCPP_TRACE") != nullptr)
-    {
-        if (auto version = lockdown->get_value({}, "ProductVersion"); version)
-        {
-            if (const protocol::Plist *value = version->find("Value"); value != nullptr)
-            {
-                std::fprintf(stderr, "[device] product version=%s\n", value->string_or().c_str());
-            }
-        }
-    }
-
     // The unique id names the pairing record, so it is learned first. A fresh
     // device answers `GetValue` before a session has started.
     if (auto udid = lockdown->get_value({}, "UniqueDeviceID"); udid)
@@ -129,6 +118,11 @@ Result<Device> Device::connect(Transport &transport, crypto::Pairing &pairing)
         }
     }
     device.impl_->udid = std::string(pairing.udid());
+    if (std::getenv("IOSCPP_TRACE") != nullptr)
+    {
+        std::fprintf(stderr, "[device] product type=%s version=%s\n", device.impl_->product_type.c_str(),
+                     device.impl_->product_version.c_str());
+    }
     return device;
 }
 
