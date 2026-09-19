@@ -26,13 +26,11 @@ exchange mux frames, with `usbmuxd` stopped and no daemon or socket in between.
 claim on the same interface. go-ios and pymobiledevice3 do it without `usbmuxd`
 (`02-references.md`).
 
-**Status.** `UsbTransport::open` claims the interface (`src/usb/usb_transport.cpp:462`), selects the
-configuration that carries it first, and the mux handshake runs to the first `lockdownd`
-request, but no device reply has been seen yet. `AGENTS.md` documents that `usbmuxd` holds
-the device, which is consistent with one owner.
+**Status.** Proven. `UsbTransport::open` claims the interface (`src/usb/usb_transport.cpp:462`),
+selects the configuration that carries it first, and the device answers the mux version
+request (`tests/device_test.cpp`).
 
-**Proof.** Run `ioscpp_usb_example` with `usbmuxd` stopped and see a device answer the mux
-version request.
+**Proof.** `ioscpp_usb_example` with `usbmuxd` stopped answers the mux version request.
 
 ### The mux interface is present and stable
 
@@ -44,9 +42,9 @@ or in the configuration the device starts in.
 `docs/04-blockers.md` records the "not the first interface" trap. A device in its initial mode
 carries the interface only in a later configuration, so `usbmuxd` selects it.
 
-**Status.** `find_mux_interface` walks every configuration for the triple and `open` selects the
-one that carries it before claiming the interface (`src/usb/usb_transport.cpp`). A run reached the
-`lockdownd` request, so the interface is found and claimed, but the device has not answered yet.
+**Status.** Proven. `find_mux_interface` walks every configuration for the triple and `open` selects
+the one that carries it before claiming the interface (`src/usb/usb_transport.cpp`), and the device
+answers (`tests/device_test.cpp`). On this device the interface is not index 0.
 
 **Proof.** A device whose mux interface is not index 0, and not in the active configuration,
 still connects and answers.
@@ -59,7 +57,8 @@ serial descriptor work on Windows (WinUSB), macOS, and Linux alike.
 **Why we believe it.** libusb is the documented cross-platform path, and the code has a Linux
 detach (`src/usb/usb_transport.cpp:441`).
 
-**Status.** Only compiled, not run, on any platform.
+**Status.** Proven on Windows: the device test claims the interface and connects
+(`tests/device_test.cpp`). macOS and Linux are still only compiled.
 
 **Proof.** The device test passes on all three CI platforms.
 
@@ -70,6 +69,9 @@ stalled, and the transport must loop or buffer rather than treat it as end of st
 
 **Why we believe it.** `docs/04-blockers.md` records this as a known trap, and `read` buffers a
 partial transfer for later reads (`src/usb/usb_transport.cpp:505`).
+
+**Status.** Proven. The TLS handshake records arrive as several short transfers and reassemble
+(`tests/device_test.cpp`).
 
 **Proof.** A large transfer over the real link reassembles without a desync.
 
@@ -82,8 +84,8 @@ partial transfer for later reads (`src/usb/usb_transport.cpp:505`).
 
 **Why we believe it.** `usbmuxd`'s `src/device.c` and `docs/04-blockers.md` describe it.
 
-**Status.** `Connection` implements it (`src/connection.cpp`) and `tests/stream_test.cpp` covers it
-over a mock only.
+**Status.** Proven. A real device completes the v2 negotiation and a port connect
+(`tests/device_test.cpp`).
 
 **Proof.** A real device completes the negotiation and a port connect.
 
