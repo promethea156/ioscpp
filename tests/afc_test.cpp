@@ -178,10 +178,6 @@ TEST_CASE("an AFC list parses directory entries", "[afc]")
                                    reinterpret_cast<const std::byte *>(body.data() + body.size()));
     transport.feed(tcp_payload(port, 1, afc_packet(0x02, payload)));
 
-    std::vector<std::byte> done;
-    put_le64(done, 0);
-    transport.feed(tcp_payload(port, 1, afc_packet(0x01, done)));
-
     auto entries = afc.list("/");
     REQUIRE(entries.has_value());
     REQUIRE(entries->size() == 2);

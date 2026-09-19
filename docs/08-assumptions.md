@@ -154,7 +154,12 @@ transport) and a second call is a no-op.
 **Assumption.** The `CFA6LPAA` packet format, the operation set, and the relative UTF-8 NUL
 terminated paths (`docs/06-afc-protocol.md`) match what a device expects.
 
-**Status.** `Afc` is written, but the device test does not exercise list, stat, pull, or push yet.
+**Status.** Proven. The device test lists the media root, stats it and a missing path, and
+round-trips a 200 KiB file through `/PublicStaging` with the bytes compared
+(`tests/device_test.cpp`). The device corrected four beliefs along the way: `READ_DIR` ends
+with its single `DATA` and no `STATUS`, the listing carries names alone, `FILE_OPEN` sends the
+mode before the path and answers `FILE_OPEN_RES`, and a message is capped at 65535 bytes
+(`docs/04-blockers.md`).
 
 **Proof.** The tour lists a directory and round-trips a file against a device.
 
@@ -205,4 +210,6 @@ logic are correct, so a later device failure is a protocol assumption, not a cod
 **Why we believe it.** It is the only way to test without a device, and the slices are built on it.
 
 **Risk.** A mock encodes the same misunderstanding the code does, so it can confirm a wrong frame.
-The device tests are what break the tie.
+The device tests are what break the tie. The AFC mock did exactly this: it fed a `STATUS` after a
+`READ_DIR` listing, so it confirmed the wrong belief until the device hung
+(`docs/04-blockers.md`).
