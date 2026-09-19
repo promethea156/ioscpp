@@ -91,5 +91,12 @@ int main()
     ok = check(!device->udid().empty(), "the device reported no udid") && ok;
     ok = check(!device->product_type().empty(), "the device reported no product type") && ok;
     ok = check(!device->product_version().empty(), "the device reported no product version") && ok;
+
+    // `connect` completes the pairing exchange and saves the record, so the
+    // in-memory record is paired and a fresh load of it is already paired, which
+    // is what keeps the next run from asking for trust again.
+    ok = check(pairing->paired(), "the pairing exchange did not complete") && ok;
+    auto reloaded = ioscpp::crypto::Pairing::load_for_udid(selected.serial);
+    ok = check(reloaded.has_value() && reloaded->paired(), "the saved pairing record was not reusable") && ok;
     return ok ? 0 : 1;
 }
