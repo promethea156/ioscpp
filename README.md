@@ -6,6 +6,27 @@ A small, self-contained **iOS device client, as a C++20 library**.
 
 > **Status: 0.1.0 (scaffold).** The project layout, the public headers, the `Result<T>` error model, and the device-free test suite exist and build. The protocol slices are tracked in [`docs/03-roadmap.md`](docs/03-roadmap.md). Every fallible operation returns a `Result<T>` instead of throwing.
 
+## How this was built
+
+This project is written **with AI assistance**. I am teaching myself how iOS
+device protocols work from the inside, so the AI keeps the code and the prose small,
+plain, and easy to follow — a tutor as much as a typist.
+
+Everything that is not the typing, I do by hand, because that is where the learning
+is:
+
+- choosing what to build, the [key constraint](docs/01-objective.md#key-constraint), and the [non-goals](docs/01-objective.md#non-goals-for-now);
+- planning the work as [vertical slices](docs/03-roadmap.md) and writing the [roadmap](docs/03-roadmap.md);
+- designing the [lesson plan](LEARNING.md) and keeping the code documented, so it can be read as a lesson;
+- setting up the machine, the compiler, and the [Apple USB driver](docs/09-platform-setup.md);
+- attaching the iPhones and iPads, tapping *Trust*, and pairing each host;
+- running every example and the device test against real hardware;
+- finding and diagnosing what only breaks on a device, then directing the fix;
+- reviewing every change, running the suite, and checking the formatting.
+
+The AI writes most of the implementation; I direct it, review it, and am
+responsible for what ships.
+
 ## Platform support
 
 | Platform | Status | Notes |

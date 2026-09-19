@@ -23,6 +23,12 @@ release, and `hotfix` carries an urgent fix from `main` back to `main` and `deve
 short-lived branch is `<type>/<slug>`. See `docs/01-objective.md` for the full model. Do not
 switch the current branch or create a branch without saying so.
 
+Work on an issue happens on a short-lived branch cut from `development`, named `<type>/<slug>`
+and named after the issue (for example `feat/explicit-disconnect` for issue #24), one issue per
+branch. Commit there, push it, and open a pull request into `development`; do not commit issue
+work directly on `development`. The pull request is squash-merged into `development` and the branch
+is deleted.
+
 Squash-merge a short-lived branch into its target, but merge two long-lived branches with a
 merge commit, not a squash; a squash between long-lived branches makes them diverge, so the target
 must be merged back immediately if it happens. See `docs/01-objective.md#merging`.
