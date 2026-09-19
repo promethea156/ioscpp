@@ -5,7 +5,8 @@ are the same device (iOS 18.7.8, `<device-serial>`) on the same host and the sam
 `USBPcap1` root hub, and differ only in the host TLS stack.
 
 - `failing-run.pcapng` — an `ioscpp_usb_example` run, with the device on `libusb0` and
-  `usbmuxd`/Apple services stopped. The device resets after the ClientHello.
+  `usbmuxd`/Apple services stopped. The device reset after the ClientHello, which was the
+  host certificate's zero-length serial.
 - `reference-run.pcapng` — a `pymobiledevice3 lockdown info` run, with the device on Apple's
   driver and *Apple Mobile Device Service* running. The device answers with a ServerHello.
 - `failing-clienthello.bin` — the ClientHello from `failing-run.pcapng`, as written by
