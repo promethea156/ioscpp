@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0-rc.1] - 2026-09-19
+
+The first release. It connects to a device over USB, pairs with it, and reads its
+identity; `AFC` and the app functions ship unvalidated on hardware.
+
 ### Added
 
 - The project layout, mirroring [`adbcpp`](https://github.com/promethea156/adbcpp): `include/`,
@@ -50,4 +55,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `usb::UsbTransport` trims the serial descriptor's trailing NUL padding, so the
   pairing record is written as `<serial>.plist` and is found again on the next run.
 
-[Unreleased]: https://github.com/promethea156/ioscpp/commits/main
+[Unreleased]: https://github.com/promethea156/ioscpp/compare/v0.1.0-rc.1...HEAD
+[0.1.0-rc.1]: https://github.com/promethea156/ioscpp/releases/tag/v0.1.0-rc.1
