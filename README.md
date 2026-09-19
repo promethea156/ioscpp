@@ -49,8 +49,8 @@ a green run is just as useful as a red one, and see [Contributing](#contributing
 - **Files**: list a directory, `stat` a path, and pull or push a file over `AFC`.
 - **Apps**: install and uninstall an app, launch it, check whether it is running, and close it.
 
-Connect and Info are proven on a device. Files and Apps are written but not yet validated on
-hardware, which is the goal of Slices 6 and 7 in [`docs/03-roadmap.md`](docs/03-roadmap.md).
+Connect, Info, and Files are proven on a device. Apps is written but not yet validated on
+hardware, which is the goal of Slice 7 in [`docs/03-roadmap.md`](docs/03-roadmap.md).
 
 ## Build it
 

@@ -4,13 +4,22 @@
 // `IOSCPP_TEST_SERIAL` picks one device when several are attached; otherwise the
 // first is used. The test asserts the transport opened that exact device, so a
 // descriptor walk or claim that reached the wrong one fails here.
+//
+// It writes `/PublicStaging/ioscpp_device_test.bin` on the device, which it also
+// removes, so it leaves the media partition as it found it.
 
 #include "ioscpp/device.hpp"
 
+#include <cstddef>
+#include <cstdint>
 #include <cstdlib>
+#include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <string>
+#include <vector>
 
+#include "ioscpp/afc.hpp"
 #include "ioscpp/crypto/pairing.hpp"
 #include "ioscpp/usb/usb_transport.hpp"
 
@@ -98,5 +107,87 @@ int main()
     ok = check(pairing->paired(), "the pairing exchange did not complete") && ok;
     auto reloaded = ioscpp::crypto::Pairing::load_for_udid(selected.serial);
     ok = check(reloaded.has_value() && reloaded->paired(), "the saved pairing record was not reusable") && ok;
+
+    // AFC: listing the media root proves the framing and the entry parse, and the
+    // push/pull round trip proves the file operations. The payload spans several
+    // chunks, so a short read or a missed end-of-file shows up as a size mismatch.
+    auto afc = device->open_afc();
+    ok = check(afc.has_value(), "the AFC service did not start") && ok;
+    if (!afc)
+    {
+        return 1;
+    }
+
+    auto entries = afc->list("/");
+    ok = check(entries.has_value(), "listing the media root failed") && ok;
+    if (entries)
+    {
+        ok = check(!entries->empty(), "the media root listed no entry") && ok;
+    }
+
+    // A `READ_DIR` answer carries the entry names alone, so the directory check
+    // is a `stat` of the root itself.
+    auto root = afc->stat("/");
+    ok = check(root.has_value() && root->has_value() && (*root)->is_directory(),
+               "the media root did not stat as a directory") &&
+         ok;
+
+    // A path that does not exist is an empty `optional`, not an error, and a
+    // listing of one is a device error rather than a silent empty listing.
+    auto missing = afc->stat("/ioscpp-does-not-exist");
+    ok = check(missing.has_value() && !missing->has_value(), "stat of a missing path was not empty") && ok;
+    auto bad = afc->list("/ioscpp-does-not-exist");
+    ok = check(!bad.has_value() && bad.error().code == ioscpp::ErrorCode::Device,
+               "listing a missing directory did not report a device error") &&
+         ok;
+
+    const std::filesystem::path directory = std::filesystem::temp_directory_path();
+    const std::filesystem::path local = directory / "ioscpp_device_test.bin";
+    const std::filesystem::path back = directory / "ioscpp_device_test.back";
+    const std::string remote = "/PublicStaging/ioscpp_device_test.bin";
+
+    std::vector<std::byte> payload(200 * 1024);
+    for (std::size_t i = 0; i < payload.size(); ++i)
+    {
+        payload[i] = static_cast<std::byte>((i * 7 + (i >> 8)) & 0xff);
+    }
+    {
+        std::ofstream out(local, std::ios::binary | std::ios::trunc);
+        out.write(reinterpret_cast<const char *>(payload.data()), static_cast<std::streamsize>(payload.size()));
+    }
+
+    ioscpp::Status pushed = afc->push(local, remote);
+    ok = check(pushed.has_value(), "push failed") && ok;
+    if (!pushed)
+    {
+        std::cerr << "push: " << pushed.error().message << "\n";
+    }
+
+    if (pushed)
+    {
+        auto info = afc->stat(remote);
+        ok = check(info.has_value() && info->has_value() && (*info)->size == payload.size(),
+                   "the pushed file did not stat back at its full size") &&
+             ok;
+    }
+
+    ioscpp::Status pulled = afc->pull(remote, back);
+    ok = check(pulled.has_value(), "pull failed") && ok;
+    if (pulled)
+    {
+        std::vector<std::byte> round_trip(payload.size());
+        std::ifstream in(back, std::ios::binary);
+        in.read(reinterpret_cast<char *>(round_trip.data()), static_cast<std::streamsize>(round_trip.size()));
+        ok = check(in.gcount() == static_cast<std::streamsize>(payload.size()),
+                   "the pulled file was shorter than the pushed one") &&
+             ok;
+        ok = check(round_trip == payload, "the pulled bytes did not match the pushed ones") && ok;
+    }
+
+    ioscpp::Status removed = afc->remove(remote);
+    ok = check(removed.has_value(), "remove failed") && ok;
+
+    std::filesystem::remove(local);
+    std::filesystem::remove(back);
     return ok ? 0 : 1;
 }

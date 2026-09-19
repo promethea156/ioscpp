@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `Afc::list` now reads the single `DATA` packet the device sends for `READ_DIR`,
+  instead of waiting for a `STATUS` it never sends, so listing no longer hangs.
+- `Afc::open_file` now sends the mode before the path and accepts the device's
+  `FILE_OPEN_RES` answer, matching `libimobiledevice` and `pymobiledevice3`.
+- `Afc` now chunks `FILE_READ` and `FILE_WRITE` at 32 KiB, under the device's
+  65535-byte message cap, and sends the handle as the packet data for `FILE_WRITE`.
+
 ## [0.1.0-rc.1] - 2026-09-19
 
 The first release. It connects to a device over USB, pairs with it, and reads its

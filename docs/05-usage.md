@@ -48,11 +48,14 @@ auto stream = connection.connect(62078).value(); // lockdownd
 
 ## List a directory
 
+A `READ_DIR` answer carries the entry names alone, so `list` returns names; the type
+of an entry comes from `stat`.
+
 ```cpp
 auto afc = device.open_afc().value();
 for (const auto &entry : afc.list("/DCIM").value())
 {
-    std::cout << (entry.is_directory() ? "d " : "- ") << entry.name << "\n";
+    std::cout << entry.name << "\n";
 }
 ```
 
