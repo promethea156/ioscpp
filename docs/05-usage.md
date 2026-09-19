@@ -86,6 +86,10 @@ afc.push("local.txt", "/Documents/local.txt").value();
 `install` uploads the IPA into `/PublicStaging` over `AFC` and then asks
 `installation_proxy` to install it. `uninstall` names the bundle id.
 
+These are written but not yet validated on a device: on iOS 17+ the mux-link
+`installation_proxy` accepts the connection but does not answer, so they are blocked on the
+`RSD` tunnel (`docs/04-blockers.md`).
+
 ```cpp
 auto result = ioscpp::install(device, "app.ipa").value();
 if (!result.success)
@@ -97,6 +101,9 @@ ioscpp::uninstall(device, "com.example.app").value();
 ```
 
 ## Launch, check, and close an app
+
+These are written but not yet validated on a device: they used a plist service that does not
+exist, and the real service is `DTX`, which is also blocked on the `RSD` tunnel.
 
 ```cpp
 ioscpp::launch(device, "com.example.app").value();

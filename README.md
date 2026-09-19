@@ -50,7 +50,8 @@ a green run is just as useful as a red one, and see [Contributing](#contributing
 - **Apps**: install and uninstall an app, launch it, check whether it is running, and close it.
 
 Connect, Info, and Files are proven on a device. Apps is written but not yet validated on
-hardware, which is the goal of Slice 7 in [`docs/03-roadmap.md`](docs/03-roadmap.md).
+hardware: on iOS 17+ it is blocked on the `RSD` tunnel, which is Slice 9 in
+[`docs/03-roadmap.md`](docs/03-roadmap.md).
 
 ## Build it
 

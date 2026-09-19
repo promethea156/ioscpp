@@ -7,6 +7,10 @@
 //
 // It writes `/PublicStaging/ioscpp_device_test.bin` on the device, which it also
 // removes, so it leaves the media partition as it found it.
+//
+// The app install/uninstall round trip is opt-in: `IOSCPP_TEST_IPA` and
+// `IOSCPP_TEST_BUNDLE` name a disposable app, and the round trip replaces it
+// and loses its data.
 
 #include "ioscpp/device.hpp"
 
@@ -20,6 +24,7 @@
 #include <vector>
 
 #include "ioscpp/afc.hpp"
+#include "ioscpp/app.hpp"
 #include "ioscpp/crypto/pairing.hpp"
 #include "ioscpp/usb/usb_transport.hpp"
 
@@ -186,6 +191,45 @@ int main()
 
     ioscpp::Status removed = afc->remove(remote);
     ok = check(removed.has_value(), "remove failed") && ok;
+
+    // Apps: the install/uninstall round trip is opt-in because it replaces the
+    // bundle and loses its data. `IOSCPP_TEST_IPA` and `IOSCPP_TEST_BUNDLE` name a
+    // disposable app the user has agreed to replace. On iOS 17+ the mux link's
+    // `installation_proxy` accepts the connection but does not answer, so this is
+    // blocked on the `RSD` tunnel (`docs/04-blockers.md`).
+    const char *ipa = std::getenv("IOSCPP_TEST_IPA");
+    const char *bundle = std::getenv("IOSCPP_TEST_BUNDLE");
+    if (ipa != nullptr && bundle != nullptr)
+    {
+        std::cout << "app: " << bundle << " from " << ipa << "\n";
+
+        auto installed = ioscpp::install(*device, ipa);
+        ok = check(installed.has_value(), "install returned an error") && ok;
+        if (!installed)
+        {
+            std::cerr << "install: " << installed.error().message << "\n";
+        }
+        else if (!installed->success)
+        {
+            std::cerr << "install: " << installed->failure_reason() << "\n";
+        }
+        ok = check(installed.has_value() && installed->success, "the device refused the install") && ok;
+
+        if (installed && installed->success)
+        {
+            auto uninstalled = ioscpp::uninstall(*device, bundle);
+            ok = check(uninstalled.has_value(), "uninstall returned an error") && ok;
+            if (!uninstalled)
+            {
+                std::cerr << "uninstall: " << uninstalled.error().message << "\n";
+            }
+            else if (!uninstalled->success)
+            {
+                std::cerr << "uninstall: " << uninstalled->failure_reason() << "\n";
+            }
+            ok = check(uninstalled.has_value() && uninstalled->success, "the device refused the uninstall") && ok;
+        }
+    }
 
     std::filesystem::remove(local);
     std::filesystem::remove(back);

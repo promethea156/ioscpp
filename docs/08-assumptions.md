@@ -171,10 +171,14 @@ mode before the path and answers `FILE_OPEN_RES`, and a message is capped at 655
 `installation_proxy` from that device-side path, and launch/close/is_running work over process
 control.
 
-**Why we believe it.** `docs/04-blockers.md` and the `installation_proxy.c` and `process_control.c`
-references describe it.
+**Why we believe it.** `docs/04-blockers.md` and the `installation_proxy.c` reference describe the
+staging and install. go-ios's `instruments/processcontrol.go` implements launch/close as `DTX` method
+calls (`launchSuspendedProcessWithDevicePath:...`, `killPid:`) over `com.apple.instruments.remoteserver`,
+not as the plist service the code first used.
 
-**Status.** `App` is written, but no device test covers it.
+**Status.** `App` is written, but no device test covers it. On iOS 17+ the mux-link `installation_proxy`
+accepts a connection but does not answer (`docs/04-blockers.md`), and process control is a `DTX` service,
+not a plist one, so both are blocked on the `RSD` tunnel (Slice 9).
 
 **Proof.** The demo installs, launches, checks, and closes an app on a device.
 

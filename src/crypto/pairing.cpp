@@ -811,8 +811,11 @@ Result<TlsSession> TlsSession::start(Stream &stream, const Pairing &pairing)
         return tl::unexpected(crypto_error("the host certificate could not be configured"));
     }
 #if defined(MBEDTLS_DEBUG_C)
-    mbedtls_ssl_conf_dbg(&impl.conf, tls_debug, nullptr);
-    mbedtls_debug_set_threshold(4);
+    if (std::getenv("IOSCPP_TRACE") != nullptr)
+    {
+        mbedtls_ssl_conf_dbg(&impl.conf, tls_debug, nullptr);
+        mbedtls_debug_set_threshold(4);
+    }
 #endif
 
     if (mbedtls_ssl_setup(&impl.ssl, &impl.conf) != 0)
