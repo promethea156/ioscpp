@@ -90,7 +90,10 @@ Result<Device> Device::connect(Transport &transport, crypto::Pairing &pairing)
     // device answers `GetValue` before a session has started.
     if (auto udid = lockdown->get_value({}, "UniqueDeviceID"); udid)
     {
-        pairing.set_udid(udid->string_or());
+        if (const protocol::Plist *value = udid->find("Value"); value != nullptr)
+        {
+            pairing.set_udid(value->string_or());
+        }
     }
 
     if (!pairing.paired())
@@ -113,11 +116,17 @@ Result<Device> Device::connect(Transport &transport, crypto::Pairing &pairing)
     Device device(std::move(connection), std::move(*lockdown), pairing);
     if (auto product_type = device.impl_->lockdown.get_value({}, "ProductType"); product_type)
     {
-        device.impl_->product_type = product_type->string_or();
+        if (const protocol::Plist *value = product_type->find("Value"); value != nullptr)
+        {
+            device.impl_->product_type = value->string_or();
+        }
     }
     if (auto product_version = device.impl_->lockdown.get_value({}, "ProductVersion"); product_version)
     {
-        device.impl_->product_version = product_version->string_or();
+        if (const protocol::Plist *value = product_version->find("Value"); value != nullptr)
+        {
+            device.impl_->product_version = value->string_or();
+        }
     }
     device.impl_->udid = std::string(pairing.udid());
     return device;

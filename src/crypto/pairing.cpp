@@ -155,14 +155,17 @@ Result<std::vector<std::byte>> write_certificate(mbedtls_pk_context &subject_key
     mbedtls_x509write_cert certificate;
     mbedtls_x509write_crt_init(&certificate);
     mbedtls_x509write_crt_set_version(&certificate, MBEDTLS_X509_CRT_VERSION_3);
-    // The pairing chain uses SHA-1, an empty distinguished name, and serial 0,
-    // matching `generate_pairing_cert_chain`:
+    // The pairing chain uses SHA-256, matching `generate_pairing_cert_chain`:
     //   https://github.com/doronz88/pymobiledevice3/blob/master/pymobiledevice3/ca.py
+    // The reference uses an empty distinguished name; `CN=ioscpp` is our own.
     mbedtls_x509write_crt_set_md_alg(&certificate, MBEDTLS_MD_SHA256);
 
+    // The reference serial is one (`_SERIAL`). A zero serial is written as a
+    // zero-length `INTEGER`, which RFC 5280 forbids and OpenSSL 3.0 and the
+    // device reject, so the serial is one here too.
     mbedtls_mpi serial;
     mbedtls_mpi_init(&serial);
-    (void)mbedtls_mpi_lset(&serial, 0);
+    (void)mbedtls_mpi_lset(&serial, 1);
     (void)mbedtls_x509write_crt_set_serial(&certificate, &serial);
 
     (void)mbedtls_x509write_crt_set_subject_name(&certificate, "CN=ioscpp");
@@ -691,6 +694,7 @@ int tls_send(void *context, const unsigned char *data, std::size_t length)
     // `IOSCPP_REFERENCE_PADDING` pads the ClientHello to 512 bytes with an
     // empty `padding` extension, the length the reference pads it to.
     static bool first_record = true;
+    const std::size_t original_length = length;
     std::vector<std::byte> record;
     if (first_record && length >= 9 && data[0] == 0x16 && data[5] == 0x01)
     {
@@ -759,6 +763,20 @@ int tls_send(void *context, const unsigned char *data, std::size_t length)
             length = record.size();
         }
     }
+    if (first_record && std::getenv("IOSCPP_REPLAY") != nullptr)
+    {
+        if (FILE *file = std::fopen(std::getenv("IOSCPP_REPLAY"), "rb"))
+        {
+            std::fseek(file, 0, SEEK_END);
+            const long size = std::ftell(file);
+            std::fseek(file, 0, SEEK_SET);
+            record.resize(static_cast<std::size_t>(size));
+            (void)std::fread(record.data(), 1, record.size(), file);
+            std::fclose(file);
+            data = reinterpret_cast<const unsigned char *>(record.data());
+            length = record.size();
+        }
+    }
     first_record = false;
     if (std::getenv("IOSCPP_TRACE") != nullptr)
     {
@@ -779,7 +797,7 @@ int tls_send(void *context, const unsigned char *data, std::size_t length)
         }
     }
     const Status status = stream->write(std::span<const std::byte>(reinterpret_cast<const std::byte *>(data), length));
-    return status ? static_cast<int>(length) : MBEDTLS_ERR_SSL_WANT_WRITE;
+    return status ? static_cast<int>(original_length) : MBEDTLS_ERR_SSL_WANT_WRITE;
 }
 
 int tls_recv(void *context, unsigned char *data, std::size_t length)
