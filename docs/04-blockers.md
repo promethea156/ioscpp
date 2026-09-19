@@ -271,6 +271,60 @@ ClientHello. The reset was the certificate serial in the entry above, and these 
 mbedTLS stack defaults `ioscpp` keeps.
 
 
+### The device answers `READ_DIR` with one `DATA` and no `STATUS`
+
+**Symptom.** After the mux fix, the device test hung in `Afc::list`: the trace showed
+the device sent one `DATA` packet holding the whole root listing (`entire=151`) and then
+nothing more. `ctest -R "^device$"` never returned.
+
+**Cause.** `Afc::list` sent `READ_DIR` and looped until a `STATUS`, but the device ends a
+directory listing with the single `DATA` packet. `libimobiledevice`'s `afc_read_directory`
+calls `afc_receive_data` once and returns, and `pymobiledevice3`'s `listdir` waits for one
+response; neither reads a trailing `STATUS`. The mock test and `docs/06-afc-protocol.md`
+encoded the wrong belief, so the mock confirmed it.
+
+**Fix.** `Afc::list` sends `READ_DIR` with `transact` and parses the one `DATA` answer
+(`src/afc.cpp`). The mock no longer feeds a `STATUS` after the listing
+(`tests/afc_test.cpp`).
+
+### The device's listing carries names alone
+
+**Symptom.** With the hang fixed, the device test failed with `the media root listed no
+directory`. The raw answer was `.`, `..`, `Downloads`, `Books`, and so on, with no `st_*`
+keys.
+
+**Cause.** The device's `READ_DIR` answer is the entry names alone, each NUL-terminated;
+the stat keys the mock fed are not part of it. `DirEntry::is_directory` was therefore
+always false.
+
+**Fix.** The device test lists the root for a non-empty answer and stats `/` for the
+directory check (`tests/device_test.cpp`). The parser still reads stat keys when a device
+sends them.
+
+### `FILE_OPEN` carries the mode first, and answers `FILE_OPEN_RES`
+
+**Symptom.** The device test failed with `push: the device sent an unexpected AFC
+operation`. The device answered `FILE_OPEN` with opcode `0x0E`, which `transact` rejected.
+
+**Cause.** Two format errors: `Afc::open_file` sent the path and then the mode, while both
+`libimobiledevice`'s `afc_file_open` and `pymobiledevice3`'s `FopenRequest` send the
+8-byte mode first and then the path; and the answer's opcode is `FILE_OPEN_RES` (`0x0E`),
+which `afc_receive_data` accepts but `transact` did not.
+
+**Fix.** `Afc::open_file` puts the mode first (`src/afc.cpp`), and `transact` accepts
+`kOpFileOpenRes`.
+
+### The device caps one message at 65535 bytes
+
+**Symptom.** With list, stat, and open fixed, the device answered a `FILE_WRITE` with a
+control frame reading `asyncReadComplete, message was too large (65536 bytes, max = 65535)`,
+and the test hung.
+
+**Cause.** `Afc` chunked `FILE_WRITE`/`FILE_READ` at 64 KiB (`kChunkSize`), so the
+device's AFC message (`entire_length`) reached 65584 bytes, over the device's 16-bit cap.
+
+**Fix.** `Afc` chunks at 32 KiB (`src/afc.cpp`), so a message stays well under the cap.
+
 ## Expected blockers
 
 The entries here are the ones already known from the reference implementations. Most have

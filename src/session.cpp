@@ -135,6 +135,8 @@ Result<Frame> Session::receive()
                      reinterpret_cast<const char *>(frame.payload.data() + 1));
     }
 
+    // `usbmuxd` echoes the device's own `rx_seq` back (`device.c`), so the ack
+    // the device sent for our frames is what goes out on our next frame.
     rx_seq_ = header.rx_seq;
     return frame;
 }

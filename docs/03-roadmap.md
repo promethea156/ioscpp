@@ -10,25 +10,27 @@ protocol assumptions explicit while they are still small enough to get right.
 
 ## Status
 
-Slices 0 to 5 are done. Slice 4 is proven on a device: `ioscpp_device_tests` walks the
+Slices 0 to 6 are done. Slice 4 is proven on a device: `ioscpp_device_tests` walks the
 descriptors, claims the mux interface, connects, and reads the device's identity, and it skips with
 code 77 when no matching device is attached. Slice 5 is proven too: the pairing exchange completes, the
 record is saved and reused, `StartSession` wraps `lockdownd` in TLS, and the device reports its
-`ProductType` and `ProductVersion` through `GetValue`. Slice 6 onward stays open until a real device
-passes it.
+`ProductType` and `ProductVersion` through `GetValue`. Slice 6 is proven: the device test lists the
+media root, stats it and a missing path, and round-trips a 200 KiB file through `/PublicStaging` with
+the bytes compared. Slice 7 onward stays open until a real device passes it.
 
 ### Current work
 
-Slices 4 and 5 are done and proven, so the next work is Slice 6: validate `AFC` listing and
-transfer against a real device (#5). The reset after the ClientHello that held Slices 4 and 5 back
+Slices 4 to 6 are done and proven, so the next work is Slice 7: validate app install, uninstall, and
+control against a real device (#6). The reset after the ClientHello that held Slices 4 and 5 back
 was the host certificate's zero-length serial (`04-blockers.md`); the ClientHello was ruled out by
 replaying the captured reference ClientHello byte for byte, and the framing, version, TLS version,
 and pre-TLS state were each ruled out in turn. The temporary experiment knobs that did the ruling
-out are retired (issue #20), so the default path reads no experiment env vars.
+out are retired (issue #20), so the default path reads no experiment env vars. Slice 6's four AFC
+format corrections are in `04-blockers.md`.
 
-The open work is ordered P4 to P10, lowest first: validate Slices 6 and 7 on a device
-(#5, #6), add the explicit disconnect and reconnect (#24), then the guided tour
-(#7), the CoreDevice tunnel plan and implementation (#23, #8), and DTX (#9).
+The open work is ordered P5 to P10, lowest first: validate Slice 7 on a device (#6), add the explicit
+disconnect and reconnect (#24), then the guided tour (#7), the CoreDevice tunnel plan and
+implementation (#23, #8), and DTX (#9).
 
 - [x] Slice 0: the project layout, the `Result<T>` error model, the `Transport` interface,
   the mock transport, and the build.
@@ -37,7 +39,7 @@ The open work is ordered P4 to P10, lowest first: validate Slices 6 and 7 on a d
 - [x] Slice 3: the mux version negotiation and port connect.
 - [x] Slice 4: the USB transport.
 - [x] Slice 5: pairing and `lockdownd`.
-- [ ] Slice 6: `AFC` file listing and transfer.
+- [x] Slice 6: `AFC` file listing and transfer.
 - [ ] Slice 7: app install, uninstall, and control.
 - [ ] Slice 8: the guided tour and the device integration test.
 - [ ] Slice 9: the iOS 17+ `RSD` tunnel, so the CoreDevice services are reachable.
