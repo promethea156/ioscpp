@@ -334,6 +334,11 @@ void append_xml(const Plist &value, std::string &out)
             }
             out += "</dict>";
             break;
+        case PlistType::Uid:
+            out += "<integer>";
+            out += std::to_string(value.uid().value());
+            out += "</integer>";
+            break;
     }
 }
 
@@ -821,6 +826,31 @@ void append_object(const Plist &value, const std::map<const Plist *, std::size_t
             }
             break;
         }
+        case PlistType::Uid:
+        {
+            const std::uint64_t index = value.uid().value();
+            if (index <= 0xff)
+            {
+                out.push_back(std::byte{0x80});
+                put_be(out, index, 1);
+            }
+            else if (index <= 0xffff)
+            {
+                out.push_back(std::byte{0x81});
+                put_be(out, index, 2);
+            }
+            else if (index <= 0xffffffffULL)
+            {
+                out.push_back(std::byte{0x82});
+                put_be(out, index, 4);
+            }
+            else
+            {
+                out.push_back(std::byte{0x83});
+                put_be(out, index, 8);
+            }
+            break;
+        }
     }
 }
 
@@ -891,6 +921,13 @@ Plist Plist::dictionary(Dictionary values)
     return plist;
 }
 
+Plist Plist::uid(std::uint64_t value)
+{
+    Plist plist;
+    plist.value_ = value;
+    return plist;
+}
+
 PlistType Plist::type() const noexcept
 {
     switch (value_.index())
@@ -911,8 +948,10 @@ PlistType Plist::type() const noexcept
             return PlistType::Date;
         case 7:
             return PlistType::Array;
-        default:
+        case 8:
             return PlistType::Dictionary;
+        default:
+            return PlistType::Uid;
     }
 }
 
@@ -951,6 +990,10 @@ bool Plist::is_array() const noexcept
 bool Plist::is_dictionary() const noexcept
 {
     return std::holds_alternative<Dictionary>(value_);
+}
+bool Plist::is_uid() const noexcept
+{
+    return std::holds_alternative<std::uint64_t>(value_);
 }
 
 std::optional<bool> Plist::boolean() const noexcept
@@ -997,6 +1040,12 @@ const Plist::Array *Plist::array() const noexcept
 const Plist::Dictionary *Plist::dictionary() const noexcept
 {
     return std::get_if<Dictionary>(&value_);
+}
+
+std::optional<std::uint64_t> Plist::uid() const noexcept
+{
+    const std::uint64_t *value = std::get_if<std::uint64_t>(&value_);
+    return value == nullptr ? std::nullopt : std::optional<std::uint64_t>(*value);
 }
 
 std::string Plist::string_or(std::string_view fallback) const
@@ -1276,10 +1325,12 @@ Result<Plist> Plist::parse_binary(std::span<const std::byte> bytes)
                     return Plist(std::move(text));
                 }
                 case 0x80:
+                case 0x81:
+                case 0x82:
+                case 0x83:
                 {
-                    const std::uint8_t int_marker = static_cast<std::uint8_t>(bytes[position++]);
-                    const std::uint64_t value = read_uint(std::size_t{1} << (int_marker & 0x0f));
-                    return Plist(static_cast<std::int64_t>(value));
+                    const std::size_t size = std::size_t{1} << info;
+                    return Plist::uid(read_uint(size));
                 }
                 case 0xa0:
                 {
