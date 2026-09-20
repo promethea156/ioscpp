@@ -1,9 +1,9 @@
 // The parallel tour: every feature once against every attached device.
 //
-// This is the same tour as `examples/demo` (minus its 15-second pause), run for
-// every device that is attached, one thread per device: a `Device`, a `Stream`, and
-// a `Connection` are not thread-safe, but different devices are independent, so one
-// thread per device is how several are driven at once.
+// This is the same tour as `examples/demo`, run for every device that is
+// attached, one thread per device: a `Device`, a `Stream`, and a `Connection` are
+// not thread-safe, but different devices are independent, so one thread per device
+// is how several are driven at once.
 //
 // Read this file next to its output. Every per-device line is prefixed with the
 // device's USB serial, so two devices are told apart. Stop `usbmuxd` first, and tap
