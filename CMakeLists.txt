@@ -67,6 +67,32 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(mbedtls)
 
+# HTTP/2 framing, HPACK, and flow control for the CoreDevice tunnel's RemoteXPC
+# layer use nghttp2 (MIT). It is a private dependency of the core, kept behind a
+# pimpl, and only its library is built, statically. `BUILD_SHARED_LIBS` is scoped
+# so the choice does not leak into `ioscpp` itself, which decides its own type
+# from the caller's `BUILD_SHARED_LIBS`.
+include(FetchContent)
+set(ENABLE_LIB_ONLY ON CACHE BOOL "" FORCE)
+set(ENABLE_DOC OFF CACHE BOOL "" FORCE)
+set(ENABLE_WERROR OFF CACHE BOOL "" FORCE)
+set(BUILD_STATIC_LIBS ON CACHE BOOL "" FORCE)
+if(DEFINED BUILD_SHARED_LIBS)
+  set(IOSCPP_BUILD_SHARED_SAVED ${BUILD_SHARED_LIBS})
+endif()
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(
+  nghttp2
+  GIT_REPOSITORY https://github.com/nghttp2/nghttp2.git
+  GIT_TAG v1.70.0
+)
+FetchContent_MakeAvailable(nghttp2)
+if(DEFINED IOSCPP_BUILD_SHARED_SAVED)
+  set(BUILD_SHARED_LIBS ${IOSCPP_BUILD_SHARED_SAVED} CACHE BOOL "" FORCE)
+else()
+  unset(BUILD_SHARED_LIBS CACHE)
+endif()
+
 add_library(ioscpp
   src/afc.cpp
   src/app.cpp
@@ -101,6 +127,10 @@ target_link_libraries(ioscpp PUBLIC tl::expected)
 # mbedTLS is only reached through the pimpl in `crypto/pairing.cpp`, so it is a
 # private dependency of the core and never appears in a public header.
 target_link_libraries(ioscpp PRIVATE MbedTLS::mbedcrypto MbedTLS::mbedtls MbedTLS::mbedx509)
+
+# nghttp2 is only reached through the pimpl in the RemoteXPC layer, so it is a
+# private dependency of the core and never appears in a public header.
+target_link_libraries(ioscpp PRIVATE nghttp2)
 
 if(WIN32)
   target_link_libraries(ioscpp PRIVATE ws2_32)
