@@ -93,17 +93,21 @@ the result. That is what the new tests do.
 
 ## Where it is going
 
-Since then, two more pieces are done and proven on a real iPhone running iOS 18.7.8:
+Since then, three more pieces are done:
 
 1. **The handshake.** The library asks the phone for the tunnel, the phone answers
    with the address, the port, and the size limit, and the library reads them back.
+   Proven on a real iPhone running iOS 18.7.8.
 2. **The small network layer.** The library wraps a request in network packets, opens
    a connection through the tunnel to the numbered door, and the phone accepts it.
+   Proven on a real iPhone running iOS 18.7.8.
+3. **The message format.** After the handshake the tunnel speaks its own kind of
+   message. The library can now build and read that message's fixed frame and the
+   structured value inside it, checked without a phone.
 
 One step is left:
 
-3. Learn the next data format the tunnel speaks, then ask the phone to list its
-   services and reach one.
+4. Ask the phone to list its services and reach one.
 
 Reaching a service is what unblocks app install, app uninstall, and app control, which
 are written but not yet working on hardware.

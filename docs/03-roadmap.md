@@ -33,8 +33,9 @@ reads no experiment env vars. Slice 6's four AFC format corrections are in `04-b
 
 Slice 9's first increment, the `CDTunnel` frame codec and the raw-IPv6 re-framer, is done
 device-free over the mock; its second, the `CoreDeviceProxy` handshake on `Device`, is done and proven
-on an iOS 18.7.8 device; and its third, the userspace IPv6 + TCP link, is done device-free against a
-scripted peer and reaches the RSD port on the device (`docs/10-coredevice-tunnel.md`). The open work is
+on an iOS 18.7.8 device; its third, the userspace IPv6 + TCP link, is done device-free against a
+scripted peer and reaches the RSD port on the device; and its fourth, the `protocol::RemoteXpc` codec, is
+done device-free (`docs/10-coredevice-tunnel.md`). The open work is
 ordered lowest first:
 the rest of the iOS 17+ `RSD` tunnel (#8), then validate app install, uninstall, and control on a
 device (#6), the guided tour (#7), and DTX (#9).
@@ -175,7 +176,7 @@ TCP client) is enough; no ARP, DHCP, routing, or ICMP.
 - The `CDTunnel` frame and the raw-IPv6 re-framer, from the handshake to a stream of whole
   IPv6 packets.
 - The userspace TCP/IP link, so `connect` reaches the RSD port with no root and no driver.
-- `protocol::RemoteXpc`, the 16-byte frame header and the `xpc` dictionary codec, which is
+- `protocol::RemoteXpc`, the fixed wrapper header and the `xpc` object codec, which is
   the CoreDevice counterpart of the mux frame and the plist codec.
 - `Rsd`, the RSD connection: `GetService` and the service dictionary, and a `Stream` to a
   named service on the tunnel.

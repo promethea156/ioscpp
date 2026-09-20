@@ -33,6 +33,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with `protocol::Ipv6Framer`, runs the SYN / SYN|ACK / ACK exchange to an RSD port, and
   moves the connection's bytes. Tested device-free against a scripted IPv6/TCP peer, and the
   device test reaches the RSD port on a real device.
+- `protocol::RemoteXpc`, the RemoteXPC codec the RSD layer rides on: `XpcWrapper` (the magic,
+  the exact flags word, the body length, and the message id), `XpcPayload` (the payload magic and
+  version), and `Xpc`, the `xpc` object codec over eleven kinds. Tested device-free, with a
+  pinned byte vector for the dictionary's field order and padding.
 
 ### Fixed
 
