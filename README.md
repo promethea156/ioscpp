@@ -4,7 +4,7 @@ A small, self-contained **iOS device client, as a C++20 library**.
 
 `ioscpp` talks to an iPhone or iPad directly, over USB, with **no `usbmuxd`, no `libimobiledevice`, and no external binary**. Embed it in a C++ program and it lists and transfers files, and installs and removes apps.
 
-> **Status: pre-0.2.0.** Connect, Info, Files, app install/uninstall, and app process control are proven on a device, on iOS 18.7.8. The protocol slices are tracked in [`docs/03-roadmap.md`](docs/03-roadmap.md). Every fallible operation returns a `Result<T>` instead of throwing.
+> **Status: 1.0.0.** Connect, Info, Files, app install/uninstall, and app process control are proven on a device, on iOS 18.7.8. The protocol slices are tracked in [`docs/03-roadmap.md`](docs/03-roadmap.md). Every fallible operation returns a `Result<T>` instead of throwing.
 
 ## How this was built
 
@@ -144,7 +144,7 @@ include/ioscpp/usb/       The USB transport, backed by libusb
 include/ioscpp/testing/  The in-memory transport used by the tests
 src/                    Library sources, mirroring the public headers
 tests/                  Catch2 unit tests and the device integration test
-examples/               Runnable examples, including the guided tour in demo/
+examples/               Runnable examples: the guided tour in demo/ and the parallel tour in multi/
 tools/                  Developer scripts (device lister, transfer benchmark)
 docs/                   Design documents and Doxygen configuration
 cmake/                  CMake package configuration
@@ -154,6 +154,7 @@ cmake/                  CMake package configuration
 
 - [`docs/00-start-here.md`](docs/00-start-here.md) — a plain-language tour of the project, with no prior knowledge assumed.
 - [`examples/demo/main.cpp`](examples/demo/main.cpp) — the guided tour, step by step in its comments.
+- [`examples/multi/main.cpp`](examples/multi/main.cpp) — the same tour against every attached device, one thread per device.
 - [`docs/05-usage.md`](docs/05-usage.md) — copy-pasteable snippets for one feature at a time.
 - [`docs/06-afc-protocol.md`](docs/06-afc-protocol.md) — how `AFC` and file transfer work, byte by byte.
 - [`docs/03-roadmap.md`](docs/03-roadmap.md) and the [open issues](https://github.com/promethea156/ioscpp/issues) — what is planned next.
