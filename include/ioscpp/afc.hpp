@@ -9,6 +9,7 @@
 #include <string_view>
 #include <vector>
 
+#include "ioscpp/byte_stream.hpp"
 #include "ioscpp/error.hpp"
 #include "ioscpp/export.hpp"
 #include "ioscpp/stream.hpp"
@@ -19,9 +20,10 @@ namespace ioscpp
 /**
  * @brief A directory entry returned by `Afc::list`.
  *
- * The fields are the metadata the device reports for each entry, the same values
- * `lstat` would give. `mode` is a `st_mode`, so the file type lives in its top bits,
- * exactly like `<sys/stat.h>` on the host.
+ * `name` is always set; the metadata fields are the `stat` values the device may
+ * append after a name, and they stay zero when it sends the name alone, which is
+ * what the media root does. `mode` is a `st_mode`, so the file type lives in its
+ * top bits, exactly like `<sys/stat.h>` on the host.
  */
 struct IOSCPP_API DirEntry
 {
@@ -94,7 +96,15 @@ struct IOSCPP_API FileStat
 class IOSCPP_API Afc
 {
 public:
-    /// Opens an `AFC` client over `stream`, which must be a started `com.apple.afc` service.
+    /**
+     * @brief Opens an `AFC` client over `stream`, which the caller keeps alive.
+     *
+     * `stream` must be a started `com.apple.afc` service or, over the RSD
+     * tunnel, its `com.apple.afc.shim.remote` counterpart.
+     */
+    static Result<Afc> start(ByteStream &stream);
+
+    /// Opens an `AFC` client over `stream`, which the client owns.
     static Result<Afc> start(Stream stream);
 
     ~Afc();
@@ -104,6 +114,9 @@ public:
     Afc &operator=(const Afc &) = delete;
 
     /// Lists the entries of the directory `path`.
+    ///
+    /// The device answers with one `DATA` packet of entry names, so only `name` is
+    /// set unless it also appends the entry's `stat` values.
     Result<std::vector<DirEntry>> list(std::string_view path);
 
     /// Stats `path`, following symbolic links.
@@ -132,6 +145,7 @@ public:
     Status rename(std::string_view from, std::string_view to);
 
 private:
+    explicit Afc(ByteStream &stream);
     explicit Afc(Stream stream);
 
     /// Opens a file and returns its handle, for `pull` and `push`.

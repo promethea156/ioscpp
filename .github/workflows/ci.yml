@@ -66,7 +66,10 @@ jobs:
             found
           ' CHANGELOG.md > notes.md
 
+      # A `-` in the tag marks a pre-release, as SemVer says.
       - name: Create the release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file notes.md
+        run: >
+          gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file notes.md
+          ${{ contains(github.ref_name, '-') && '--prerelease' || '' }}

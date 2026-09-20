@@ -1,21 +1,16 @@
 #include "ioscpp/app.hpp"
 
-#include <algorithm>
-#include <array>
-#include <cstddef>
-#include <cstdint>
 #include <filesystem>
-#include <memory>
-#include <span>
 #include <string>
 #include <string_view>
 #include <utility>
-#include <vector>
 
 #include "ioscpp/afc.hpp"
 #include "ioscpp/device.hpp"
 #include "ioscpp/error.hpp"
 #include "ioscpp/lockdown.hpp"
+#include "ioscpp/plist_service.hpp"
+#include "ioscpp/process_control.hpp"
 #include "ioscpp/protocol/plist.hpp"
 #include "ioscpp/stream.hpp"
 
@@ -24,70 +19,17 @@ namespace ioscpp
 namespace
 {
 
-Error protocol_error(std::string message)
-{
-    return Error{ErrorCode::Protocol, std::move(message)};
-}
-
-/// The `installation_proxy` and process-control service names.
+/// The `installation_proxy` service name and the instruments service names.
 constexpr std::string_view kInstallationProxy = "com.apple.mobile.installation_proxy";
-constexpr std::string_view kProcessControl = "com.apple.mobile.instruments";
+constexpr std::string_view kInstruments = "com.apple.instruments.remoteserver";
+
+/// The RSD shim service names the iOS 17.4+ path uses.
+constexpr std::string_view kInstallationProxyShim = "com.apple.mobile.installation_proxy.shim.remote";
+constexpr std::string_view kAfcShim = "com.apple.afc.shim.remote";
+constexpr std::string_view kInstrumentsRsd = "com.apple.instruments.dtservicehub";
 
 /// The staging directory an IPA is uploaded into before it is installed.
 constexpr std::string_view kStagingDirectory = "/PublicStaging";
-
-/**
- * @brief A length-prefixed plist service.
- *
- * `installation_proxy` and process control frame every message the way
- * `lockdownd` does: a 4-byte big-endian length, then an XML plist.
- */
-class PlistService
-{
-public:
-    explicit PlistService(Stream stream)
-        : stream_(std::move(stream))
-    {
-    }
-
-    Status send(const protocol::Plist &message)
-    {
-        const std::string body = message.to_xml();
-        std::vector<std::byte> frame(4 + body.size());
-        frame[0] = static_cast<std::byte>((frame.size() >> 24) & 0xff);
-        frame[1] = static_cast<std::byte>((frame.size() >> 16) & 0xff);
-        frame[2] = static_cast<std::byte>((frame.size() >> 8) & 0xff);
-        frame[3] = static_cast<std::byte>(frame.size() & 0xff);
-        std::copy(reinterpret_cast<const std::byte *>(body.data()),
-                  reinterpret_cast<const std::byte *>(body.data() + body.size()), frame.begin() + 4);
-        return stream_.write(frame);
-    }
-
-    Result<protocol::Plist> receive()
-    {
-        std::array<std::byte, 4> length_bytes{};
-        if (Status status = stream_.read(length_bytes); !status)
-        {
-            return tl::unexpected(status.error());
-        }
-        const std::uint32_t length =
-            (static_cast<std::uint32_t>(length_bytes[0]) << 24) | (static_cast<std::uint32_t>(length_bytes[1]) << 16) |
-            (static_cast<std::uint32_t>(length_bytes[2]) << 8) | static_cast<std::uint32_t>(length_bytes[3]);
-        if (length == 0)
-        {
-            return tl::unexpected(protocol_error("the service sent an empty plist"));
-        }
-        std::vector<std::byte> body(length);
-        if (Status status = stream_.read(body); !status)
-        {
-            return tl::unexpected(status.error());
-        }
-        return protocol::Plist::parse(body);
-    }
-
-private:
-    Stream stream_;
-};
 
 Result<PlistService> open_service(Device &device, std::string_view name)
 {
@@ -100,14 +42,9 @@ Result<PlistService> open_service(Device &device, std::string_view name)
 }
 
 /// Runs an `installation_proxy` command and reads its status stream to the end.
-Result<PackageResult> run_installer(Device &device, protocol::Plist::Dictionary command)
+Result<PackageResult> run_installer(PlistService &service, protocol::Plist::Dictionary command)
 {
-    auto service = open_service(device, kInstallationProxy);
-    if (!service)
-    {
-        return tl::unexpected(service.error());
-    }
-    if (Status status = service->send(protocol::Plist::dictionary(std::move(command))); !status)
+    if (Status status = service.send(protocol::Plist::dictionary(std::move(command))); !status)
     {
         return tl::unexpected(status.error());
     }
@@ -115,7 +52,7 @@ Result<PackageResult> run_installer(Device &device, protocol::Plist::Dictionary 
     PackageResult result;
     for (;;)
     {
-        auto status = service->receive();
+        auto status = service.receive();
         if (!status)
         {
             return tl::unexpected(status.error());
@@ -155,26 +92,39 @@ Result<PackageResult> install(Device &device, const std::filesystem::path &ipa)
         return tl::unexpected(Error{ErrorCode::InvalidArgument, "the IPA is not a regular file"});
     }
 
-    auto afc = device.open_afc();
-    if (!afc)
-    {
-        return tl::unexpected(afc.error());
-    }
-    (void)afc->make_directory(kStagingDirectory);
-
     const std::string remote = std::string(kStagingDirectory) + "/" + ipa.filename().string();
-    if (Status status = afc->push(ipa, remote); !status)
+    // The mux connection carries one service at a time: the AFC stream is closed
+    // before the installation_proxy stream opens, because a stream left open
+    // discards the other's frames (see `Stream::receive_more`).
     {
-        return tl::unexpected(status.error());
+        auto afc = device.open_afc();
+        if (!afc)
+        {
+            return tl::unexpected(afc.error());
+        }
+        (void)afc->make_directory(kStagingDirectory);
+
+        if (Status status = afc->push(ipa, remote); !status)
+        {
+            return tl::unexpected(status.error());
+        }
     }
 
+    // An install names the staged package only: `ApplicationIdentifier` belongs to
+    // uninstall, and sending an empty one with the install makes the device refuse
+    // it. The package is a development build, so `PackageType` is `Developer`,
+    // which is what `pymobiledevice3 apps install --developer` sets.
     protocol::Plist::Dictionary command{
-        {"ApplicationIdentifier", protocol::Plist()},
-        {"ClientOptions", protocol::Plist::dictionary({})},
+        {"ClientOptions", protocol::Plist::dictionary({{"PackageType", protocol::Plist("Developer")}})},
         {"Command", protocol::Plist("Install")},
         {"PackagePath", protocol::Plist(remote)},
     };
-    return run_installer(device, std::move(command));
+    auto service = open_service(device, kInstallationProxy);
+    if (!service)
+    {
+        return tl::unexpected(service.error());
+    }
+    return run_installer(*service, std::move(command));
 }
 
 Result<PackageResult> uninstall(Device &device, std::string_view bundle_id)
@@ -184,92 +134,166 @@ Result<PackageResult> uninstall(Device &device, std::string_view bundle_id)
         {"ClientOptions", protocol::Plist::dictionary({})},
         {"Command", protocol::Plist("Uninstall")},
     };
-    return run_installer(device, std::move(command));
-}
-
-Result<CommandResult> launch(Device &device, std::string_view bundle_id)
-{
-    auto service = open_service(device, kProcessControl);
+    auto service = open_service(device, kInstallationProxy);
     if (!service)
     {
         return tl::unexpected(service.error());
     }
+    return run_installer(*service, std::move(command));
+}
 
+Result<PackageResult> install(Rsd &rsd, const std::filesystem::path &ipa)
+{
+    if (!std::filesystem::is_regular_file(ipa))
+    {
+        return tl::unexpected(Error{ErrorCode::InvalidArgument, "the IPA is not a regular file"});
+    }
+
+    const std::string remote = std::string(kStagingDirectory) + "/" + ipa.filename().string();
+    // The AFC shim and the installer shim are separate connections, so the AFC
+    // one is closed before the installer one opens.
+    {
+        auto link = rsd.start_service(kAfcShim);
+        if (!link)
+        {
+            return tl::unexpected(link.error());
+        }
+        auto afc = Afc::start(*link);
+        if (!afc)
+        {
+            return tl::unexpected(afc.error());
+        }
+        (void)afc->make_directory(kStagingDirectory);
+
+        if (Status status = afc->push(ipa, remote); !status)
+        {
+            return tl::unexpected(status.error());
+        }
+    }
+
+    auto link = rsd.start_service(kInstallationProxyShim);
+    if (!link)
+    {
+        return tl::unexpected(link.error());
+    }
+    PlistService service(*link);
     protocol::Plist::Dictionary command{
-        {"BundleId", protocol::Plist(bundle_id)},
-        {"Command", protocol::Plist("process_launch")},
+        {"ClientOptions", protocol::Plist::dictionary({{"PackageType", protocol::Plist("Developer")}})},
+        {"Command", protocol::Plist("Install")},
+        {"PackagePath", protocol::Plist(remote)},
     };
-    if (Status status = service->send(protocol::Plist::dictionary(std::move(command))); !status)
+    auto result = run_installer(service, std::move(command));
+    if (!result)
     {
-        return tl::unexpected(status.error());
+        return tl::unexpected(result.error());
     }
-
-    auto answer = service->receive();
-    if (!answer)
-    {
-        return tl::unexpected(answer.error());
-    }
-
-    CommandResult result;
-    const protocol::Plist *error = answer->find("Error");
-    result.success = error == nullptr;
-    result.output = error != nullptr ? error->string_or("launch failed") : std::string();
     return result;
 }
 
-Status close(Device &device, std::string_view bundle_id)
+Result<PackageResult> uninstall(Rsd &rsd, std::string_view bundle_id)
 {
-    auto service = open_service(device, kProcessControl);
-    if (!service)
+    auto link = rsd.start_service(kInstallationProxyShim);
+    if (!link)
     {
-        return tl::unexpected(service.error());
+        return tl::unexpected(link.error());
     }
-
+    PlistService service(*link);
     protocol::Plist::Dictionary command{
-        {"BundleId", protocol::Plist(bundle_id)},
-        {"Command", protocol::Plist("process_kill")},
+        {"ApplicationIdentifier", protocol::Plist(bundle_id)},
+        {"ClientOptions", protocol::Plist::dictionary({})},
+        {"Command", protocol::Plist("Uninstall")},
     };
-    return service->send(protocol::Plist::dictionary(std::move(command)));
+    return run_installer(service, std::move(command));
+}
+
+Result<std::uint64_t> launch(Device &device, std::string_view bundle_id)
+{
+    auto stream = device.start_service(kInstruments);
+    if (!stream)
+    {
+        return tl::unexpected(stream.error());
+    }
+    auto control = ProcessControl::start(*stream);
+    if (!control)
+    {
+        return tl::unexpected(control.error());
+    }
+    return control->launch(bundle_id);
+}
+
+Status close(Device &device, std::uint64_t pid)
+{
+    auto stream = device.start_service(kInstruments);
+    if (!stream)
+    {
+        return tl::unexpected(stream.error());
+    }
+    auto control = ProcessControl::start(*stream);
+    if (!control)
+    {
+        return tl::unexpected(control.error());
+    }
+    return control->kill(pid);
 }
 
 Result<bool> is_running(Device &device, std::string_view bundle_id)
 {
-    auto service = open_service(device, kProcessControl);
-    if (!service)
+    auto stream = device.start_service(kInstruments);
+    if (!stream)
     {
-        return tl::unexpected(service.error());
+        return tl::unexpected(stream.error());
     }
+    auto control = ProcessControl::start(*stream);
+    if (!control)
+    {
+        return tl::unexpected(control.error());
+    }
+    return control->is_running(bundle_id);
+}
 
-    protocol::Plist::Dictionary command{{"Command", protocol::Plist("process_list")}};
-    if (Status status = service->send(protocol::Plist::dictionary(std::move(command))); !status)
+Result<std::uint64_t> launch(Rsd &rsd, std::string_view bundle_id)
+{
+    auto link = rsd.start_service(kInstrumentsRsd);
+    if (!link)
     {
-        return tl::unexpected(status.error());
+        return tl::unexpected(link.error());
     }
+    auto control = ProcessControl::start(*link);
+    if (!control)
+    {
+        return tl::unexpected(control.error());
+    }
+    return control->launch(bundle_id);
+}
 
-    auto answer = service->receive();
-    if (!answer)
+Status close(Rsd &rsd, std::uint64_t pid)
+{
+    auto link = rsd.start_service(kInstrumentsRsd);
+    if (!link)
     {
-        return tl::unexpected(answer.error());
+        return tl::unexpected(link.error());
     }
-    if (const protocol::Plist *error = answer->find("Error"); error != nullptr)
+    auto control = ProcessControl::start(*link);
+    if (!control)
     {
-        return tl::unexpected(Error{ErrorCode::Device, error->string_or("process_list failed")});
+        return tl::unexpected(control.error());
     }
+    return control->kill(pid);
+}
 
-    const protocol::Plist *list = answer->find("ProcessList");
-    if (list == nullptr || list->array() == nullptr)
+Result<bool> is_running(Rsd &rsd, std::string_view bundle_id)
+{
+    auto link = rsd.start_service(kInstrumentsRsd);
+    if (!link)
     {
-        return false;
+        return tl::unexpected(link.error());
     }
-    for (const protocol::Plist &process : *list->array())
+    auto control = ProcessControl::start(*link);
+    if (!control)
     {
-        const protocol::Plist *name = process.find("BundleId");
-        if (name != nullptr && name->string_or() == bundle_id)
-        {
-            return true;
-        }
+        return tl::unexpected(control.error());
     }
-    return false;
+    return control->is_running(bundle_id);
 }
 
 } // namespace ioscpp

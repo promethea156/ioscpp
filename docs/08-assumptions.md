@@ -133,19 +133,28 @@ re-enumerates and its USB address changes.
 **Why we believe it.** The wire capture in `04-blockers.md` shows the device reset the mux connection, and
 `usb::DeviceId` already selects a device by serial, so discovery is the same call the first connect uses.
 
-**Status.** Not implemented. Teardown is RAII only, and `Transport::reopen` means "a fresh `usbmuxd`
-socket per port", not a reconnect.
+**Status.** Implemented. The choice is the caller-owned transport: `Device::connect` keeps taking a
+`Transport&`, `Device` stays tied to that one transport, and a reconnect is `disconnect`, destroy the
+`Device`, re-discover by serial, open a fresh transport, and `connect` again. `Transport::reopen` still
+means "a fresh `usbmuxd` socket per port" and is not the reconnect.
 
-**Proof.** A device test unplugs and replugs the device and reconnects with no stale handle.
+**Proof.** `tests/device_test.cpp` disconnects, re-discovers the device by serial, and reconnects on a
+fresh transport; with `IOSCPP_TEST_REPLUG=1` it waits for a physical unplug and replug first, so the
+re-enumeration and the new USB address are exercised.
 
 ### `disconnect` is idempotent and ordered
 
 **Assumption.** `Device::disconnect` closes innermost first (TLS `close_notify`, then streams, mux, and
 transport) and a second call is a no-op.
 
-**Status.** Not implemented; only the destructors close today.
+**Status.** Proven. `Device::disconnect` closes the `Lockdown` session (`TlsSession::close` sends the
+`close_notify`, then `Stream::close` sends the reset) and then `Connection::close` closes the transport.
+Each of `Stream::close`, `Connection::close`, `Lockdown::close`, and `Device::disconnect` is idempotent,
+and the destructors route through them. A service stream the caller opened, such as an `Afc`, must be
+destroyed first, because `Device` does not own it.
 
-**Proof.** Two `disconnect` calls leave nothing open, and the mock transport reports the ordered close.
+**Proof.** Two `disconnect` calls leave nothing open, and `tests/stream_test.cpp` drives the same order over
+the mock transport: the stream reset is written before the transport close, and neither repeats.
 
 ## AFC
 
@@ -154,7 +163,12 @@ transport) and a second call is a no-op.
 **Assumption.** The `CFA6LPAA` packet format, the operation set, and the relative UTF-8 NUL
 terminated paths (`docs/06-afc-protocol.md`) match what a device expects.
 
-**Status.** `Afc` is written, but the device test does not exercise list, stat, pull, or push yet.
+**Status.** Proven. The device test lists the media root, stats it and a missing path, and
+round-trips a 200 KiB file through `/PublicStaging` with the bytes compared
+(`tests/device_test.cpp`). The device corrected four beliefs along the way: `READ_DIR` ends
+with its single `DATA` and no `STATUS`, the listing carries names alone, `FILE_OPEN` sends the
+mode before the path and answers `FILE_OPEN_RES`, and a message is capped at 65535 bytes
+(`docs/04-blockers.md`).
 
 **Proof.** The tour lists a directory and round-trips a file against a device.
 
@@ -163,13 +177,21 @@ terminated paths (`docs/06-afc-protocol.md`) match what a device expects.
 ### Install needs the package staged, then installed by device path
 
 **Assumption.** An IPA is uploaded over `AFC` into `/PublicStaging` and then installed over
-`installation_proxy` from that device-side path, and launch/close/is_running work over process
-control.
+`installation_proxy` from that device-side path. On iOS 17.4 and later both run over the RSD shims
+(`com.apple.afc.shim.remote` and `com.apple.mobile.installation_proxy.shim.remote`), and
+launch/close/is_running run over the RSD `com.apple.instruments.dtservicehub` service.
 
-**Why we believe it.** `docs/04-blockers.md` and the `installation_proxy.c` and `process_control.c`
-references describe it.
+**Why we believe it.** `docs/04-blockers.md` and the `installation_proxy.c` reference describe the
+staging and install. pymobiledevice3's `ProcessControl` implements launch/close/is_running as `DTX`
+method calls (`launchSuspendedProcessWithDevicePath:...`, `sendSignal:toPid:`,
+`processIdentifierForBundleIdentifier:`) over the `com.apple.instruments.server.services.processcontrol`
+channel, not as the plist service the code first used.
 
-**Status.** `App` is written, but no device test covers it.
+**Status.** `App` is written. On iOS 17.4 and later `install(Rsd&)` and `uninstall(Rsd&)` ride the RSD
+shims, and the device test's opt-in round trip is verified on an iOS 18.7.8 device: a development-signed
+IPA installs and uninstalls. `launch(Rsd&)`, `is_running(Rsd&)`, and `close(Rsd&)` ride the RSD
+`dtservicehub` service over `DTX`, and the same round trip launches the installed app, finds it running by
+its bundle id, and kills it by pid.
 
 **Proof.** The demo installs, launches, checks, and closes an app on a device.
 
@@ -189,11 +211,35 @@ with no root.
 
 **The one new piece.** The tunnel's link is a raw IPv6 packet stream, so a userspace TCP/IP stack is
 required. In C++ that is `lwIP` behind a custom `netif`, or a minimal IPv6 + TCP client: the tunnel needs
-only outbound TCP connections to a few RSD ports, so no ARP, DHCP, routing, or ICMP is needed.
+only outbound TCP connections to a few RSD ports, so no ARP, DHCP, routing, or ICMP is needed. `TcpLink` is
+the minimal client, with `protocol::Ipv6Framer` below it.
 
-**Status.** Not implemented; `CoreDeviceProxy` needs iOS 17.4 or later, which the device has.
+**Status.** Implemented and proven on a device. The `CoreDeviceProxy` handshake runs over
+TLS and returns the RSD address, port, and MTU, and `TcpLink` re-frames the tunnel's IPv6 packets and
+opens a TCP connection to the RSD port, all on an iOS 18.7.8 device (`docs/10-coredevice-tunnel.md`,
+increments 2 and 3). The `protocol::RemoteXpc` codec and the `protocol::Http2` layer the RSD
+connection rides on are done device-free (increments 4 and 5), and the `Rsd` connection over the link,
+which lists the services and reaches one, is done and proven on an iOS 18.7.8 device (increment 6).
+The layers, the wire formats, the API surface, the testing plan, and the choice of a
+hand-rolled minimal IPv6 + TCP client over `lwIP` are in
+[`10-coredevice-tunnel.md`](10-coredevice-tunnel.md).
 
 **Proof.** A device of iOS 17.4 or later lists the RSD services over the tunnel.
+
+### The RSD shim services are lockdown-style plist services
+
+**Assumption.** The iOS 17.4+ `AFC` and installer shims (`com.apple.afc.shim.remote` and
+`com.apple.mobile.installation_proxy.shim.remote`) are not RemoteXPC services: after the
+`RSDCheckin`, each speaks the same length-prefixed plist framing `lockdownd` does.
+
+**Why we believe it.** pymobiledevice3's `RSD_SERVICE_NAME` reaches both over the RSD tunnel with
+an `RSDCheckin` and then the same messages as the mux-link services.
+
+**Status.** Proven on a device. The device test stages an IPA over the `AFC` shim and the installer
+shim answers a status, and `uninstall(Rsd&)` removes an app over the installer shim
+(`docs/04-blockers.md`).
+
+**Proof.** A device of iOS 17.4 or later installs a development-signed app over the RSD shims.
 
 ## Test fidelity
 
@@ -205,4 +251,6 @@ logic are correct, so a later device failure is a protocol assumption, not a cod
 **Why we believe it.** It is the only way to test without a device, and the slices are built on it.
 
 **Risk.** A mock encodes the same misunderstanding the code does, so it can confirm a wrong frame.
-The device tests are what break the tie.
+The device tests are what break the tie. The AFC mock did exactly this: it fed a `STATUS` after a
+`READ_DIR` listing, so it confirmed the wrong belief until the device hung
+(`docs/04-blockers.md`).

@@ -15,6 +15,7 @@
 #include "ioscpp/protocol/plist.hpp"
 #include "ioscpp/protocol/usbmux.hpp"
 #include "ioscpp/stream.hpp"
+#include "ioscpp/tunnel.hpp"
 
 namespace ioscpp
 {
@@ -23,6 +24,9 @@ namespace
 
 /// The service name of the device's media file service.
 constexpr std::string_view kAfcService = "com.apple.afc";
+
+/// The lockdown service that hands out the CoreDevice tunnel, on iOS 17.4+.
+constexpr std::string_view kCoreDeviceProxyService = "com.apple.internal.devicecompute.CoreDeviceProxy";
 
 } // namespace
 
@@ -38,6 +42,7 @@ struct Device::Impl
     std::shared_ptr<Connection> connection;
     Lockdown lockdown;
     crypto::Pairing *pairing;
+    bool disconnected = false;
     std::string udid;
     std::string product_type;
     std::string product_version;
@@ -48,9 +53,33 @@ Device::Device(std::shared_ptr<Connection> connection, Lockdown lockdown, crypto
 {
 }
 
-Device::~Device() = default;
+Device::~Device()
+{
+    disconnect();
+}
+
 Device::Device(Device &&) noexcept = default;
-Device &Device::operator=(Device &&) noexcept = default;
+
+Device &Device::operator=(Device &&other) noexcept
+{
+    if (this != &other)
+    {
+        disconnect();
+        impl_ = std::move(other.impl_);
+    }
+    return *this;
+}
+
+void Device::disconnect() noexcept
+{
+    if (impl_ == nullptr || impl_->disconnected)
+    {
+        return;
+    }
+    impl_->disconnected = true;
+    impl_->lockdown.close();
+    impl_->connection->close();
+}
 
 Result<Device> Device::connect(Transport &transport, crypto::Pairing &pairing)
 {
@@ -148,12 +177,12 @@ Lockdown &Device::lockdown() noexcept
 
 Result<Stream> Device::start_service(std::string_view name)
 {
-    auto port = impl_->lockdown.start_service(name);
-    if (!port)
+    auto service = impl_->lockdown.start_service(name);
+    if (!service)
     {
-        return tl::unexpected(port.error());
+        return tl::unexpected(service.error());
     }
-    return Stream::open(impl_->connection, *port);
+    return Stream::open(impl_->connection, service->port);
 }
 
 Result<Afc> Device::open_afc()
@@ -164,6 +193,26 @@ Result<Afc> Device::open_afc()
         return tl::unexpected(stream.error());
     }
     return Afc::start(std::move(*stream));
+}
+
+Result<Tunnel> Device::tunnel()
+{
+    auto service = impl_->lockdown.start_service(kCoreDeviceProxyService);
+    if (!service)
+    {
+        return tl::unexpected(service.error());
+    }
+
+    auto stream = Stream::open(impl_->connection, service->port);
+    if (!stream)
+    {
+        return tl::unexpected(stream.error());
+    }
+
+    // `CoreDeviceProxy` sets `EnableServiceSSL`, so the service requires TLS
+    // before it answers the handshake. Sending the frame in plaintext makes the
+    // device reset the port (`sessionUpcall connection closed`).
+    return Tunnel::open(std::move(*stream), *impl_->pairing, service->enable_ssl);
 }
 
 } // namespace ioscpp

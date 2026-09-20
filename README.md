@@ -2,9 +2,9 @@
 
 A small, self-contained **iOS device client, as a C++20 library**.
 
-`ioscpp` talks to an iPhone or iPad directly, over USB, with **no `usbmuxd`, no `libimobiledevice`, and no external binary**. Embed it in a C++ program and it lists and transfers files, installs and removes apps, and starts and stops them.
+`ioscpp` talks to an iPhone or iPad directly, over USB, with **no `usbmuxd`, no `libimobiledevice`, and no external binary**. Embed it in a C++ program and it lists and transfers files, and installs and removes apps.
 
-> **Status: 0.1.0 (scaffold).** The project layout, the public headers, the `Result<T>` error model, and the device-free test suite exist and build. The protocol slices are tracked in [`docs/03-roadmap.md`](docs/03-roadmap.md). Every fallible operation returns a `Result<T>` instead of throwing.
+> **Status: 1.0.0.** Connect, Info, Files, app install/uninstall, and app process control are proven on a device, on iOS 18.7.8. The protocol slices are tracked in [`docs/03-roadmap.md`](docs/03-roadmap.md). Every fallible operation returns a `Result<T>` instead of throwing.
 
 ## How this was built
 
@@ -47,10 +47,11 @@ a green run is just as useful as a red one, and see [Contributing](#contributing
 - **Connect**: discover a device over USB, pair with it, and reach any `lockdownd` service.
 - **Info**: query the device's model, iOS version, and unique id.
 - **Files**: list a directory, `stat` a path, and pull or push a file over `AFC`.
-- **Apps**: install and uninstall an app, launch it, check whether it is running, and close it.
+- **Apps**: install and uninstall an app over the RSD `AFC` and `installation_proxy` shims on iOS 17.4+, or the mux link below; launch it, check whether it is running, and close it.
 
-Connect and Info are proven on a device. Files and Apps are written but not yet validated on
-hardware, which is the goal of Slices 6 and 7 in [`docs/03-roadmap.md`](docs/03-roadmap.md).
+Connect, Info, Files, app install/uninstall, and app process control are proven on a
+device. Process control rides the RSD `com.apple.instruments.dtservicehub` service over
+`DTX`, Slice 10 in [`docs/03-roadmap.md`](docs/03-roadmap.md).
 
 ## Build it
 
@@ -114,10 +115,13 @@ The fastest way to learn the library is to run [`examples/demo/main.cpp`](exampl
 1. finds an attached device and opens its USB interface, with the mux negotiation;
 2. pairs with it if it is not paired, starts the `lockdownd` session, and reads the identity;
 3. opens `AFC` and lists the media root;
-4. pushes a file into `/PublicStaging`;
-5. installs an app from an IPA, replacing an existing copy;
-6. launches it;
-7. closes it.
+4. pushes a file into `/PublicStaging`, stats it, and pulls it back;
+5. opens the CoreDevice tunnel and the RSD connection, listing the services;
+6. installs an app from an IPA, replacing an existing copy;
+7. launches it, checks it is running, and closes it;
+8. uninstalls it.
+
+Steps 5-8 need iOS 17.4 or later, because the installer and the developer tools moved behind the tunnel there.
 
 To run it, you need a device with **a trusted host** (tap *Trust* on the device when asked) and an IPA to install. The install replaces that bundle, so it loses the bundle's data.
 
@@ -133,14 +137,14 @@ It uses the first attached device. When it finishes, open the source and read it
 
 ```
 include/ioscpp/         Public headers (transport, protocol, session, stream,
-                         device, lockdown, afc, app)
+                         device, lockdown, afc, app, rsd)
 include/ioscpp/crypto/   The pairing record, backed by mbedTLS
 include/ioscpp/tcp/       The TCP transport, over the platform's sockets
 include/ioscpp/usb/       The USB transport, backed by libusb
 include/ioscpp/testing/  The in-memory transport used by the tests
 src/                    Library sources, mirroring the public headers
 tests/                  Catch2 unit tests and the device integration test
-examples/               Runnable examples, including the guided tour in demo/
+examples/               Runnable examples: the guided tour in demo/ and the parallel tour in multi/
 tools/                  Developer scripts (device lister, transfer benchmark)
 docs/                   Design documents and Doxygen configuration
 cmake/                  CMake package configuration
@@ -148,13 +152,16 @@ cmake/                  CMake package configuration
 
 ## Where to go next
 
+- [`docs/00-start-here.md`](docs/00-start-here.md) — a plain-language tour of the project, with no prior knowledge assumed.
 - [`examples/demo/main.cpp`](examples/demo/main.cpp) — the guided tour, step by step in its comments.
+- [`examples/multi/main.cpp`](examples/multi/main.cpp) — the same tour against every attached device, one thread per device.
 - [`docs/05-usage.md`](docs/05-usage.md) — copy-pasteable snippets for one feature at a time.
 - [`docs/06-afc-protocol.md`](docs/06-afc-protocol.md) — how `AFC` and file transfer work, byte by byte.
 - [`docs/03-roadmap.md`](docs/03-roadmap.md) and the [open issues](https://github.com/promethea156/ioscpp/issues) — what is planned next.
 
 ## Design documents
 
+- [`docs/00-start-here.md`](docs/00-start-here.md) — a plain-language tour of the project, and a glossary of the terms it uses
 - [`docs/01-objective.md`](docs/01-objective.md) — objective, technical requirements, versioning, and commit conventions
 - [`docs/02-references.md`](docs/02-references.md) — reference material on the iOS device protocols
 - [`docs/03-roadmap.md`](docs/03-roadmap.md) — vertical-slice implementation roadmap
@@ -164,6 +171,7 @@ cmake/                  CMake package configuration
 - [`docs/07-error-model.md`](docs/07-error-model.md) — why nothing throws, and what `Result<T>` carries instead
 - [`docs/08-assumptions.md`](docs/08-assumptions.md) — what the implementation assumes but has not yet proven on a device
 - [`docs/09-platform-setup.md`](docs/09-platform-setup.md) — what to install and grant per platform to build and reach a device
+- [`docs/10-coredevice-tunnel.md`](docs/10-coredevice-tunnel.md) — the iOS 17+ CoreDevice tunnel plan: the layers, the wire formats, and the testing plan
 
 ## Contributing
 

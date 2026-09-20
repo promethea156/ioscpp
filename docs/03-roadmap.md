@@ -10,25 +10,42 @@ protocol assumptions explicit while they are still small enough to get right.
 
 ## Status
 
-Slices 0 to 5 are done. Slice 4 is proven on a device: `ioscpp_device_tests` walks the
+All slices 0 to 10 are done. Slice 4 is proven on a device: `ioscpp_device_tests` walks the
 descriptors, claims the mux interface, connects, and reads the device's identity, and it skips with
 code 77 when no matching device is attached. Slice 5 is proven too: the pairing exchange completes, the
 record is saved and reused, `StartSession` wraps `lockdownd` in TLS, and the device reports its
-`ProductType` and `ProductVersion` through `GetValue`. Slice 6 onward stays open until a real device
-passes it.
+`ProductType` and `ProductVersion` through `GetValue`. Slice 6 is proven: the device test lists the
+media root, stats it and a missing path, and round-trips a 200 KiB file through `/PublicStaging` with
+the bytes compared. Slice 7's install and uninstall over the mux-link `installation_proxy`
+turned out to need the iOS 17+ `RSD` tunnel, so they were blocked on Slice 9; with the
+tunnel done, they now ride the RSD `AFC` and `installation_proxy` shims and are
+device-exercised, and process control rides the RSD `DTX` channel (Slice 10), which is
+also device-exercised.
 
 ### Current work
 
-Slices 4 and 5 are done and proven, so the next work is Slice 6: validate `AFC` listing and
-transfer against a real device (#5). The reset after the ClientHello that held Slices 4 and 5 back
-was the host certificate's zero-length serial (`04-blockers.md`); the ClientHello was ruled out by
-replaying the captured reference ClientHello byte for byte, and the framing, version, TLS version,
-and pre-TLS state were each ruled out in turn. The temporary experiment knobs that did the ruling
-out are retired (issue #20), so the default path reads no experiment env vars.
+All slices 0 to 10 are done, so the roadmap is complete for the current scope. The work
+that is left is the [non-goals](#non-goals-for-now): the privileged `tunneld` and `utun`
+interface, the device-initiated AV/HID paths, WebDriverAgent, and iOS 17.0–17.3.1 over Wi-Fi.
 
-The open work is ordered P4 to P10, lowest first: validate Slices 6 and 7 on a device
-(#5, #6), add the explicit disconnect and reconnect (#24), then the guided tour
-(#7), the CoreDevice tunnel plan and implementation (#23, #8), and DTX (#9).
+Slice 8, the guided tour, is complete: `examples/demo` walks connect, identity, AFC
+list/push/stat/pull, the `CoreDevice` tunnel, the RSD connection, install, launch, the
+running check, close, and uninstall against one iOS 18.7.8 device, and `tests/device_test.cpp`
+covers the same steps plus a replug between them.
+
+Slice 9, the iOS 17+ `RSD` tunnel, is complete: the `CDTunnel` frame codec and the raw-IPv6
+re-framer, the `CoreDeviceProxy` handshake on `Device`, the userspace IPv6 + TCP link, the
+`protocol::RemoteXpc` codec, the `protocol::Http2` layer, and the `Rsd` connection are each done
+and proven on an iOS 18.7.8 device, which lists the RSD services and reaches one
+(`docs/10-coredevice-tunnel.md`). Slice 7's install and uninstall then rode the RSD `AFC` and
+`installation_proxy` shims and are device-exercised; its process control moves to `DTX` (Slice 10).
+
+The reset after the ClientHello that held Slices 4 and 5 back was the host certificate's
+zero-length serial (`04-blockers.md`); the ClientHello was ruled out by replaying the captured reference
+ClientHello byte for byte, and the framing, version, TLS version, and pre-TLS state were each ruled out in
+turn. The temporary experiment knobs that did the ruling out are retired (issue #20), so the default path
+reads no experiment env vars. Slice 6's four AFC format corrections, and Slice 7's plist length-prefix fix,
+are in `04-blockers.md`.
 
 - [x] Slice 0: the project layout, the `Result<T>` error model, the `Transport` interface,
   the mock transport, and the build.
@@ -37,10 +54,13 @@ The open work is ordered P4 to P10, lowest first: validate Slices 6 and 7 on a d
 - [x] Slice 3: the mux version negotiation and port connect.
 - [x] Slice 4: the USB transport.
 - [x] Slice 5: pairing and `lockdownd`.
-- [ ] Slice 6: `AFC` file listing and transfer.
-- [ ] Slice 7: app install, uninstall, and control.
-- [ ] Slice 8: the guided tour and the device integration test.
-- [ ] Slice 9: the iOS 17+ `RSD` tunnel, so the CoreDevice services are reachable.
+- [x] Slice 6: `AFC` file listing and transfer.
+- [x] Slice 7: app install, uninstall, and process control over the `RSD` shims.
+- [x] Slice 8: the guided tour and the device integration test.
+- [x] Slice 9: the iOS 17+ `RSD` tunnel, so app install/uninstall and the CoreDevice
+  services are reachable.
+- [x] Slice 10: `DTX` and the `dvt` process-control service, so app install, uninstall,
+  launch, close, and `is_running` are all reachable.
 
 ## Slice 0: Layout, error model, and transport
 
@@ -113,12 +133,25 @@ frame is an `ErrorCode::Protocol` error.
 
 **Done when:** the tour lists a directory and round-trips a file.
 
-## Slice 7: App install, uninstall, and control
+## Slice 7: App install and uninstall over the `RSD` tunnel
 
-- `app.hpp`: `install` and `uninstall` over `installation_proxy`, and `launch`, `close`, and
-  `is_running` over process control.
+- `app.hpp`: `install(Rsd&, ipa)` and `uninstall(Rsd&, bundle_id)`, which stage the IPA in
+  `/PublicStaging` over the RSD `com.apple.afc.shim.remote` service and then install it over
+  the RSD `com.apple.mobile.installation_proxy.shim.remote` service.
+- `app.hpp`: `launch(Rsd&, bundle_id)`, `close(Rsd&, pid)`, and `is_running(Rsd&, bundle_id)`,
+  which ride the RSD `com.apple.instruments.dtservicehub` service over `DTX` (Slice 10).
+- `ByteStream` and `PlistService`, so the `AFC` client and the plist service ride the mux
+  link and the RSD tunnel unchanged.
+- The pre-17.4 `install(Device&)` and `uninstall(Device&)` over the mux-link
+  `installation_proxy` stay as the fallback.
 
-**Done when:** the tour installs, launches, checks, and closes an app.
+**Done and device-verified.** The device test's opt-in round trip (`IOSCPP_TEST_IPA` and
+`IOSCPP_TEST_BUNDLE`) stages a development-signed IPA over the `AFC` shim, installs it over the
+installer shim, launches it, finds it running, kills it, and uninstalls the bundle, on an iOS 18.7.8
+device. An unsigned package is answered with `ApplicationVerificationFailed`, so a full install needs a
+development-signed IPA.
+
+**Done when:** the tour installs, uninstalls, and controls an app. The demo step is Slice 8.
 
 ## Slice 8: The guided tour and the device integration test
 
@@ -128,10 +161,18 @@ frame is an `ErrorCode::Protocol` error.
 - A reconnect for a dropped link: a reset or replug re-enumerates the device, so the test
   rediscovers it by serial and connects again rather than reusing a stale handle.
 
+**Done and device-verified.** `ioscpp_demo_example` walks connect, identity, AFC
+list/push/stat/pull, the `CoreDevice` tunnel, the RSD connection, install, launch, the running
+check, close, and uninstall against one iOS 18.7.8 device. The demo's app steps need iOS 17.4 or
+later, because the installer and the developer tools moved behind the tunnel there.
+
 **Done when:** the demo and the device test pass against a real device, including a replug
 between steps.
 
 ## Slice 9: The iOS 17+ `RSD` tunnel
+
+The plan, with the layers, the wire formats, the API surface, the testing plan, and the
+userspace-TCP/IP decision, is in [`10-coredevice-tunnel.md`](10-coredevice-tunnel.md).
 
 iOS 17 moved the developer services off `lockdownd` and onto **CoreDevice** over
 **RemoteXPC**, and a CoreDevice service is only reachable over an **RSD** (Remote Service
@@ -141,9 +182,9 @@ handshake returns the tunnel interface's address, MTU, and RSD port and then car
 tunnel's IPv6 packets as data. On 17.0–17.3.1 the same tunnel is reached over the Wi-Fi
 **RemotePairing** route instead.
 
-The tunnel is what every later CoreDevice feature needs, so it is scheduled after the
-`lockdownd`, AFC, app install, and guided-tour work that runs over the plain mux (P8), and
-it is built the same way the rest of the library is: no `usbmuxd`, no `tunneld`
+The tunnel is what app install, uninstall, and control, and every later CoreDevice feature, need,
+so it is the next work after the `lockdownd` and AFC work that runs over the plain mux, and it is
+built the same way the rest of the library is: no `usbmuxd`, no `tunneld`
 daemon, and no TUN interface. The device's own tunnel address is only reachable from this
 process, which is the userspace model; a kernel-routable tunnel is a later improvement.
 
@@ -157,7 +198,7 @@ TCP client) is enough; no ARP, DHCP, routing, or ICMP.
 - The `CDTunnel` frame and the raw-IPv6 re-framer, from the handshake to a stream of whole
   IPv6 packets.
 - The userspace TCP/IP link, so `connect` reaches the RSD port with no root and no driver.
-- `protocol::RemoteXpc`, the 16-byte frame header and the `xpc` dictionary codec, which is
+- `protocol::RemoteXpc`, the fixed wrapper header and the `xpc` object codec, which is
   the CoreDevice counterpart of the mux frame and the plist codec.
 - `Rsd`, the RSD connection: `GetService` and the service dictionary, and a `Stream` to a
   named service on the tunnel.
@@ -174,12 +215,21 @@ the tunnel.
 ## Slice 10: CoreDevice and `DTX` developer services
 
 The services Slice 9 opens are the CoreDevice ones (`com.apple.dvt.*`), which speak `DTX`
-rather than the `lockdownd` plists. `dvt` and `fetch-symbols` are the first two.
+rather than the `lockdownd` plists. `processcontrol` is the first.
 
 - `protocol::Dtx`, the `DTX` message codec.
-- `dvt` and `fetch-symbols` over the RSD `Stream` from Slice 9.
+- `protocol::KeyedArchive`, the `NSKeyedArchive` a `DTX` argument rides in, with the
+  `Uid` kind it refers to its objects with.
+- `DtxConnection` and `DtxChannel`, the request/reply and channel layer over a `ByteStream`.
+- `launch`, `close`, and `is_running` from Slice 7, which process control's `DTX`
+  service over the RSD `dtservicehub` carries.
 
-**Done when:** the tour lists the DVT services and runs one of them.
+**Done and device-verified.** `ioscpp_demo_example` launches an installed app over the RSD
+`com.apple.instruments.dtservicehub` service, finds it running by its bundle id, and kills it, on an
+iOS 18.7.8 device. `dvt`'s other channels (`deviceinfo`, `fetch-symbols`) are not needed by process
+control and are left for later.
+
+**Done when:** the tour launches, checks, and closes an app over `DTX`.
 
 ## Non-goals (for now)
 

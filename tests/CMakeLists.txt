@@ -9,9 +9,20 @@ FetchContent_MakeAvailable(Catch2)
 
 add_executable(ioscpp_tests
   afc_test.cpp
+  cdtunnel_test.cpp
+  dtx_connection_test.cpp
+  dtx_test.cpp
+  http2_test.cpp
+  ipv6_test.cpp
+  json_test.cpp
+  keyed_archive_test.cpp
+  plist_service_test.cpp
   plist_test.cpp
+  process_control_test.cpp
+  remotexpc_test.cpp
   session_test.cpp
   stream_test.cpp
+  tcp_link_test.cpp
   tls_client_hello_test.cpp
   transport_test.cpp
   usbmux_test.cpp
