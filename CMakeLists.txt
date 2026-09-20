@@ -80,6 +80,7 @@ add_library(ioscpp
   src/protocol/http2.cpp
   src/protocol/ipv6.cpp
   src/protocol/json.cpp
+  src/protocol/keyed_archive.cpp
   src/protocol/plist.cpp
   src/protocol/remotexpc.cpp
   src/protocol/usbmux.cpp

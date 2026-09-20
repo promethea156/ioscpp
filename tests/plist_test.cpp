@@ -52,6 +52,19 @@ TEST_CASE("a plist round-trips through binary", "[plist]")
     CHECK(parsed->to_xml() == original.to_xml());
 }
 
+TEST_CASE("a UID round-trips through binary", "[plist]")
+{
+    const Plist value = Plist::uid(42);
+    REQUIRE(value.is_uid());
+    CHECK(value.uid() == 42);
+
+    const std::vector<std::byte> binary = value.to_binary();
+    auto parsed = Plist::parse_binary(binary);
+    REQUIRE(parsed.has_value());
+    CHECK(parsed->is_uid());
+    CHECK(parsed->uid() == 42);
+}
+
 TEST_CASE("a dictionary keeps its keys sorted", "[plist]")
 {
     Plist::Dictionary dictionary{

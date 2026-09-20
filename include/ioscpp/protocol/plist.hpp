@@ -27,7 +27,8 @@ enum class PlistType
     Data,
     Date,
     Array,
-    Dictionary
+    Dictionary,
+    Uid
 };
 
 /// A date, as the whole seconds since 2001-01-01T00:00:00Z, the plist epoch.
@@ -80,6 +81,15 @@ public:
     static Plist array(Array values);
     static Plist dictionary(Dictionary values);
 
+    /**
+     * @brief A `Uid`, an index into a binary plist's object table.
+     *
+     * A `Uid` only exists in the binary form: it is how an `NSKeyedArchive`
+     * refers to its objects, and `0` is the `$null` slot. It has no XML form, so
+     * @ref to_xml writes its index as an integer.
+     */
+    static Plist uid(std::uint64_t value);
+
     /// The kind of value held.
     PlistType type() const noexcept;
 
@@ -92,6 +102,7 @@ public:
     bool is_date() const noexcept;
     bool is_array() const noexcept;
     bool is_dictionary() const noexcept;
+    bool is_uid() const noexcept;
 
     /// The boolean, or nothing when the value is not a boolean.
     std::optional<bool> boolean() const noexcept;
@@ -109,6 +120,8 @@ public:
     const Array *array() const noexcept;
     /// The dictionary, or nullptr when the value is not a dictionary.
     const Dictionary *dictionary() const noexcept;
+    /// The `Uid` index, or nothing when the value is not a `Uid`.
+    std::optional<std::uint64_t> uid() const noexcept;
 
     /// The string, or `fallback` when the value is not a string.
     std::string string_or(std::string_view fallback = {}) const;
@@ -133,7 +146,7 @@ public:
 
 private:
     using Value = std::variant<std::monostate, bool, std::int64_t, double, std::string, std::vector<std::byte>, Date,
-                               Array, Dictionary>;
+                               Array, Dictionary, std::uint64_t>;
 
     Value value_;
 };
