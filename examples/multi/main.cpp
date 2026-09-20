@@ -17,6 +17,7 @@
 //
 // Usage: ioscpp_multi_example <bundle-id> <app.ipa>
 
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
@@ -154,6 +155,12 @@ bool run_tour(const ioscpp::usb::DeviceId &id, const std::string &bundle_id, con
     report(id.serial, "launched pid " + std::to_string(*launched));
     auto running = is_running(*rsd, bundle_id);
     report(id.serial, running.has_value() && *running ? "running" : "not running");
+
+    // Leave the app on screen for a moment, so a person watching the run can see
+    // it launch. Every device's tour waits at once, so the run stays 15s in all.
+    report(id.serial, "leaving the app up for 15s");
+    std::this_thread::sleep_for(std::chrono::seconds(15));
+
     if (auto closed = close(*rsd, *launched); !closed)
     {
         report(id.serial, "close: " + closed.error().message);
