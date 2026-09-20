@@ -35,18 +35,17 @@ output is already a contribution — [open a bug](https://github.com/promethea15
 ### Pick up a roadmap item
 
 [`docs/03-roadmap.md`](docs/03-roadmap.md) is the plan. The remaining slices each have an
-issue, and most of them are blocked on one thing: **a run against a real device**. Slice 7's app install
-and control are blocked on the `RSD` tunnel (Slice 9), so the most useful work is the tunnel and the device
-runs that report what happens. Items labelled
+issue, and most of them are blocked on one thing: **a run against a real device**. The iOS 17+ `RSD`
+tunnel (Slice 9) is done, so app install and uninstall now run over its shims; the remaining work is
+the guided tour and `DTX`, and the device runs that report what happens. Items labelled
 [`good first issue`](https://github.com/promethea156/ioscpp/labels/good%20first%20issue)
 need little context; those labelled
 [`help wanted`](https://github.com/promethea156/ioscpp/labels/help%20wanted) are broader.
 Reasonable starting points today:
 
-- **Build the iOS 17+ `RSD` tunnel** ([#8](https://github.com/promethea156/ioscpp/issues/8)) — the largest remaining slice, and it unblocks app install and control.
-- **Add the explicit disconnect and reconnect** ([#24](https://github.com/promethea156/ioscpp/issues/24)).
-- **Build the guided tour and the device integration test** ([#7](https://github.com/promethea156/ioscpp/issues/7)).
-- **Validate app install, uninstall, and control** ([#6](https://github.com/promethea156/ioscpp/issues/6)) — blocked on the `RSD` tunnel.
+- **Build the guided tour and the device integration test** ([#7](https://github.com/promethea156/ioscpp/issues/7)) — walk every implemented feature against one device.
+- **Build `DTX` and the `dvt` services** ([#9](https://github.com/promethea156/ioscpp/issues/9)) — the last layer, and it unblocks app process control.
+- **Validate app install, uninstall, and control** ([#6](https://github.com/promethea156/ioscpp/issues/6)) — install and uninstall are proven; process control needs `DTX`.
 
 If an issue looks stale or already done, say so in it rather than guessing.
 
@@ -98,11 +97,12 @@ so an unformatted file fails the build there.
 `ioscpp_device_tests` is the one test that needs hardware. It exits with code 77 (a CTest
 skip) when no matching device is attached, so it never fails a machine without one;
 `IOSCPP_TEST_SERIAL` names the device to match when several are attached, and the first is used
-otherwise. Today it connects, reads the device's identity, and exercises AFC listing, stat, and a
-push/pull round trip; the install and uninstall round trip is the goal of Slice 7, which is blocked on
-the `RSD` tunnel (Slice 9), and it runs only when `IOSCPP_TEST_IPA` and `IOSCPP_TEST_BUNDLE` name a
-disposable app. It uninstalls and reinstalls the bundle and loses its data, so only set those variables
-for an app you have agreed to replace.
+otherwise. Today it connects, reads the device's identity, exercises AFC listing, stat, and a push/pull round
+trip, opens the RSD tunnel, and lists the RSD services. The opt-in install and uninstall round trip runs
+only when `IOSCPP_TEST_IPA` and `IOSCPP_TEST_BUNDLE` name a development-signed app: it stages the IPA
+over the RSD `AFC` shim, installs it over the `installation_proxy` shim, and uninstalls the bundle. It
+uninstalls and reinstalls the bundle and loses its data, so only set those variables for an app you have
+agreed to replace.
 
 A device that has not been trusted by this host shows the *Trust This Computer?* prompt, and the pairing
 exchange blocks until it is answered, so run the device test from an interactive terminal.

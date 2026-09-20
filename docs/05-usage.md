@@ -130,8 +130,8 @@ ioscpp::uninstall(*rsd, "com.example.app").value();
 ## Launch, check, and close an app
 
 These are written but not yet validated on a device: they used a plist service that does not
-exist, and the real service is `DTX`, which is blocked on the `RSD` tunnel and the `DTX`
-codec (`docs/04-blockers.md`).
+exist, and the real service is `DTX`, which is not built yet (Slice 10,
+`docs/04-blockers.md`).
 
 ```cpp
 ioscpp::launch(device, "com.example.app").value();

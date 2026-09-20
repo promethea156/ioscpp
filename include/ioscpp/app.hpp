@@ -82,7 +82,7 @@ Result<PackageResult> IOSCPP_API uninstall(Rsd &rsd, std::string_view bundle_id)
  * `success == false` with the reason, not an `Error`.
  *
  * @note Not yet validated on a device: the real process-control service is `DTX`, not a
- * plist one, so this is blocked on the `RSD` tunnel.
+ * plist one, so this is blocked on the `DTX` codec (Slice 10).
  */
 Result<CommandResult> IOSCPP_API launch(Device &device, std::string_view bundle_id);
 

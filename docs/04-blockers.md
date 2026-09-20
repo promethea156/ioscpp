@@ -3,9 +3,9 @@
 Significant blockers hit during development, and how they were solved. Each entry keeps the
 symptom, the cause, and the fix, so the same trap is not walked into twice.
 
-The list is empty in the scaffold and fills in as the slices in
-[`03-roadmap.md`](03-roadmap.md) are implemented. The entries below are the ones already known
-from the reference implementations and are expected to be hit.
+It fills in as the slices in [`03-roadmap.md`](03-roadmap.md) are implemented: the entries
+below are the ones hit so far, and the ones known from the reference implementations and
+expected.
 
 ## Hit blockers
 
