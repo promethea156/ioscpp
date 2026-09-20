@@ -11,6 +11,10 @@
 // The app install/uninstall round trip is opt-in: `IOSCPP_TEST_IPA` and
 // `IOSCPP_TEST_BUNDLE` name a disposable app, and the round trip replaces it
 // and loses its data.
+//
+// The lifecycle step disconnects, re-discovers the device by serial, and
+// reconnects on a fresh transport. `IOSCPP_TEST_REPLUG` waits for a physical
+// unplug and replug before the reconnect, so the re-enumeration is exercised.
 
 #include "ioscpp/device.hpp"
 
@@ -20,6 +24,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -72,12 +77,15 @@ int main()
 
     std::cout << "device: " << selected.serial << "\n";
 
-    auto transport = ioscpp::usb::UsbTransport::open(selected);
-    if (!transport)
+    auto opened = ioscpp::usb::UsbTransport::open(selected);
+    if (!opened)
     {
-        std::cerr << "open: " << transport.error().message << "\n";
+        std::cerr << "open: " << opened.error().message << "\n";
         return 1;
     }
+    // The transport is held in an `optional`, not the `Result`, so a reconnect
+    // can destroy it and open a fresh one.
+    std::optional<ioscpp::usb::UsbTransport> transport = std::move(*opened);
 
     // The transport reports the serial of the device it opened, so it proves the
     // descriptor walk and the claim reached the selected device.
@@ -92,12 +100,13 @@ int main()
         return 1;
     }
 
-    auto device = ioscpp::Device::connect(*transport, *pairing);
-    if (!device)
+    auto connected = ioscpp::Device::connect(*transport, *pairing);
+    if (!connected)
     {
-        std::cerr << "connect: " << device.error().message << "\n";
+        std::cerr << "connect: " << connected.error().message << "\n";
         return 1;
     }
+    std::optional<ioscpp::Device> device = std::move(*connected);
 
     std::cout << "udid: " << device->udid() << "\n";
     std::cout << "product: " << device->product_type() << " " << device->product_version() << "\n";
@@ -116,12 +125,15 @@ int main()
     // AFC: listing the media root proves the framing and the entry parse, and the
     // push/pull round trip proves the file operations. The payload spans several
     // chunks, so a short read or a missed end-of-file shows up as a size mismatch.
-    auto afc = device->open_afc();
-    ok = check(afc.has_value(), "the AFC service did not start") && ok;
-    if (!afc)
+    auto opened_afc = device->open_afc();
+    ok = check(opened_afc.has_value(), "the AFC service did not start") && ok;
+    if (!opened_afc)
     {
         return 1;
     }
+    // The AFC client is held in an `optional`, so the reconnect can destroy it
+    // before the connection closes, sending its reset while the link is still up.
+    std::optional<ioscpp::Afc> afc = std::move(*opened_afc);
 
     auto entries = afc->list("/");
     ok = check(entries.has_value(), "listing the media root failed") && ok;
@@ -228,6 +240,55 @@ int main()
                 std::cerr << "uninstall: " << uninstalled->failure_reason() << "\n";
             }
             ok = check(uninstalled.has_value() && uninstalled->success, "the device refused the uninstall") && ok;
+        }
+    }
+
+    // Lifecycle: close innermost first, then re-discover the device by serial
+    // and reconnect on a fresh transport. A reset or replug re-enumerates the
+    // device, so its USB address changes and the old handle is stale; the serial
+    // is what selects it again. `IOSCPP_TEST_REPLUG` waits for a physical
+    // unplug and replug before the reconnect.
+    afc.reset();
+
+    device->disconnect();
+    device->disconnect(); // idempotent: the second call leaves nothing open
+    device.reset();
+    transport.reset();
+
+    if (std::getenv("IOSCPP_TEST_REPLUG") != nullptr)
+    {
+        std::cout << "unplug and replug the device, then press Enter\n";
+        std::cin.get();
+    }
+
+    auto again = ioscpp::usb::UsbTransport::list();
+    ok = check(again.has_value(), "re-listing the devices failed") && ok;
+    bool present = false;
+    if (again)
+    {
+        for (const ioscpp::usb::DeviceId &id : *again)
+        {
+            if (id.serial == selected.serial)
+            {
+                present = true;
+            }
+        }
+    }
+    ok = check(present, "the device did not reappear by serial") && ok;
+
+    auto reopened = ioscpp::usb::UsbTransport::open(selected);
+    ok = check(reopened.has_value(), "reopening the device failed") && ok;
+    if (reopened)
+    {
+        transport = std::move(*reopened);
+        auto reconnected = ioscpp::Device::connect(*transport, *pairing);
+        ok = check(reconnected.has_value(), "reconnect failed") && ok;
+        if (reconnected)
+        {
+            device = std::move(*reconnected);
+            ok = check(!device->udid().empty(), "the reconnected device reported no udid") && ok;
+            std::cout << "reconnected: " << device->product_type() << " " << device->product_version() << "\n";
+            device->disconnect();
         }
     }
 

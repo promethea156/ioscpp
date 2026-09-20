@@ -49,6 +49,7 @@ public:
     void close() override
     {
         closed_ = true;
+        ++close_count_;
     }
 
     /// Sets the serial reported by serial(), to stand in for a real transport's.
@@ -74,11 +75,19 @@ public:
         return closed_;
     }
 
+    /// The number of times close() has been called, so a test can tell that a
+    /// second close was a no-op.
+    std::size_t close_count() const noexcept
+    {
+        return close_count_;
+    }
+
 private:
     std::vector<std::byte> incoming_;
     std::size_t read_position_ = 0;
     std::vector<std::byte> written_;
     bool closed_ = false;
+    std::size_t close_count_ = 0;
     std::string serial_;
 };
 

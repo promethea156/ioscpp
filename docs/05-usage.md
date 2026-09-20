@@ -26,6 +26,31 @@ std::cout << device.udid() << " " << device.product_type() << " "
           << device.product_version() << "\n";
 ```
 
+## Disconnect and reconnect
+
+`disconnect` tears the connection down innermost first (TLS, streams, mux, transport) and is
+idempotent. The transport is closed but owned by the caller, and a `Device` is tied to one transport,
+so a reconnect destroys the `Device`, re-discovers the device by its serial, opens a fresh transport, and
+connects again. A service stream the caller opened must be destroyed first, so its reset is sent while the
+link is still up.
+
+```cpp
+afc.reset();
+
+device->disconnect();
+device.reset();
+transport.reset();
+
+for (const auto &id : ioscpp::usb::UsbTransport::list().value())
+{
+    if (id.serial == serial)
+    {
+        transport = ioscpp::usb::UsbTransport::open(id).value();
+        device = ioscpp::Device::connect(*transport, pairing).value();
+    }
+}
+```
+
 ## List the attached devices
 
 ```cpp

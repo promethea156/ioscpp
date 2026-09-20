@@ -70,6 +70,15 @@ public:
     /// Reads all output until the device resets the connection.
     Result<std::vector<std::byte>> read_all();
 
+    /**
+     * @brief Resets the port, releasing it on the device.
+     *
+     * The reset is sent once; a second call, or one after the stream has already
+     * been moved from, is a no-op. This is the stream half of an ordered
+     * teardown, and the destructor routes through it, so there is one path.
+     */
+    void close() noexcept;
+
     /// The remote port this stream is connected to.
     std::uint16_t port() const noexcept
     {

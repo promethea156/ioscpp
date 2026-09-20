@@ -92,9 +92,27 @@ Lockdown::Lockdown(Stream stream)
 {
 }
 
-Lockdown::~Lockdown() = default;
+Lockdown::~Lockdown()
+{
+    close();
+}
+
 Lockdown::Lockdown(Lockdown &&) noexcept = default;
 Lockdown &Lockdown::operator=(Lockdown &&) noexcept = default;
+
+void Lockdown::close() noexcept
+{
+    if (impl_ == nullptr)
+    {
+        return;
+    }
+    if (impl_->tls.has_value())
+    {
+        impl_->tls->close();
+        impl_->tls.reset();
+    }
+    impl_->stream.close();
+}
 
 Result<Lockdown> Lockdown::start(Stream stream)
 {

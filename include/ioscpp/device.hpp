@@ -65,6 +65,21 @@ public:
     /// Starts `com.apple.afc` and returns a file client on it.
     Result<Afc> open_afc();
 
+    /**
+     * @brief Disconnects from the device, innermost first.
+     *
+     * Closes the TLS `close_notify`, then the `lockdownd` stream, then the mux
+     * and the transport. A service stream the caller opened, such as an `Afc`, must
+     * be destroyed first so its reset is sent while the link is still up. The call
+     * is idempotent, and the destructor routes through it, so there is one path.
+     *
+     * The transport is closed here but owned by the caller, so a reconnect means
+     * destroying this `Device`, opening a fresh transport (re-discovering the device
+     * by its serial), and calling @ref connect again. `Device` is tied to one
+     * transport, so it cannot be pointed at another.
+     */
+    void disconnect() noexcept;
+
 private:
     Device(std::shared_ptr<Connection> connection, Lockdown lockdown, crypto::Pairing &pairing);
 

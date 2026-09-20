@@ -38,6 +38,7 @@ struct Device::Impl
     std::shared_ptr<Connection> connection;
     Lockdown lockdown;
     crypto::Pairing *pairing;
+    bool disconnected = false;
     std::string udid;
     std::string product_type;
     std::string product_version;
@@ -48,9 +49,33 @@ Device::Device(std::shared_ptr<Connection> connection, Lockdown lockdown, crypto
 {
 }
 
-Device::~Device() = default;
+Device::~Device()
+{
+    disconnect();
+}
+
 Device::Device(Device &&) noexcept = default;
-Device &Device::operator=(Device &&) noexcept = default;
+
+Device &Device::operator=(Device &&other) noexcept
+{
+    if (this != &other)
+    {
+        disconnect();
+        impl_ = std::move(other.impl_);
+    }
+    return *this;
+}
+
+void Device::disconnect() noexcept
+{
+    if (impl_ == nullptr || impl_->disconnected)
+    {
+        return;
+    }
+    impl_->disconnected = true;
+    impl_->lockdown.close();
+    impl_->connection->close();
+}
 
 Result<Device> Device::connect(Transport &transport, crypto::Pairing &pairing)
 {
