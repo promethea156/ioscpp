@@ -42,6 +42,20 @@ rough edges. If you have either, please build it and
 [report the result](https://github.com/promethea156/ioscpp/issues/new?template=platform_verification.yml);
 a green run is just as useful as a red one, and see [Contributing](#contributing).
 
+## Device and iOS support
+
+`ioscpp` reaches any iPhone or iPad that presents the mux interface. What it can do
+depends on the device's iOS version, because iOS 17.4 moved the app installer and the
+developer tools behind the `CoreDevice` tunnel:
+
+| iOS version | What works |
+|-------------|------------|
+| Any | Connect, Info, and Files, over the mux link. |
+| 17.4 or later | The app steps too: install, launch, the running check, close, and uninstall, over the tunnel. |
+
+Exercised on **iOS 17.5.1** (iPhone15,4) and **iOS 18.7.8** (iPhone17,4), including
+both devices driven at once; **17.5.1 is the oldest iOS version tested so far**.
+
 ## What it can do
 
 - **Connect**: discover a device over USB, pair with it, and reach any `lockdownd` service.
