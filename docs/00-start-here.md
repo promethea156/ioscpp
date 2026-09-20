@@ -117,19 +117,15 @@ built next.
 
 ## What is being built now
 
-App control talks to the phone in a different format, called `DTX`. It is not a
-property list like the phone's other services: every message has its own fixed frame, a
-**magic word**, a **length**, and the two sides' names, and then its own list of small
-values. Sending a property list to a developer service, or reading its first reply as
-one, fails.
+The library is complete for its current scope: every feature works end to end on a
+real iPhone, and the sample program walks them all once.
 
-The library can now build and read that frame, open a numbered channel, and carry the
-conversation over it. Starting, checking, and closing an app work on a newer iPhone: the
-library asks the phone's developer tools to start the app, reads back its process id, asks
-whether it is running, and closes it. Verified on a real iPhone running iOS 18.7.8.
+The sample program connects, reads the phone's identity, lists and copies files,
+opens the tunnel, lists the phone's services, installs an app, starts it, checks it is
+running, closes it, and removes it. Verified on a real iPhone running iOS 18.7.8.
 
-The one piece left is the **guided tour**: the sample program and the device test walk
-every feature once, against one phone.
+What is left is not on the roadmap yet: the privileged helper, the keyboard and screen
+paths, and the older Wi-Fi route (the non-goals).
 
 ## The words this project uses
 

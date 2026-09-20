@@ -24,6 +24,16 @@ inline constexpr std::uint16_t kRsdPort = 58783;
 using RsdUuid = std::array<std::byte, 16>;
 
 /**
+ * @brief The RSD handshake UUID for `host_id`, the pairing record's host id.
+ *
+ * The device keeps one RSD connection per tunnel and re-attaches the tunnel when the
+ * UUID changes, so every connection to one tunnel, across runs and processes, must
+ * present the same UUID. Deriving it from the host id makes it stable, which is
+ * what `default_handshake_uuid` does from `generate_host_id`.
+ */
+RsdUuid IOSCPP_API rsd_uuid(std::string_view host_id);
+
+/**
  * @brief A service the RSD advertises, and how it is reached.
  *
  * The device handshake's `Services` dictionary lists every service by name and
