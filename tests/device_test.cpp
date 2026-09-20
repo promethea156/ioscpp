@@ -81,6 +81,15 @@ int main()
         std::cerr << "list: " << devices.error().message << "\n";
         return 1;
     }
+    // A device whose serial cannot be read is left out of the list, because an
+    // empty serial would alias the first device when it is opened.
+    for (const ioscpp::usb::DeviceId &id : *devices)
+    {
+        if (!check(!id.serial.empty(), "the list reported a device with no serial"))
+        {
+            return 1;
+        }
+    }
 
     const char *wanted = std::getenv("IOSCPP_TEST_SERIAL");
     ioscpp::usb::DeviceId selected;

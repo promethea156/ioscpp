@@ -298,10 +298,20 @@ Result<std::vector<DeviceId>> UsbTransport::list()
         {
             continue;
         }
+        // A device whose serial cannot be read cannot be selected, because the
+        // serial is the only unambiguous selector: an empty one would alias the
+        // first device in `find_device`. Reading the serial opens the device, so a
+        // device whose driver does not let libusb open it lands here, and it is
+        // skipped like a device without a mux interface.
+        std::string serial = device_serial(devices[i], descriptor);
+        if (serial.empty())
+        {
+            continue;
+        }
         DeviceId id;
         id.vendor_id = descriptor.idVendor;
         id.product_id = descriptor.idProduct;
-        id.serial = device_serial(devices[i], descriptor);
+        id.serial = std::move(serial);
         found.push_back(std::move(id));
     }
     libusb_free_device_list(devices, 1);
