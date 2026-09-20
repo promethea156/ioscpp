@@ -148,7 +148,7 @@ so they belong to the core and not to `ioscpp-usb`.
 Each increment is end to end and leaves the repository working:
 
 1. `protocol::Cdtunnel` and the raw-IPv6 re-framer, device-free over the mock. No device and no new
-   dependency.
+   dependency. **Done.**
 2. The `CoreDeviceProxy` handshake on `Device`, returning the RSD address and port, with a device test that
    skips on a pre-17.4 device.
 3. The userspace IPv6 + TCP link, device-free against the scripted peer, then reaching the RSD port on a device.

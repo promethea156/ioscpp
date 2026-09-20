@@ -9,6 +9,9 @@ FetchContent_MakeAvailable(Catch2)
 
 add_executable(ioscpp_tests
   afc_test.cpp
+  cdtunnel_test.cpp
+  ipv6_test.cpp
+  json_test.cpp
   plist_test.cpp
   session_test.cpp
   stream_test.cpp

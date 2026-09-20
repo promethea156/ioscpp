@@ -31,8 +31,10 @@ ClientHello byte for byte, and the framing, version, TLS version, and pre-TLS st
 turn. The temporary experiment knobs that did the ruling out are retired (issue #20), so the default path
 reads no experiment env vars. Slice 6's four AFC format corrections are in `04-blockers.md`.
 
-The open work is ordered lowest first: the iOS 17+ `RSD` tunnel (#8), then validate app install, uninstall,
-and control on a device (#6), the guided tour (#7), the CoreDevice tunnel plan (#23), and DTX (#9).
+Slice 9's first increment, the `CDTunnel` frame codec and the raw-IPv6 re-framer, is done
+device-free over the mock (`docs/10-coredevice-tunnel.md`). The open work is ordered lowest first:
+the rest of the iOS 17+ `RSD` tunnel (#8), then validate app install, uninstall, and control on a
+device (#6), the guided tour (#7), and DTX (#9).
 
 - [x] Slice 0: the project layout, the `Result<T>` error model, the `Transport` interface,
   the mock transport, and the build.

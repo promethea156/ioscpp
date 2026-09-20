@@ -18,6 +18,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The iOS 17+ CoreDevice tunnel plan (`docs/10-coredevice-tunnel.md`): the four layers, the
   `CDTunnel` handshake and raw-IPv6 re-framer formats, the RSD/RemoteXPC surface, the testing
   plan, and the choice of a hand-rolled minimal IPv6 + TCP client over `lwIP`.
+- `protocol::Json`, a minimal JSON codec for the CoreDevice tunnel handshake, with an integral
+  number serialized without a fraction.
+- `protocol::Cdtunnel`, the `CDTunnel` frame codec and the handshake request and response,
+  tested device-free over the mock.
+- `protocol::Ipv6` and `Ipv6Framer`, the fixed IPv6 header and the re-framer that turns the
+  tunnel's boundary-less byte stream into whole packets, tested device-free over the mock.
 
 ### Fixed
 
