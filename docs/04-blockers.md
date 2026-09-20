@@ -42,7 +42,7 @@ is the only holder: the *Apple Mobile Device Service* claims the device, and the
 interface is bound to Apple's `usbaapl64` driver, which libusb cannot open.
 
 **Fix.** Stop *Apple Mobile Device Service*, bind a libusb-compatible driver to the
-mux interface alone with Zadig, and replug. Bind the interface, not the composite
+mux interface alone in Device Manager, and replug. Bind the interface, not the composite
 device, so the rest of the device keeps Apple's driver. Use `libusb-win32`, not
 WinUSB: its libusb0 backend sends `SET_CONFIGURATION`, which the device's initial USB
 mode needs (`docs/09-platform-setup.md`).
