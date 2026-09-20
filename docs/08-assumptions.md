@@ -210,13 +210,13 @@ required. In C++ that is `lwIP` behind a custom `netif`, or a minimal IPv6 + TCP
 only outbound TCP connections to a few RSD ports, so no ARP, DHCP, routing, or ICMP is needed. `TcpLink` is
 the minimal client, with `protocol::Ipv6Framer` below it.
 
-**Status.** Partly implemented and proven on a device. The `CoreDeviceProxy` handshake runs over
+**Status.** Implemented and proven on a device. The `CoreDeviceProxy` handshake runs over
 TLS and returns the RSD address, port, and MTU, and `TcpLink` re-frames the tunnel's IPv6 packets and
 opens a TCP connection to the RSD port, all on an iOS 18.7.8 device (`docs/10-coredevice-tunnel.md`,
 increments 2 and 3). The `protocol::RemoteXpc` codec and the `protocol::Http2` layer the RSD
-connection rides on are done device-free (increments 4 and 5). The RSD connection over the link, which
-lists and reaches a service, is not
-implemented; the layers, the wire formats, the API surface, the testing plan, and the choice of a
+connection rides on are done device-free (increments 4 and 5), and the `Rsd` connection over the link,
+which lists the services and reaches one, is done and proven on an iOS 18.7.8 device (increment 6).
+The layers, the wire formats, the API surface, the testing plan, and the choice of a
 hand-rolled minimal IPv6 + TCP client over `lwIP` are in
 [`10-coredevice-tunnel.md`](10-coredevice-tunnel.md).
 

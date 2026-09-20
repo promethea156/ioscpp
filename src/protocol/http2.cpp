@@ -30,9 +30,10 @@ inline constexpr std::uint8_t kPing = 0x6;
 inline constexpr std::uint8_t kGoAway = 0x7;
 inline constexpr std::uint8_t kWindowUpdate = 0x8;
 
-/// The `END_STREAM` and `ACK` flags, the ones this layer sets or reads.
+/// The `END_STREAM`, `END_HEADERS`, and `ACK` flags, the ones this layer sets or reads.
 inline constexpr std::uint8_t kEndStream = 0x1;
 inline constexpr std::uint8_t kAck = 0x1;
+inline constexpr std::uint8_t kEndHeaders = 0x4;
 
 /// The two settings this layer reads: the stream limit and the window size.
 inline constexpr std::uint16_t kSettingsMaxConcurrentStreams = 0x3;
@@ -47,6 +48,15 @@ inline constexpr std::size_t kMaxFrameSize = 16384;
 std::uint8_t byte_at(std::span<const std::byte> bytes, std::size_t offset)
 {
     return std::to_integer<std::uint8_t>(bytes[offset]);
+}
+
+/// Reads a big-endian 32-bit field at `offset`.
+std::uint32_t read_u32(std::span<const std::byte> bytes, std::size_t offset)
+{
+    return (static_cast<std::uint32_t>(byte_at(bytes, offset)) << 24) |
+           (static_cast<std::uint32_t>(byte_at(bytes, offset + 1)) << 16) |
+           (static_cast<std::uint32_t>(byte_at(bytes, offset + 2)) << 8) |
+           static_cast<std::uint32_t>(byte_at(bytes, offset + 3));
 }
 
 /// Appends an HTTP/2 frame: the 3-byte length, the type, the flags, the stream, the payload.
@@ -102,8 +112,10 @@ std::vector<std::byte> window_update_frame(std::uint32_t stream, std::uint32_t i
 /// An empty HEADERS frame that opens `stream`.
 std::vector<std::byte> headers_frame(std::uint32_t stream)
 {
+    // The header block is empty, so `END_HEADERS` must be set: without it the peer
+    // expects a CONTINUATION and rejects the DATA frame that follows.
     std::vector<std::byte> out;
-    append_frame(out, kHeaders, 0, stream, {});
+    append_frame(out, kHeaders, kEndHeaders, stream, {});
     return out;
 }
 
@@ -239,10 +251,7 @@ Status Http2::Impl::read_frame()
             break;
         case kWindowUpdate:
         {
-            const std::uint32_t increment = (static_cast<std::uint32_t>(byte_at(payload, 0)) << 24) |
-                                            (static_cast<std::uint32_t>(byte_at(payload, 1)) << 16) |
-                                            (static_cast<std::uint32_t>(byte_at(payload, 2)) << 8) |
-                                            static_cast<std::uint32_t>(byte_at(payload, 3));
+            const std::uint32_t increment = read_u32(payload, 0);
             if (stream == 0)
             {
                 connection_window += static_cast<std::int32_t>(increment);
@@ -264,13 +273,22 @@ Status Http2::Impl::read_frame()
             }
             break;
         case kGoAway:
+        {
+            // The error code and last stream id are the first two 32-bit fields.
             failed = true;
-            error = protocol_error("the peer sent GOAWAY");
+            error = protocol_error(length >= 8 ? "the peer sent GOAWAY (code " + std::to_string(read_u32(payload, 4)) +
+                                                     ", last stream " + std::to_string(read_u32(payload, 0)) + ")"
+                                               : "the peer sent GOAWAY");
             break;
+        }
         case kRstStream:
+        {
             failed = true;
-            error = protocol_error("the peer reset a stream");
+            error = protocol_error(length >= 4 ? "the peer reset stream " + std::to_string(stream) + " (code " +
+                                                     std::to_string(read_u32(payload, 0)) + ")"
+                                               : "the peer reset a stream");
             break;
+        }
         default:
             break;
     }

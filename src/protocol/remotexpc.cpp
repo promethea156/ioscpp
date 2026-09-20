@@ -757,21 +757,9 @@ std::vector<std::byte> XpcWrapper::encode() const
         body = payload->encode();
     }
 
-    // The flags word must be exact, so `AlwaysSet` is forced and `DataPresent` follows
-    // the body rather than the caller's spelling.
-    std::uint32_t effective = flags | kXpcFlagAlwaysSet;
-    if (payload.has_value())
-    {
-        effective |= kXpcFlagDataPresent;
-    }
-    else
-    {
-        effective &= ~kXpcFlagDataPresent;
-    }
-
     std::vector<std::byte> out;
     append_u32(out, kXpcWrapperMagic);
-    append_u32(out, effective);
+    append_u32(out, flags);
     append_u64(out, static_cast<std::uint64_t>(body.size()));
     append_u64(out, message_id);
     out.insert(out.end(), body.begin(), body.end());
