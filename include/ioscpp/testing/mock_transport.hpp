@@ -33,7 +33,8 @@ public:
     Result<std::size_t> read(std::span<std::byte> buffer) override
     {
         const std::size_t available = incoming_.size() - read_position_;
-        const std::size_t count = std::min(available, buffer.size());
+        const std::size_t limit = read_chunk_ == 0 ? buffer.size() : std::min(buffer.size(), read_chunk_);
+        const std::size_t count = std::min(available, limit);
         std::copy_n(incoming_.begin() + static_cast<std::ptrdiff_t>(read_position_), static_cast<std::ptrdiff_t>(count),
                     buffer.begin());
         read_position_ += count;
@@ -56,6 +57,13 @@ public:
     void set_serial(std::string serial)
     {
         serial_ = std::move(serial);
+    }
+
+    /// Limits each read() to at most `chunk` bytes, so a test can force a
+    /// partial read. Zero (the default) returns everything available.
+    void set_read_chunk(std::size_t chunk)
+    {
+        read_chunk_ = chunk;
     }
 
     std::string_view serial() const noexcept override
@@ -85,6 +93,7 @@ public:
 private:
     std::vector<std::byte> incoming_;
     std::size_t read_position_ = 0;
+    std::size_t read_chunk_ = 0;
     std::vector<std::byte> written_;
     bool closed_ = false;
     std::size_t close_count_ = 0;
