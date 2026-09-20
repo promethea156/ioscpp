@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `usb::UsbTransport::list` no longer reports a device whose USB serial cannot be read.
+  An empty serial is not a usable selector, so listing it let `open` alias the first
+  device when two were attached.
+
 ## [1.0.0] - 2026-09-20
 
 ### Added
