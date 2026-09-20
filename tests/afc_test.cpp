@@ -5,7 +5,6 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cstddef>
 #include <cstdint>
-#include <cstdio>
 #include <cstring>
 #include <memory>
 #include <span>
@@ -105,7 +104,7 @@ std::vector<std::byte> tcp_payload(std::uint16_t source, std::uint16_t destinati
 }
 
 /// Opens a connection, a stream, and an AFC client over `transport`.
-Afc open_afc(testing::MockTransport &transport, std::uint16_t port)
+Afc open_afc(testing::MockTransport &transport, std::uint16_t remote_port)
 {
     // The version handshake answers version 1, so no setup packet is needed.
     VersionHeader version;
@@ -123,8 +122,8 @@ Afc open_afc(testing::MockTransport &transport, std::uint16_t port)
     REQUIRE(opened.has_value());
     auto connection = std::make_shared<Connection>(std::move(*opened));
 
-    transport.feed(tcp_frame(port, 1, TcpSyn | TcpAck));
-    auto stream = Stream::open(connection, port);
+    transport.feed(tcp_frame(remote_port, 1, TcpSyn | TcpAck));
+    auto stream = Stream::open(connection, remote_port);
     REQUIRE(stream.has_value());
 
     auto afc = Afc::start(std::move(*stream));
@@ -196,7 +195,7 @@ TEST_CASE("an AFC error status is a device error", "[afc]")
     put_le64(error, 8); // AFC_E_OBJECT_NOT_FOUND
     transport.feed(tcp_payload(port, 1, afc_packet(0x01, error)));
 
-    auto info = afc.stat("/missing");
-    REQUIRE(info.has_value());
-    CHECK_FALSE(info->has_value());
+    auto removed = afc.remove("/missing");
+    REQUIRE_FALSE(removed.has_value());
+    CHECK(removed.error().code == ErrorCode::Device);
 }

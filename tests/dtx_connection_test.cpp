@@ -227,7 +227,8 @@ TEST_CASE("a DTX connection queues a message that arrives before the reply", "[d
     CHECK_FALSE(connection.has_pending());
 
     // The notification expects a reply, so it was acknowledged, and the reply did
-    // not, so the only frame written besides the request is the acknowledgement.
+    // not expect one, so the only frame written besides the request is the
+    // acknowledgement.
     const std::span<const std::byte> written(stream.written());
     auto ack = Dtx::parse(written.subspan(written.size() - (kDtxHeaderSize + kDtxPayloadHeaderSize)));
     REQUIRE(ack.has_value());

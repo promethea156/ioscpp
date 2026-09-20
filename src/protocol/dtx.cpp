@@ -231,7 +231,8 @@ Result<DtxValue> decode_value(Reader &reader)
     return tl::unexpected(protocol_error("a DTX auxiliary value has an unknown type"));
 }
 
-/// Decodes the auxiliary dictionary, whose keys are always null and are dropped.
+/// Decodes the auxiliary dictionary. Each entry is a key and a value, and the key
+/// is discarded without checking it; the keys the services here send are null.
 Result<Dtx::Auxiliary> decode_auxiliary(Reader &reader)
 {
     auto magic = reader.u32();
@@ -243,10 +244,10 @@ Result<Dtx::Auxiliary> decode_auxiliary(Reader &reader)
     {
         return tl::unexpected(protocol_error("the DTX auxiliary dictionary has a bad magic"));
     }
-    auto unknown = reader.u32();
-    if (!unknown)
+    // A reserved 32-bit field; `encode` writes 0 and the value is unused.
+    if (auto skipped = reader.take(4); !skipped)
     {
-        return tl::unexpected(unknown.error());
+        return tl::unexpected(skipped.error());
     }
     auto body_length = reader.u64();
     if (!body_length)
@@ -466,11 +467,13 @@ std::vector<std::byte> Dtx::encode() const
     out.push_back(std::byte{0});
     append_u32(out, static_cast<std::uint32_t>(auxiliary_size));
     append_u32(out, static_cast<std::uint32_t>(total_size));
+    // The payload's own flags word; always zero for the services here.
     append_u32(out, 0);
 
     if (!auxiliary.empty())
     {
         append_u32(out, kDtxAuxiliaryMagic);
+        // A reserved field in the auxiliary header; always zero.
         append_u32(out, 0);
         append_u64(out, static_cast<std::uint64_t>(auxiliary_body.size()));
         out.insert(out.end(), auxiliary_body.begin(), auxiliary_body.end());
@@ -482,6 +485,8 @@ std::vector<std::byte> Dtx::encode() const
 Result<Dtx> Dtx::parse(std::span<const std::byte> bytes)
 {
     Reader reader{bytes, 0};
+
+    // The message header starts with the magic and its own size.
     auto magic = reader.u32();
     if (!magic)
     {
@@ -508,6 +513,9 @@ Result<Dtx> Dtx::parse(std::span<const std::byte> bytes)
         }
     }
 
+    // The rest of the message header: the fragment pair, the length, the
+    // identifier, the conversation index, the channel, and whether a reply is
+    // expected.
     Dtx message;
     auto fragment_index = reader.u16();
     if (!fragment_index)
@@ -560,26 +568,18 @@ Result<Dtx> Dtx::parse(std::span<const std::byte> bytes)
     }
     message.expects_reply = *expects_reply != 0;
 
+    // The payload header: the type and flags, the auxiliary and total sizes, and
+    // the payload's own flags.
     auto message_type = reader.u8();
     if (!message_type)
     {
         return tl::unexpected(message_type.error());
     }
     message.message_type = static_cast<DtxMessageType>(*message_type);
-    auto flags_a = reader.u8();
-    if (!flags_a)
+    // Three flag and reserved bytes, unused but consumed to reach the sizes.
+    if (auto skipped = reader.take(3); !skipped)
     {
-        return tl::unexpected(flags_a.error());
-    }
-    auto flags_b = reader.u8();
-    if (!flags_b)
-    {
-        return tl::unexpected(flags_b.error());
-    }
-    auto reserved = reader.u8();
-    if (!reserved)
-    {
-        return tl::unexpected(reserved.error());
+        return tl::unexpected(skipped.error());
     }
     auto auxiliary_size = reader.u32();
     if (!auxiliary_size)
@@ -591,10 +591,10 @@ Result<Dtx> Dtx::parse(std::span<const std::byte> bytes)
     {
         return tl::unexpected(total_size.error());
     }
-    auto payload_flags = reader.u32();
-    if (!payload_flags)
+    // The payload's own flags word; unused, and always zero for the services here.
+    if (auto skipped = reader.take(4); !skipped)
     {
-        return tl::unexpected(payload_flags.error());
+        return tl::unexpected(skipped.error());
     }
 
     if (*total_size < *auxiliary_size)
@@ -606,6 +606,7 @@ Result<Dtx> Dtx::parse(std::span<const std::byte> bytes)
         return tl::unexpected(protocol_error("the DTX message header and payload header disagree"));
     }
 
+    // The auxiliary comes first when its size is non-zero, then the payload.
     if (*auxiliary_size > 0)
     {
         auto auxiliary = decode_auxiliary(reader);

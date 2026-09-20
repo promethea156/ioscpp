@@ -22,8 +22,8 @@ namespace ioscpp
  *
  * `connect` composes the whole stack: it opens the transport, negotiates the mux
  * version, opens `lockdownd` on port 62078, pairs when the record is not complete,
- * starts the session (which switches `lockdownd` to TLS), and reads the device's
- * identity.
+ * starts the session, which upgrades `lockdownd` to TLS when the device asks for it,
+ * and reads the device's identity.
  *
  * Every later feature hangs off the `lockdownd` client: `start_service` returns a raw
  * stream to any service, and `open_afc` returns the file client.

@@ -104,8 +104,8 @@ Result<Device> Device::connect(Transport &transport, crypto::Pairing &pairing)
         return tl::unexpected(lockdown.error());
     }
 
-    // The unique id names the pairing record, so it is learned first. A fresh
-    // device answers `GetValue` before a session has started.
+    // Read the unique id first, because it names the pairing record; `lockdownd`
+    // answers `GetValue` before a session has started.
     if (auto udid = lockdown->get_value({}, "UniqueDeviceID"); udid)
     {
         if (const protocol::Plist *value = udid->find("Value"); value != nullptr)

@@ -39,9 +39,10 @@ public:
     /**
      * @brief Launches `bundle_id` and returns its process id.
      *
-     * The environment always carries `NSUnbufferedIO=YES`, which is what makes the
-     * app send its output over the channel, and `kill_existing` replaces a running
-     * instance. A launch the device refuses is an `ErrorCode::Device` error.
+     * The environment always carries `NSUnbufferedIO=YES`, which keeps the app's
+     * stdout and stderr unbuffered so the service can read it; `kill_existing`
+     * replaces a running instance. A launch the device refuses is an
+     * `ErrorCode::Device` error.
      */
     Result<std::uint64_t> launch(std::string_view bundle_id, std::span<const std::string> arguments = {},
                                  bool kill_existing = true, bool start_suspended = false);

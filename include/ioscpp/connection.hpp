@@ -114,7 +114,6 @@ private:
 
     Session session_;
     std::uint16_t next_port_ = 1;
-    bool negotiated_ = false;
     bool closed_ = false;
 
     // The `usbmuxd` path: the device's id, and a factory for a fresh socket.

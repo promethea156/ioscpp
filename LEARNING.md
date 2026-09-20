@@ -73,16 +73,17 @@ Read: [`include/ioscpp/afc.hpp`](include/ioscpp/afc.hpp),
 
 `installation_proxy` installs and removes apps over the plist framing, so it reuses
 Module 3 and Module 5; on iOS 17.4+ both ride the `RSD` tunnel's `AFC` and installer
-shims. Process control launches and closes them, but it is a `DTX` service rather than a
-plist one, so it is not built yet.
+shims. Process control launches and closes them over a `DTX` service rather than a plist
+one, which `protocol::Dtx` and `DtxConnection` carry.
 
-Read: [`include/ioscpp/app.hpp`](include/ioscpp/app.hpp).
+Read: [`include/ioscpp/app.hpp`](include/ioscpp/app.hpp),
+[`include/ioscpp/process_control.hpp`](include/ioscpp/process_control.hpp).
 
 ## Module 8: Putting it together
 
 `Device` composes the modules: a transport, a mux connection, a pairing, a `lockdownd`
-client, and the device's identity. The demo walks the implemented features once; walking
-every feature once is the goal of Slice 8 (`03-roadmap.md`).
+client, and the device's identity. The demo walks every feature once, which is Slice 8
+(`03-roadmap.md`).
 
 Read: [`include/ioscpp/device.hpp`](include/ioscpp/device.hpp),
 [`examples/demo/main.cpp`](examples/demo/main.cpp).

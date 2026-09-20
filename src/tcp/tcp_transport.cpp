@@ -101,6 +101,8 @@ Status ensure_sockets()
     return {};
 }
 
+/// Starts a non-blocking connect, waits for writability, then reads `SO_ERROR`
+/// and restores the blocking mode.
 bool connect_with_timeout(socket_t socket, const sockaddr *address, int address_length, unsigned int timeout_ms)
 {
 #if defined(_WIN32)

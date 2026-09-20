@@ -38,7 +38,8 @@ void append_u64(std::vector<std::byte> &out, std::uint64_t value)
     }
 }
 
-/// Pads `out` to the next 4-byte boundary, which every string and data blob ends on.
+/// Pads `out` to the next 4-byte boundary, which every string, data blob, and
+/// dictionary key ends on.
 void pad(std::vector<std::byte> &out)
 {
     while (out.size() % 4 != 0)
@@ -190,7 +191,8 @@ struct Reader
         return view;
     }
 
-    /// Skips to the next 4-byte boundary, which a string, data, array, or dictionary ends on.
+    /// Skips to the next 4-byte boundary, which a string, data blob, or
+    /// dictionary key ends on. An array or dictionary is already aligned.
     Status skip_padding()
     {
         const std::size_t remainder = offset % 4;
@@ -318,6 +320,8 @@ Result<Xpc> decode_object(Reader &reader)
                 return tl::unexpected(payload.error());
             }
             std::string text(reinterpret_cast<const char *>(payload->data()), payload->size());
+            // The length includes the NUL terminator; drop it and any defensive
+            // extra NULs.
             while (!text.empty() && text.back() == '\0')
             {
                 text.pop_back();

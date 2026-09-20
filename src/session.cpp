@@ -21,7 +21,7 @@ namespace
 /// The largest frame the mux link carries.
 ///
 /// `usbmuxd` sends up to `USB_MTU` (3 × 16 KiB) per transfer, so a frame is
-/// bounded well above that to catch a desynchronized length.
+/// bounded at that to catch a desynchronized length.
 constexpr std::uint32_t kMaxFrameSize = 3 * 16384;
 
 Error protocol_error(std::string message)
@@ -112,12 +112,6 @@ Result<Frame> Session::receive()
     }
 
     trace_mux("recv", header, header.length - header_size);
-
-    if (std::getenv("IOSCPP_TRACE") != nullptr &&
-        header.protocol == static_cast<std::uint32_t>(protocol::MuxProtocol::Control))
-    {
-        // The control payload is not read yet, so read it here and buffer it.
-    }
 
     Frame frame;
     frame.header = header;

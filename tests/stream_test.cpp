@@ -174,9 +174,9 @@ TEST_CASE("a device teardown is ordered innermost first", "[connection]")
 
     const std::size_t after_open = transport.written().size();
 
-    // `Device::disconnect` closes the session (TLS, then the stream reset) and
-    // then the mux and the transport. The stream reset is written before the
-    // transport is closed, and neither step repeats.
+    // This mirrors what `Device::disconnect` does: close the session (TLS, then the
+    // stream reset), then the mux and the transport. The stream reset is written
+    // before the transport is closed, and neither step repeats.
     lockdown->close();
     CHECK(transport.written().size() > after_open);
     CHECK_FALSE(transport.closed());

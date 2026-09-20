@@ -15,10 +15,9 @@ namespace ioscpp
 /**
  * @brief A length-prefixed plist service.
  *
- * `lockdownd`, `installation_proxy`, the process-control service, and the RSD
- * checkin all frame every message the same way: a 4-byte big-endian length, then
- * an XML plist. The length is the plist size alone, not including the prefix
- * itself.
+ * `lockdownd`, `installation_proxy`, and the RSD checkin all frame every message
+ * the same way: a 4-byte big-endian length, then an XML plist. The length is the
+ * plist size alone, not including the prefix itself.
  *
  * A `PlistService` borrows a @ref ByteStream, or owns a @ref Stream when it is
  * constructed from one, so the same service code rides the mux link and the RSD

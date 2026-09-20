@@ -17,13 +17,17 @@ Error protocol_error(std::string message)
     return Error{ErrorCode::Protocol, std::move(message)};
 }
 
-/// The bytes one transport read moves at a time.
+/// The size of one transport read request.
 constexpr std::size_t kReadSize = 16384;
 
 } // namespace
 
 std::array<std::byte, kIpv6HeaderSize> Ipv6Header::encode() const noexcept
 {
+    // Byte 0 is the version (high nibble) and the traffic class high nibble; byte
+    // 1 is the traffic class low nibble and the flow label high bits; bytes 2-3
+    // are the flow label; bytes 4-5 the payload length; byte 6 the next header;
+    // byte 7 the hop limit.
     std::array<std::byte, kIpv6HeaderSize> bytes{};
     bytes[0] = static_cast<std::byte>(((version & 0x0f) << 4) | ((traffic_class >> 4) & 0x0f));
     bytes[1] = static_cast<std::byte>(((traffic_class & 0x0f) << 4) | ((flow_label >> 16) & 0x0f));
@@ -70,7 +74,7 @@ Ipv6Framer::Ipv6Framer(Transport &transport, std::size_t max_packet_size) noexce
 Status Ipv6Framer::fill(std::size_t count)
 {
     // The consumed prefix is dropped once, before reading, so the buffer stays
-    // bounded by the largest packet rather than growing with every packet.
+    // bounded by a packet plus one read chunk rather than growing with every packet.
     if (offset_ > 0)
     {
         buffer_.erase(buffer_.begin(), buffer_.begin() + static_cast<std::ptrdiff_t>(offset_));

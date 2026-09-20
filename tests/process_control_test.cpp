@@ -104,6 +104,8 @@ std::vector<std::vector<std::byte>> frames(std::span<const std::byte> bytes)
     std::size_t offset = 0;
     while (offset + kDtxHeaderSize <= bytes.size())
     {
+        // A frame's size is its header size plus its message length, at offsets
+        // 4 and 12 of the DTX message header.
         const std::size_t size = read_u32(bytes, offset + 4) + read_u32(bytes, offset + 12);
         out.emplace_back(bytes.begin() + static_cast<std::ptrdiff_t>(offset),
                          bytes.begin() + static_cast<std::ptrdiff_t>(offset + size));

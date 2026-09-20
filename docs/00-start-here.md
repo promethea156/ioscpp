@@ -111,9 +111,9 @@ With the tunnel complete, app install and uninstall work on a newer iPhone: the
 library uploads the app over the tunnel and asks the phone's installer to install it,
 then removes it. Verified on a real iPhone running iOS 18.7.8.
 
-One piece is left: **app control** (starting, checking, and closing an app). The
-phone moved that behind a different format called `DTX`, which is what the library
-built next.
+App control (starting, checking, and closing an app) is done too: the phone moved
+it behind a different format called `DTX`, which the library then built, and it is
+verified on a real iPhone running iOS 18.7.8.
 
 ## What is being built now
 

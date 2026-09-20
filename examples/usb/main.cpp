@@ -1,4 +1,5 @@
-// Connects to the first attached iOS device over USB and prints its identity.
+// Lists every attached iOS device's serial, then connects to the first over USB and
+// prints its identity.
 //
 // Stop `usbmuxd` first, because it claims the same USB interface. On a device
 // that has not been trusted by this host, the device shows the *Trust This

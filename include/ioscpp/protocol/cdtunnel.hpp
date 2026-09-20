@@ -17,7 +17,7 @@ namespace ioscpp::protocol
 inline constexpr std::string_view kCdtunnelMagic = "CDTunnel";
 
 /// The size of a `CDTunnel` frame's header: the magic and the 16-bit length.
-inline constexpr std::size_t kCdtunnelHeaderSize = 8 + 2;
+inline constexpr std::size_t kCdtunnelHeaderSize = kCdtunnelMagic.size() + 2;
 
 /// The MTU the host requests in the handshake, the IPv6 minimum (go-ios).
 inline constexpr std::uint16_t kCdtunnelDefaultMtu = 1280;
@@ -64,7 +64,7 @@ IOSCPP_API std::vector<std::byte> cdtunnel_encode(std::string_view body);
 /**
  * @brief Reads a `CDTunnel` frame's header, returning its body length.
  *
- * The header is read first and the body length then read, because the tunnel's
+ * The caller reads the header first, then the body length, because the tunnel's
  * stream is boundary-less and a body length is not known before the header. A bad
  * magic is an `ErrorCode::Protocol` error.
  */

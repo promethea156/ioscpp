@@ -66,7 +66,7 @@ TEST_CASE("a session receives a frame", "[session]")
     CHECK(received->payload[2] == std::byte{0x03});
 }
 
-TEST_CASE("a bad magic is a protocol error", "[session]")
+TEST_CASE("a zero-length frame is a protocol error", "[session]")
 {
     testing::MockTransport transport;
     Session session(transport);
@@ -85,7 +85,7 @@ TEST_CASE("a truncated frame is a protocol error", "[session]")
     testing::MockTransport transport;
     Session session(transport);
 
-    // A length of 8 says no payload follows, but only 4 bytes are queued.
+    // The v1 header needs 8 bytes, but only 4 are queued.
     std::vector<std::byte> frame{std::byte{0}, std::byte{0}, std::byte{0}, std::byte{6}};
     transport.feed(frame);
 

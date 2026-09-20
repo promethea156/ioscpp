@@ -6,7 +6,6 @@
 // `/PublicStaging/ioscpp_transfer.bin`, which is a disposable location.
 
 #include <chrono>
-#include <cstdlib>
 #include <filesystem>
 #include <iostream>
 #include <string>
@@ -76,6 +75,7 @@ int main(int argc, char **argv)
     }
     const double pushed = seconds_since(start);
 
+    // The pulled copy lands in the working directory, next to the original name.
     start = std::chrono::steady_clock::now();
     if (Status status = afc->pull(remote, local.filename().string() + ".back"); !status)
     {
