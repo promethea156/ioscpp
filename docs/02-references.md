@@ -42,7 +42,9 @@ The device exposes a vendor-specific USB interface that multiplexes TCP-like con
 - **Why it matters**:
   - `src/lockdown.c` documents the pairing exchange: `QueryType`, `Pair`, `StartSession`, and `StartService`, all carried as plists with a 4-byte big-endian length prefix.
   - `src/afc.c` and `src/afc.h` document the `AFC` wire format (`CFA6LPAA` magic and the operation set) that file listing and transfer are built on.
-  - `src/installation_proxy.c` and `src/process_control.c` document app installation and process control.
+  - `src/installation_proxy.c` documents app installation. It has no process-control
+    client, so go-ios's `ios/instruments/processcontrol.go` is the reference for launch,
+    close, and the process list.
   - It is the closest analogue to what this library is, but it requires the `usbmuxd` daemon, while this library does not.
 
 ### libimobiledevice/libplist

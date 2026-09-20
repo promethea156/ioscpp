@@ -406,6 +406,23 @@ non-UTF-8 path fails with an opaque `AFC_E_*` status.
 staging directory and then installed from the device-side path. Installing without the upload, or
 from a path the host can see but the device cannot, fails.
 
+**Hit.** `install` uploads the IPA into `/PublicStaging` over `AFC` and passes that device-side
+path as `PackagePath` (`src/app.cpp`); a `stat` of the staged file reports its full size.
+
+### The mux-link `installation_proxy` accepts a connection but does not answer on iOS 17+
+
+`lockdownd` starts `com.apple.mobile.installation_proxy` over the mux link and the device accepts the
+port, but on iOS 17+ it does not answer an `Install` or a `Browse`: the request goes out and the
+connection then times out with no reply. The mux-link service is the legacy path, and `pymobiledevice3`
+reaches the same service over the **RSD** shim
+(`com.apple.mobile.installation_proxy.shim.remote`), which the RSD tunnel carries
+(`docs/03-roadmap.md`, Slice 9).
+
+**Hit.** `ioscpp_device_tests` staged `BitBarSampleApp.ipa` (arm64, `MinimumOSVersion` 12.4) into
+`/PublicStaging` and sent the `Install` command `pymobiledevice3 apps install` sends, with Developer
+Mode on and the device unlocked; the device accepted the `installation_proxy` connection and never replied
+(`tests/device_test.cpp`). The `AFC` upload over the same mux link works, so the link is not the problem.
+
 ### A CoreDevice service is not on the mux link, but on the RSD tunnel
 
 On iOS 17.4 and later, a `com.apple.dvt.*` service is not on a `lockdownd` port at all: it is on

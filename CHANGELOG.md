@@ -15,6 +15,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `FILE_OPEN_RES` answer, matching `libimobiledevice` and `pymobiledevice3`.
 - `Afc` now chunks `FILE_READ` and `FILE_WRITE` at 32 KiB, under the device's
   65535-byte message cap, and sends the handle as the packet data for `FILE_WRITE`.
+- `install` now closes its `AFC` stream before it opens `installation_proxy`, because a
+  stream left open on the shared mux connection discards the other's frames.
+- `install` now sends the staged package path alone, without an empty
+  `ApplicationIdentifier`, and sets `PackageType` to `Developer`, matching
+  `pymobiledevice3 apps install --developer`.
+
+### Changed
+
+- The mbedTLS TLS debug callback is now behind `IOSCPP_TRACE`, so a normal run no
+  longer prints the handshake.
+- The `app` process-control functions are documented as unvalidated and blocked on the
+  `RSD` tunnel: they used a plist service that does not exist, and the real service is
+  `DTX` (`docs/04-blockers.md`).
 
 ## [0.1.0-rc.1] - 2026-09-19
 
