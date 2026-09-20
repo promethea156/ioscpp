@@ -70,10 +70,13 @@ public:
     static Result<bool> is_present(DeviceId id);
 
     /**
-     * @brief Returns every attached device, each with its USB serial filled in.
+     * @brief Returns every selectable attached device, each with its USB serial
+     * filled in.
      *
-     * This is how a caller discovers the serial to pass to @ref open. The list is
-     * in libusb's enumeration order, which is stable for one attached set.
+     * This is how a caller discovers the serial to pass to @ref open. A device
+     * whose serial cannot be read is left out, because the serial is the only
+     * unambiguous selector and an empty one would alias the first device. The list
+     * is in libusb's enumeration order, which is stable for one attached set.
      */
     static Result<std::vector<DeviceId>> list();
 
