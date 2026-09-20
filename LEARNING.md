@@ -71,8 +71,10 @@ Read: [`include/ioscpp/afc.hpp`](include/ioscpp/afc.hpp),
 
 ## Module 7: Applications
 
-`installation_proxy` installs and removes apps; process control launches and closes
-them. Both are plist services, so they reuse Module 3 and Module 5.
+`installation_proxy` installs and removes apps over the plist framing, so it reuses
+Module 3 and Module 5; on iOS 17.4+ both ride the `RSD` tunnel's `AFC` and installer
+shims. Process control launches and closes them, but it is a `DTX` service rather than a
+plist one, so it is not built yet.
 
 Read: [`include/ioscpp/app.hpp`](include/ioscpp/app.hpp).
 

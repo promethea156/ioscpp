@@ -44,19 +44,19 @@ The library can already do all of the everyday work:
 - list a folder, check a path, and copy a file to or from the phone;
 - start a service by name and talk to it.
 
-The app install and uninstall code is written too, but on a newer iPhone it does
-not work yet, for the reason in the next section.
+The app install and uninstall code is written too; on a newer iPhone it needs the
+tunnel described in the next section, which the library now has.
 
 ## The wall we hit
 
-Installing an app does not work on an iPhone running iOS 17 or later. The library
-connects to the phone's app-installer service, sends the request, and the phone never
-answers. Nothing on our side is broken; the phone simply moved that service somewhere
+Installing an app did not work on an iPhone running iOS 17 or later. The library
+connected to the phone's app-installer service, sent the request, and the phone never
+answered. Nothing on our side was broken; the phone simply moved that service somewhere
 else.
 
 On iOS 17, the app installer and the developer tools no longer sit behind the front
 desk. They sit behind a **private tunnel** instead. Apple's tools build that tunnel,
-and so do other open-source projects, but this library does not have one yet.
+and so do other open-source projects, but this library did not have one yet.
 
 ## What the tunnel is
 
@@ -91,9 +91,9 @@ The first, easy part of the tunnel work is done, and it is two translation piece
 Neither piece needs a real phone to check: the tests feed made-up data and compare
 the result. That is what the new tests do.
 
-## Where it is going
+## Where it is now
 
-Since then, three more pieces are done:
+Since then, the rest of the tunnel is done:
 
 1. **The handshake.** The library asks the phone for the tunnel, the phone answers
    with the address, the port, and the size limit, and the library reads them back.
@@ -104,13 +104,16 @@ Since then, three more pieces are done:
 3. **The message format.** After the handshake the tunnel speaks its own kind of
    message. The library can now build and read that message's fixed frame and the
    structured value inside it, checked without a phone.
+4. **The service list.** The library asks the phone to list its services over the
+   tunnel and reaches one by name. Proven on a real iPhone running iOS 18.7.8.
 
-One step is left:
+With the tunnel complete, app install and uninstall work on a newer iPhone: the
+library uploads the app over the tunnel and asks the phone's installer to install it,
+then removes it. Verified on a real iPhone running iOS 18.7.8.
 
-4. Ask the phone to list its services and reach one.
-
-Reaching a service is what unblocks app install, app uninstall, and app control, which
-are written but not yet working on hardware.
+One piece is left: **app control** (starting, checking, and closing an app). The
+phone moved that behind a different format called `DTX`, which the library does not
+speak yet.
 
 ## The words this project uses
 
