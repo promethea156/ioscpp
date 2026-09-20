@@ -708,7 +708,7 @@ int tls_send(void *context, const unsigned char *data, std::size_t length)
 int tls_recv(void *context, unsigned char *data, std::size_t length)
 {
     auto *stream = static_cast<Stream *>(context);
-    const Status read = stream->read(std::span<std::byte>(reinterpret_cast<std::byte *>(data), length));
+    const Status read = stream->read_exact(std::span<std::byte>(reinterpret_cast<std::byte *>(data), length));
     // The stream read is exact and blocks until it has the bytes or the link
     // breaks, so a failure is the end of the connection rather than a retry.
     return read ? static_cast<int>(length) : MBEDTLS_ERR_SSL_CONN_EOF;

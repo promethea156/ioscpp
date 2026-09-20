@@ -236,6 +236,30 @@ TEST_CASE("a link read returns the peer's data", "[tcp-link]")
     CHECK(std::equal(buffer.begin(), buffer.begin() + static_cast<std::ptrdiff_t>(*read), data.begin()));
 }
 
+TEST_CASE("a link read_exact reassembles the peer's segments", "[tcp-link]")
+{
+    ScriptedPeer peer;
+    peer.server_port_ = 54323;
+
+    auto link = TcpLink::open(peer, kClientAddress, 1280);
+    REQUIRE(link.has_value());
+    REQUIRE(link->connect(kServerAddress, 54323).has_value());
+
+    // The peer sends one message as two segments, so `read_exact` loops over
+    // `read` until the whole buffer is filled.
+    const std::array<std::byte, 3> first{std::byte{1}, std::byte{2}, std::byte{3}};
+    const std::array<std::byte, 3> second{std::byte{4}, std::byte{5}, std::byte{6}};
+    peer.send(first);
+    peer.send(second);
+
+    std::array<std::byte, 6> buffer{};
+    REQUIRE(link->read_exact(buffer).has_value());
+    for (std::size_t i = 0; i < buffer.size(); ++i)
+    {
+        CHECK(buffer[i] == static_cast<std::byte>(i + 1));
+    }
+}
+
 TEST_CASE("a bad tunnel address is an invalid argument", "[tcp-link]")
 {
     ScriptedPeer peer;

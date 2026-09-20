@@ -108,27 +108,30 @@ afc.push("local.txt", "/Documents/local.txt").value();
 
 ## Install and uninstall an app
 
-`install` uploads the IPA into `/PublicStaging` over `AFC` and then asks
-`installation_proxy` to install it. `uninstall` names the bundle id.
+On iOS 17.4 and later, `install(Rsd&, ipa)` uploads the IPA into `/PublicStaging` over the RSD
+`AFC` shim and then asks the RSD `installation_proxy` shim to install it.
+`uninstall(Rsd&, bundle_id)` names the bundle id. The pre-17.4 `install(Device&, ipa)` and
+`uninstall(Device&, bundle_id)` over the mux link stay as the fallback.
 
-These are written but not yet validated on a device: on iOS 17+ the mux-link
-`installation_proxy` accepts the connection but does not answer, so they are blocked on the
-`RSD` tunnel (`docs/04-blockers.md`).
+An install the device refuses is a normal outcome, so it is `success == false` with the reason
+rather than an `Error`. A development-signed IPA whose provisioning profile lists the device
+installs; an unsigned or App Store IPA is refused with `ApplicationVerificationFailed`.
 
 ```cpp
-auto result = ioscpp::install(device, "app.ipa").value();
+auto result = ioscpp::install(*rsd, "app.ipa").value();
 if (!result.success)
 {
     std::cout << "install failed: " << result.failure_reason() << "\n";
 }
 
-ioscpp::uninstall(device, "com.example.app").value();
+ioscpp::uninstall(*rsd, "com.example.app").value();
 ```
 
 ## Launch, check, and close an app
 
 These are written but not yet validated on a device: they used a plist service that does not
-exist, and the real service is `DTX`, which is also blocked on the `RSD` tunnel.
+exist, and the real service is `DTX`, which is blocked on the `RSD` tunnel and the `DTX`
+codec (`docs/04-blockers.md`).
 
 ```cpp
 ioscpp::launch(device, "com.example.app").value();

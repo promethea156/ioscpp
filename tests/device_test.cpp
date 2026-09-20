@@ -10,7 +10,9 @@
 //
 // The app install/uninstall round trip is opt-in: `IOSCPP_TEST_IPA` and
 // `IOSCPP_TEST_BUNDLE` name a disposable app, and the round trip replaces it
-// and loses its data.
+// and loses its data. The IPA must be development-signed with the device in its
+// provisioning profile; an unsigned IPA is refused with
+// `ApplicationVerificationFailed`.
 //
 // The tunnel step opens the iOS 17.4+ CoreDevice tunnel and checks the RSD
 // address, port, and MTU, then opens a userspace TCP link to the RSD port; it is
@@ -86,6 +88,10 @@ bool version_at_least(std::string_view version, int major, int minor)
 
 int main()
 {
+    // A crash must not swallow the progress already printed, so every write is
+    // flushed immediately.
+    std::cout << std::unitbuf;
+
     auto devices = ioscpp::usb::UsbTransport::list();
     if (!devices)
     {
@@ -240,45 +246,6 @@ int main()
     ioscpp::Status removed = afc->remove(remote);
     ok = check(removed.has_value(), "remove failed") && ok;
 
-    // Apps: the install/uninstall round trip is opt-in because it replaces the
-    // bundle and loses its data. `IOSCPP_TEST_IPA` and `IOSCPP_TEST_BUNDLE` name a
-    // disposable app the user has agreed to replace. On iOS 17+ the mux link's
-    // `installation_proxy` accepts the connection but does not answer, so this is
-    // blocked on the `RSD` tunnel (`docs/04-blockers.md`).
-    const char *ipa = std::getenv("IOSCPP_TEST_IPA");
-    const char *bundle = std::getenv("IOSCPP_TEST_BUNDLE");
-    if (ipa != nullptr && bundle != nullptr)
-    {
-        std::cout << "app: " << bundle << " from " << ipa << "\n";
-
-        auto installed = ioscpp::install(*device, ipa);
-        ok = check(installed.has_value(), "install returned an error") && ok;
-        if (!installed)
-        {
-            std::cerr << "install: " << installed.error().message << "\n";
-        }
-        else if (!installed->success)
-        {
-            std::cerr << "install: " << installed->failure_reason() << "\n";
-        }
-        ok = check(installed.has_value() && installed->success, "the device refused the install") && ok;
-
-        if (installed && installed->success)
-        {
-            auto uninstalled = ioscpp::uninstall(*device, bundle);
-            ok = check(uninstalled.has_value(), "uninstall returned an error") && ok;
-            if (!uninstalled)
-            {
-                std::cerr << "uninstall: " << uninstalled.error().message << "\n";
-            }
-            else if (!uninstalled->success)
-            {
-                std::cerr << "uninstall: " << uninstalled->failure_reason() << "\n";
-            }
-            ok = check(uninstalled.has_value() && uninstalled->success, "the device refused the uninstall") && ok;
-        }
-    }
-
     // The CoreDevice tunnel needs iOS 17.4 or later, so the step is skipped on
     // anything older. The handshake returns the RSD address, port, and MTU; the
     // tunnel's link and RSD connection are later increments, so the endpoint is
@@ -353,6 +320,44 @@ int main()
                             }
                             break;
                         }
+
+                        // The install/uninstall round trip is destructive: it
+                        // replaces the bundle and loses its data, so it only runs
+                        // when `IOSCPP_TEST_IPA` names a disposable package
+                        // and `IOSCPP_TEST_BUNDLE` names its bundle id.
+                        const char *ipa = std::getenv("IOSCPP_TEST_IPA");
+                        const char *bundle = std::getenv("IOSCPP_TEST_BUNDLE");
+                        if (ipa != nullptr && bundle != nullptr)
+                        {
+                            auto installed = ioscpp::install(*rsd, ipa);
+                            if (!installed)
+                            {
+                                ok = check(false, "installing over the RSD failed") && ok;
+                                std::cerr << "install: " << installed.error().message << "\n";
+                            }
+                            else if (!installed->success)
+                            {
+                                ok = check(false, "the device refused the install") && ok;
+                                std::cerr << "install: refused: " << installed->failure_reason() << "\n";
+                            }
+                            else
+                            {
+                                std::cout << "install: installed " << bundle << "\n";
+
+                                auto uninstalled = ioscpp::uninstall(*rsd, bundle);
+                                if (!uninstalled)
+                                {
+                                    ok = check(false, "uninstalling over the RSD failed") && ok;
+                                    std::cerr << "uninstall: " << uninstalled.error().message << "\n";
+                                }
+                                else
+                                {
+                                    ok = check(uninstalled->success, "the device refused the uninstall") && ok;
+                                    std::cout << "install: uninstalled " << bundle << "\n";
+                                }
+                            }
+                        }
+
                         rsd->close();
                     }
                 }

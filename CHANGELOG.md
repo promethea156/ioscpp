@@ -44,6 +44,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Rsd`, the Remote Service Discovery connection over the tunnel: the device handshake, the service
   dictionary, `start_service` with its `RSDCheckin`, and a `TcpLink` to a named service. The device
   test lists the RSD services and reaches one, on an iOS 18.7.8 device.
+- `ByteStream`, the byte-level seam a service codec rides: `Stream` (the mux link) and `TcpLink` (the
+  RSD tunnel) both implement it, so `AFC` and the plist service run over either link unchanged.
+- `PlistService`, the length-prefixed plist service that `lockdownd`, `installation_proxy`, process
+  control, and the RSD checkin share.
+- `install(Rsd&, ipa)` and `uninstall(Rsd&, bundle_id)`, the iOS 17.4+ app functions over the RSD
+  tunnel: the IPA is staged in `/PublicStaging` over the `AFC` shim, then installed over the
+  `installation_proxy` shim. Verified on an iOS 18.7.8 device: a development-signed IPA installs
+  and uninstalls, and an unsigned IPA is refused with `ApplicationVerificationFailed`.
 
 ### Fixed
 
@@ -63,6 +71,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `install` now sends the staged package path alone, without an empty
   `ApplicationIdentifier`, and sets `PackageType` to `Developer`, matching
   `pymobiledevice3 apps install --developer`.
+- `PlistService` now writes the length prefix as the plist size alone rather than the
+  size plus the prefix, so the device no longer reads past the message and resets the
+  connection; this is `internal_plist_send`'s framing.
 
 ### Changed
 
@@ -79,6 +90,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The `app` process-control functions are documented as unvalidated and blocked on the
   `RSD` tunnel: they used a plist service that does not exist, and the real service is
   `DTX` (`docs/04-blockers.md`).
+- The RSD checkin now reads its plists through `PlistService`, so the length-prefixed
+  framing has one implementation rather than one per service.
 
 ## [0.1.0-rc.1] - 2026-09-19
 
