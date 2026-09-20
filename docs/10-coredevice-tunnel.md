@@ -165,7 +165,7 @@ plist codec (a type word, then a length-prefixed value, with an aligned string),
   peer's window tracked so a payload over 64 KiB is split across `DATA` frames. Hand-rolled, tested device-free
   against a scripted peer.
 - `Rsd`: the device handshake, the service dictionary, `start_service` with its `RSDCheckin`, and a
-  `Stream` to a named service.
+  `TcpLink` to a named service.
 - `Device::tunnel()`: starts `CoreDeviceProxy`, runs the handshake, and returns a `Tunnel` with
   `client_address`, `address`, `port`, and `mtu`. The `Tunnel` is a `Transport`, so `TcpLink` reads its
   packets directly, and the RSD connection follows. `Device::disconnect` tears it down innermost first (see
@@ -210,8 +210,9 @@ Each increment is end to end and leaves the repository working:
    peer's window tracked so a payload over 64 KiB is split across `DATA` frames, hand-rolled, device-free against a
    scripted peer. **Done.**
 6. `Rsd`, the device handshake, the service dictionary, `start_service` with its `RSDCheckin`, and a
-   `Stream` to a named service, with a device test that lists the RSD services and reaches one over the
-   tunnel. This is Slice 9's done-when.
+   `TcpLink` to a named service, with a device test that lists the RSD services and reaches one over the
+   tunnel. This is Slice 9's done-when. **Done and proven on an iOS 18.7.8 device**: the handshake lists 59
+   services and a service is reached.
 
 Increments 4 to 6 were one increment in the first plan; the references show that RemoteXPC runs over
 HTTP/2, so it is three, each end to end.

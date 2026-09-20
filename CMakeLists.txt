@@ -81,6 +81,7 @@ add_library(ioscpp
   src/protocol/plist.cpp
   src/protocol/remotexpc.cpp
   src/protocol/usbmux.cpp
+  src/rsd.cpp
   src/session.cpp
   src/stream.cpp
   src/tcp/tcp_transport.cpp

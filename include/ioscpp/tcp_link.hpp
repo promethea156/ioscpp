@@ -31,7 +31,7 @@ namespace ioscpp
  * sees. A `TcpLink` is not thread-safe, so concurrent calls must be serialized by
  * the caller.
  */
-class IOSCPP_API TcpLink
+class IOSCPP_API TcpLink : public Transport
 {
 public:
     /**
@@ -53,13 +53,13 @@ public:
     Status connect(std::string_view address, std::uint16_t port);
 
     /// Reads up to `buffer.size()` bytes from the connection, or 0 at its end.
-    Result<std::size_t> read(std::span<std::byte> buffer);
+    Result<std::size_t> read(std::span<std::byte> buffer) override;
 
     /// Writes the whole of `data` to the connection.
-    Status write(std::span<const std::byte> data);
+    Status write(std::span<const std::byte> data) override;
 
     /// Closes the connection, sending a FIN.
-    void close();
+    void close() override;
 
 private:
     explicit TcpLink(Transport &tunnel, std::string_view client_address, std::uint16_t mtu);

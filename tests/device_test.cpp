@@ -37,6 +37,7 @@
 #include "ioscpp/afc.hpp"
 #include "ioscpp/app.hpp"
 #include "ioscpp/crypto/pairing.hpp"
+#include "ioscpp/rsd.hpp"
 #include "ioscpp/tcp_link.hpp"
 #include "ioscpp/usb/usb_transport.hpp"
 
@@ -51,6 +52,25 @@ bool check(bool condition, const char *what)
         std::cerr << "FAIL: " << what << "\n";
     }
     return condition;
+}
+
+/// The host UUID the RSD handshake identifies this peer with, derived from the
+/// pairing record's host id. It is stable between runs and processes, because the
+/// device re-attaches the tunnel when the UUID changes.
+ioscpp::RsdUuid rsd_uuid(std::string_view host_id)
+{
+    std::uint64_t hash = 0xcbf29ce484222325ULL;
+    for (const char c : host_id)
+    {
+        hash ^= static_cast<unsigned char>(c);
+        hash *= 0x100000001b3ULL;
+    }
+    ioscpp::RsdUuid uuid{};
+    for (std::size_t i = 0; i < uuid.size(); ++i)
+    {
+        uuid[i] = static_cast<std::byte>((hash >> ((i % 8) * 8)) & 0xff);
+    }
+    return uuid;
 }
 
 /// Whether `version` (for example `18.7.8`) is at least `major.minor`.
@@ -302,6 +322,38 @@ int main()
                     {
                         std::cout << "link: connected to the RSD port " << tunnel->port() << "\n";
                         link->close();
+                    }
+
+                    // The RSD connection: the device handshake, the service
+                    // dictionary, and one service reached over it. The lock-down
+                    // services answer a plist `RSDCheckin`, so one is reached and
+                    // checked in to prove the whole tunnel.
+                    auto rsd = ioscpp::Rsd::connect(*tunnel, rsd_uuid(pairing->host_id()));
+                    ok = check(rsd.has_value(), "the RSD connection failed") && ok;
+                    if (!rsd)
+                    {
+                        std::cerr << "rsd: " << rsd.error().message << "\n";
+                    }
+                    else
+                    {
+                        ok = check(!rsd->services().empty(), "the RSD listed no service") && ok;
+                        std::cout << "rsd: " << rsd->services().size() << " services\n";
+                        for (const auto &[name, service] : rsd->services())
+                        {
+                            if (service.uses_remote_xpc)
+                            {
+                                continue;
+                            }
+                            auto service_link = rsd->start_service(name);
+                            ok = check(service_link.has_value(), "reaching an RSD service failed") && ok;
+                            if (service_link)
+                            {
+                                std::cout << "rsd: reached " << name << " port=" << service.port << "\n";
+                                service_link->close();
+                            }
+                            break;
+                        }
+                        rsd->close();
                     }
                 }
             }
