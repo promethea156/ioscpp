@@ -58,25 +58,6 @@ bool check(bool condition, const char *what)
     return condition;
 }
 
-/// The host UUID the RSD handshake identifies this peer with, derived from the
-/// pairing record's host id. It is stable between runs and processes, because the
-/// device re-attaches the tunnel when the UUID changes.
-ioscpp::RsdUuid rsd_uuid(std::string_view host_id)
-{
-    std::uint64_t hash = 0xcbf29ce484222325ULL;
-    for (const char c : host_id)
-    {
-        hash ^= static_cast<unsigned char>(c);
-        hash *= 0x100000001b3ULL;
-    }
-    ioscpp::RsdUuid uuid{};
-    for (std::size_t i = 0; i < uuid.size(); ++i)
-    {
-        uuid[i] = static_cast<std::byte>((hash >> ((i % 8) * 8)) & 0xff);
-    }
-    return uuid;
-}
-
 /// Whether `version` (for example `18.7.8`) is at least `major.minor`.
 bool version_at_least(std::string_view version, int major, int minor)
 {
@@ -297,7 +278,7 @@ int main()
                     // dictionary, and one service reached over it. The lock-down
                     // services answer a plist `RSDCheckin`, so one is reached and
                     // checked in to prove the whole tunnel.
-                    auto rsd = ioscpp::Rsd::connect(*tunnel, rsd_uuid(pairing->host_id()));
+                    auto rsd = ioscpp::Rsd::connect(*tunnel, ioscpp::rsd_uuid(pairing->host_id()));
                     ok = check(rsd.has_value(), "the RSD connection failed") && ok;
                     if (!rsd)
                     {
@@ -364,8 +345,8 @@ int main()
 
                                     // Leave the app on screen for a moment, so a
                                     // person watching the run can see it launch.
-                                    std::cout << "launch: leaving the app up for 10s\n";
-                                    std::this_thread::sleep_for(std::chrono::seconds(10));
+                                    std::cout << "launch: leaving the app up for 15s\n";
+                                    std::this_thread::sleep_for(std::chrono::seconds(15));
 
                                     if (auto closed = ioscpp::close(*rsd, *launched); !closed)
                                     {

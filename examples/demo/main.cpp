@@ -5,18 +5,28 @@
 // speaks. Stop `usbmuxd` first, and tap the *Trust This Computer?* prompt when it
 // appears.
 //
+// The file steps ride the mux link, which every iOS version speaks. The app steps
+// need iOS 17.4 or later, because the installer and the developer tools moved
+// behind the `CoreDevice` tunnel there; on an older device the tour stops after the
+// file steps.
+//
 // Usage: ioscpp_demo_example <bundle-id> <app.ipa>
 
+#include <chrono>
 #include <cstdint>
 #include <cstdio>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <string>
+#include <thread>
+#include <vector>
 
 #include "ioscpp/afc.hpp"
 #include "ioscpp/app.hpp"
 #include "ioscpp/crypto/pairing.hpp"
 #include "ioscpp/device.hpp"
+#include "ioscpp/rsd.hpp"
 #include "ioscpp/usb/usb_transport.hpp"
 
 namespace
@@ -90,61 +100,107 @@ int main(int argc, char **argv)
 
     // 4. Push a file into /PublicStaging, stat it, and pull it back.
     step(4, "push a file, stat it, and pull it back");
-    const std::filesystem::path local = "ioscpp_demo.txt";
+    const std::filesystem::path directory = std::filesystem::temp_directory_path();
+    const std::filesystem::path local = directory / "ioscpp_demo.txt";
+    const std::filesystem::path back = directory / "ioscpp_demo.back";
+    const std::string remote = "/PublicStaging/ioscpp_demo.txt";
     {
-        FILE *file = std::fopen(local.string().c_str(), "wb");
-        if (file != nullptr)
-        {
-            const char text[] = "hello from ioscpp\n";
-            (void)std::fwrite(text, 1, sizeof(text) - 1, file);
-            std::fclose(file);
-        }
+        const std::vector<std::byte> payload(200 * 1024, std::byte{0x5a});
+        std::ofstream out(local, std::ios::binary | std::ios::trunc);
+        out.write(reinterpret_cast<const char *>(payload.data()), static_cast<std::streamsize>(payload.size()));
     }
-    if (auto pushed = afc->push(local, "/PublicStaging/ioscpp_demo.txt"); !pushed)
+    if (auto pushed = afc->push(local, remote); !pushed)
     {
         std::cerr << "push: " << pushed.error().message << "\n";
+        return 1;
     }
-    else
+    if (auto info = afc->stat(remote); info && info->has_value())
     {
-        std::cout << "pushed " << local << "\n";
+        std::cout << "pushed " << remote << " (" << (*info)->size << " bytes)\n";
+    }
+    if (auto pulled = afc->pull(remote, back); !pulled)
+    {
+        std::cerr << "pull: " << pulled.error().message << "\n";
+        return 1;
     }
 
-    // 5. Install the app, then launch it, check it runs, and close it.
-    step(5, "install the app");
-    auto installed = install(*device, ipa);
+    // 5. Open the iOS 17.4+ CoreDevice tunnel and the RSD connection. The
+    // tunnel carries the device's IPv6 packets as data, and the RSD connection
+    // lists the services the app steps are reached through.
+    step(5, "open the CoreDevice tunnel and the RSD connection");
+    auto tunnel = device->tunnel();
+    if (!tunnel)
+    {
+        std::cout << "the app steps need iOS 17.4 or later; stopping after the file steps\n";
+        return 0;
+    }
+    std::cout << "tunnel: " << tunnel->address() << ":" << tunnel->port() << " mtu " << tunnel->mtu() << "\n";
+    auto rsd = Rsd::connect(*tunnel, rsd_uuid(pairing->host_id()));
+    if (!rsd)
+    {
+        std::cerr << "rsd: " << rsd.error().message << "\n";
+        return 1;
+    }
+    std::cout << "rsd: " << rsd->services().size() << " services\n";
+
+    // 6. Install the app over the RSD shims: the IPA is staged in
+    // /PublicStaging over the AFC shim and then installed over the installer
+    // shim. A refused install is a normal outcome with the reason, not an error.
+    step(6, "install the app over the RSD shims");
+    auto installed = install(*rsd, ipa);
     if (!installed)
     {
         std::cerr << "install: " << installed.error().message << "\n";
+        return 1;
     }
-    else if (!installed->success)
+    if (!installed->success)
     {
         std::cerr << "install refused: " << installed->failure_reason() << "\n";
+        return 1;
     }
-    else
-    {
-        std::cout << "installed " << bundle_id << "\n";
-    }
+    std::cout << "installed " << bundle_id << "\n";
 
-    step(6, "launch the app");
-    std::uint64_t pid = 0;
-    auto launched = launch(*device, bundle_id);
+    // 7. Launch the app over DTX, check it runs, and close it. The
+    // process-control service is a DTX channel on the RSD `dtservicehub`, not a
+    // plist one: the launch returns the process id, the check resolves the
+    // bundle id to it, and the close kills it.
+    step(7, "launch the app over DTX, check it runs, and close it");
+    auto launched = launch(*rsd, bundle_id);
     if (!launched)
     {
         std::cerr << "launch: " << launched.error().message << "\n";
+        return 1;
     }
-    else
+    std::cout << "launched pid " << *launched << "\n";
+    auto running = is_running(*rsd, bundle_id);
+    std::cout << (running.has_value() && *running ? "running" : "not running") << "\n";
+
+    // Leave the app on screen for a moment, so a person watching the run can
+    // see it launch.
+    std::cout << "leaving the app up for 15s\n";
+    std::this_thread::sleep_for(std::chrono::seconds(15));
+
+    if (auto closed = close(*rsd, *launched); !closed)
     {
-        pid = *launched;
-        std::cout << "launched pid " << pid << "\n";
+        std::cerr << "close: " << closed.error().message << "\n";
     }
 
-    step(7, "close the app");
-    if (pid != 0)
+    // 8. Uninstall the app over the RSD installer shim.
+    step(8, "uninstall the app over the RSD shims");
+    auto uninstalled = uninstall(*rsd, bundle_id);
+    if (!uninstalled)
     {
-        if (auto closed = close(*device, pid); !closed)
-        {
-            std::cerr << "close: " << closed.error().message << "\n";
-        }
+        std::cerr << "uninstall: " << uninstalled.error().message << "\n";
+        return 1;
     }
+    if (!uninstalled->success)
+    {
+        std::cerr << "uninstall refused: " << uninstalled->failure_reason() << "\n";
+        return 1;
+    }
+    std::cout << "uninstalled " << bundle_id << "\n";
+
+    std::filesystem::remove(local);
+    std::filesystem::remove(back);
     return 0;
 }

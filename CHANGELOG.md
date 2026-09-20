@@ -63,6 +63,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ProcessControl` and the `launch(Rsd&, bundle_id)`, `close(Rsd&, pid)`, and
   `is_running(Rsd&, bundle_id)` process control: they open the RSD `dtservicehub` channel and
   return the launched process id. Verified on an iOS 18.7.8 device.
+- `rsd_uuid(host_id)`, the RSD handshake UUID derived from the pairing record's host id, shared
+  by the demo and the device test.
+- `examples/demo` now walks every feature once against one device: connect, identity, AFC
+  list/push/stat/pull, the `CoreDevice` tunnel, the RSD connection, install, launch, the running
+  check, close, and uninstall over the RSD shims.
 
 ### Fixed
 

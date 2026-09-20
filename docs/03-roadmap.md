@@ -10,7 +10,7 @@ protocol assumptions explicit while they are still small enough to get right.
 
 ## Status
 
-Slices 0 to 7 and Slices 9 and 10 are done; Slice 8 is the open one. Slice 4 is proven on a device: `ioscpp_device_tests` walks the
+All slices 0 to 10 are done. Slice 4 is proven on a device: `ioscpp_device_tests` walks the
 descriptors, claims the mux interface, connects, and reads the device's identity, and it skips with
 code 77 when no matching device is attached. Slice 5 is proven too: the pairing exchange completes, the
 record is saved and reused, `StartSession` wraps `lockdownd` in TLS, and the device reports its
@@ -24,16 +24,14 @@ also device-exercised.
 
 ### Current work
 
-Slices 0 to 7, 9, and 10 are done, so the next work is the guided tour (Slice 8, #7):
-`examples/demo` and `tests/device_test.cpp` walk every implemented feature against one device,
-including a replug between steps, and the demo's install and process control move from the mux link
-to the RSD shims.
+All slices 0 to 10 are done, so the roadmap is complete for the current scope. The work
+that is left is the [non-goals](#non-goals-for-now): the privileged `tunneld` and `utun`
+interface, the device-initiated AV/HID paths, WebDriverAgent, and iOS 17.0–17.3.1 over Wi-Fi.
 
-Slice 10, `DTX` and the `dvt` services, is complete: `protocol::Dtx` and
-`protocol::KeyedArchive`, the `DtxConnection`/`DtxChannel` layer, and the `launch`/`close`/
-`is_running` process control over the RSD `com.apple.instruments.dtservicehub` service, which
-launches, finds, and kills an app on an iOS 18.7.8 device. That closes Slice 7's process control,
-the last piece of #6.
+Slice 8, the guided tour, is complete: `examples/demo` walks connect, identity, AFC
+list/push/stat/pull, the `CoreDevice` tunnel, the RSD connection, install, launch, the
+running check, close, and uninstall against one iOS 18.7.8 device, and `tests/device_test.cpp`
+covers the same steps plus a replug between them.
 
 Slice 9, the iOS 17+ `RSD` tunnel, is complete: the `CDTunnel` frame codec and the raw-IPv6
 re-framer, the `CoreDeviceProxy` handshake on `Device`, the userspace IPv6 + TCP link, the
@@ -58,7 +56,7 @@ are in `04-blockers.md`.
 - [x] Slice 5: pairing and `lockdownd`.
 - [x] Slice 6: `AFC` file listing and transfer.
 - [x] Slice 7: app install, uninstall, and process control over the `RSD` shims.
-- [ ] Slice 8: the guided tour and the device integration test.
+- [x] Slice 8: the guided tour and the device integration test.
 - [x] Slice 9: the iOS 17+ `RSD` tunnel, so app install/uninstall and the CoreDevice
   services are reachable.
 - [x] Slice 10: `DTX` and the `dvt` process-control service, so app install, uninstall,
@@ -163,6 +161,11 @@ development-signed IPA.
 - A reconnect for a dropped link: a reset or replug re-enumerates the device, so the test
   rediscovers it by serial and connects again rather than reusing a stale handle.
 
+**Done and device-verified.** `ioscpp_demo_example` walks connect, identity, AFC
+list/push/stat/pull, the `CoreDevice` tunnel, the RSD connection, install, launch, the running
+check, close, and uninstall against one iOS 18.7.8 device. The demo's app steps need iOS 17.4 or
+later, because the installer and the developer tools moved behind the tunnel there.
+
 **Done when:** the demo and the device test pass against a real device, including a replug
 between steps.
 
@@ -221,10 +224,10 @@ rather than the `lockdownd` plists. `processcontrol` is the first.
 - `launch`, `close`, and `is_running` from Slice 7, which process control's `DTX`
   service over the RSD `dtservicehub` carries.
 
-**Done and device-verified.** The device test's opt-in round trip launches an installed app over
-the RSD `com.apple.instruments.dtservicehub` service, finds it running by its bundle id, and kills
-it, on an iOS 18.7.8 device. `dvt`'s other channels (`deviceinfo`, `fetch-symbols`) are not
-needed by process control and are left for later.
+**Done and device-verified.** `ioscpp_demo_example` launches an installed app over the RSD
+`com.apple.instruments.dtservicehub` service, finds it running by its bundle id, and kills it, on an
+iOS 18.7.8 device. `dvt`'s other channels (`deviceinfo`, `fetch-symbols`) are not needed by process
+control and are left for later.
 
 **Done when:** the tour launches, checks, and closes an app over `DTX`.
 
