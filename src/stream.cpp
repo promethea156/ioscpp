@@ -56,7 +56,7 @@ std::uint32_t get_le32(std::span<const std::byte> bytes, std::size_t offset) noe
            (static_cast<std::uint32_t>(bytes[offset + 3]) << 24);
 }
 
-Status read_exact(Transport &transport, std::span<std::byte> buffer)
+Status read_exact_transport(Transport &transport, std::span<std::byte> buffer)
 {
     std::size_t offset = 0;
     while (offset < buffer.size())
@@ -146,7 +146,7 @@ Result<Stream> Stream::open(std::shared_ptr<Connection> connection, std::uint16_
         }
 
         std::array<std::byte, 4> length_bytes{};
-        if (Status status = read_exact(**transport, length_bytes); !status)
+        if (Status status = read_exact_transport(**transport, length_bytes); !status)
         {
             return tl::unexpected(status.error());
         }
@@ -156,7 +156,7 @@ Result<Stream> Stream::open(std::shared_ptr<Connection> connection, std::uint16_
             return tl::unexpected(protocol_error("the usbmuxd connect answer is too short"));
         }
         std::vector<std::byte> answer(length - 4);
-        if (Status status = read_exact(**transport, answer); !status)
+        if (Status status = read_exact_transport(**transport, answer); !status)
         {
             return tl::unexpected(status.error());
         }
@@ -284,6 +284,11 @@ Stream::~Stream()
     close_now();
 }
 
+void Stream::close() noexcept
+{
+    close_now();
+}
+
 void Stream::close_now() noexcept
 {
     if (closed_ || connection_ == nullptr)
@@ -298,6 +303,13 @@ void Stream::close_now() noexcept
         {
             owned_transport_->close();
         }
+        return;
+    }
+
+    // The connection is closed as a whole before a stream, the reset would be
+    // written to a dead transport and is skipped.
+    if (connection_->closed())
+    {
         return;
     }
 
@@ -417,7 +429,7 @@ Result<bool> Stream::receive_more()
     }
 }
 
-Status Stream::read(std::span<std::byte> buffer)
+Status Stream::read_exact(std::span<std::byte> buffer)
 {
     std::size_t offset = 0;
     while (offset < buffer.size())

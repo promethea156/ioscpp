@@ -42,13 +42,21 @@ constexpr std::uint64_t kOpRemovePath = 0x08;
 constexpr std::uint64_t kOpMakeDir = 0x09;
 constexpr std::uint64_t kOpGetFileInfo = 0x0A;
 constexpr std::uint64_t kOpFileOpen = 0x0D;
+constexpr std::uint64_t kOpFileOpenRes = 0x0E;
 constexpr std::uint64_t kOpFileRead = 0x0F;
 constexpr std::uint64_t kOpFileWrite = 0x10;
 constexpr std::uint64_t kOpFileClose = 0x14;
 constexpr std::uint64_t kOpRenamePath = 0x18;
 
+// The `AFC_FOPEN_*` open modes, from `libimobiledevice`'s `src/afc.h`.
+constexpr std::uint64_t kFopenRdonly = 0x01;
+constexpr std::uint64_t kFopenWr = 0x04;
+
 constexpr std::size_t kHeaderSize = 40;
-constexpr std::size_t kChunkSize = 64 * 1024;
+// The device caps one message at 65535 bytes, and a `FILE_WRITE`/`FILE_READ`
+// packet carries the 40-byte header and an 8-byte handle on top of the chunk, so
+// the chunk stays well under that cap.
+constexpr std::size_t kChunkSize = 32 * 1024;
 
 constexpr std::array<char, 8> kMagic{'C', 'F', 'A', '6', 'L', 'P', 'A', 'A'};
 
@@ -136,12 +144,20 @@ void parse_tokens(std::span<const std::byte> data, Handler handler)
 
 struct Afc::Impl
 {
-    explicit Impl(Stream value)
-        : stream(std::move(value))
+    explicit Impl(ByteStream &value)
+        : stream(&value)
     {
     }
 
-    Stream stream;
+    explicit Impl(Stream value)
+        : owned(std::move(value))
+        , stream(&*owned)
+    {
+    }
+
+    /// The mux stream, when the client owns it. The RSD path borrows instead.
+    std::optional<Stream> owned;
+    ByteStream *stream = nullptr;
     std::uint64_t packet_num = 0;
 
     Status send(std::uint64_t operation, std::span<const std::byte> extra, std::span<const std::byte> payload)
@@ -155,13 +171,13 @@ struct Afc::Impl
         std::copy(extra.begin(), extra.end(), packet.begin() + static_cast<std::ptrdiff_t>(kHeaderSize));
         std::copy(payload.begin(), payload.end(),
                   packet.begin() + static_cast<std::ptrdiff_t>(kHeaderSize + extra.size()));
-        return stream.write(packet);
+        return stream->write(packet);
     }
 
     Result<Packet> receive()
     {
         std::array<std::byte, kHeaderSize> header{};
-        if (Status status = stream.read(header); !status)
+        if (Status status = stream->read_exact(header); !status)
         {
             return tl::unexpected(status.error());
         }
@@ -185,9 +201,16 @@ struct Afc::Impl
         Packet packet;
         packet.operation = get_le64(header, 32);
         packet.data.resize(entire_length - kHeaderSize);
-        if (Status status = stream.read(packet.data); !status)
+        if (Status status = stream->read_exact(packet.data); !status)
         {
             return tl::unexpected(status.error());
+        }
+        if (std::getenv("IOSCPP_TRACE") != nullptr)
+        {
+            std::fprintf(stderr, "[afc recv] op=0x%02llx entire=%llu this=%llu num=%llu payload=%zu\n",
+                         static_cast<unsigned long long>(packet.operation),
+                         static_cast<unsigned long long>(entire_length), static_cast<unsigned long long>(this_length),
+                         static_cast<unsigned long long>(packet_number), packet.data.size());
         }
         return packet;
     }
@@ -216,13 +239,18 @@ struct Afc::Impl
                 return tl::unexpected(device_error("the device reported AFC error " + std::to_string(code)));
             }
         }
-        else if (answer->operation != kOpData)
+        else if (answer->operation != kOpData && answer->operation != kOpFileOpenRes)
         {
             return tl::unexpected(protocol_error("the device sent an unexpected AFC operation"));
         }
         return answer;
     }
 };
+
+Afc::Afc(ByteStream &stream)
+    : impl_(std::make_unique<Impl>(stream))
+{
+}
 
 Afc::Afc(Stream stream)
     : impl_(std::make_unique<Impl>(std::move(stream)))
@@ -232,6 +260,11 @@ Afc::Afc(Stream stream)
 Afc::~Afc() = default;
 Afc::Afc(Afc &&) noexcept = default;
 Afc &Afc::operator=(Afc &&) noexcept = default;
+
+Result<Afc> Afc::start(ByteStream &stream)
+{
+    return Afc(stream);
+}
 
 Result<Afc> Afc::start(Stream stream)
 {
@@ -243,89 +276,76 @@ Result<std::vector<DirEntry>> Afc::list(std::string_view path)
     std::vector<std::byte> request;
     append_path(request, path);
 
-    if (Status status = impl_->send(kOpReadDir, request, {}); !status)
+    // The device answers a `READ_DIR` with one `DATA` packet holding every entry;
+    // unlike the file operations it does not send a trailing `STATUS`.
+    auto answer = impl_->transact(kOpReadDir, request);
+    if (!answer)
     {
-        return tl::unexpected(status.error());
+        return tl::unexpected(answer.error());
+    }
+    if (answer->operation != kOpData)
+    {
+        return tl::unexpected(protocol_error("the device sent an unexpected AFC operation"));
     }
 
+    // The payload is one entry name after another, each optionally followed by
+    // alternating stat keys and values. A token that is not a stat key starts the
+    // next entry.
     std::vector<DirEntry> entries;
-    for (;;)
+    std::size_t position = 0;
+    const std::span<const std::byte> data(answer->data);
+    auto next_token = [&]() -> std::optional<std::string_view>
     {
-        auto answer = impl_->receive();
-        if (!answer)
+        if (position >= data.size())
         {
-            return tl::unexpected(answer.error());
+            return std::nullopt;
         }
-        if (answer->operation == kOpStatus)
-        {
-            if (answer->data.size() >= 8 && get_le64(answer->data, 0) != 0)
-            {
-                return tl::unexpected(device_error("the device refused the listing"));
-            }
-            return entries;
-        }
-        if (answer->operation != kOpData)
-        {
-            return tl::unexpected(protocol_error("the device sent an unexpected AFC operation"));
-        }
+        const char *begin = reinterpret_cast<const char *>(data.data() + position);
+        const std::size_t length = strnlen(begin, data.size() - position);
+        position += length + 1;
+        return std::string_view(begin, length);
+    };
 
-        // The payload is one entry name after another, each followed by
-        // alternating stat keys and values. A token that is not a stat key starts
-        // the next entry.
-        std::size_t position = 0;
-        const std::span<const std::byte> data(answer->data);
-        auto next_token = [&]() -> std::optional<std::string_view>
+    DirEntry entry;
+    while (std::optional<std::string_view> token = next_token())
+    {
+        if (!token->starts_with("st_"))
         {
-            if (position >= data.size())
+            if (!entry.name.empty())
             {
-                return std::nullopt;
+                entries.push_back(std::move(entry));
+                entry = DirEntry{};
             }
-            const char *begin = reinterpret_cast<const char *>(data.data() + position);
-            const std::size_t length = strnlen(begin, data.size() - position);
-            position += length + 1;
-            return std::string_view(begin, length);
-        };
-
-        DirEntry entry;
-        while (std::optional<std::string_view> token = next_token())
-        {
-            if (!token->starts_with("st_"))
-            {
-                if (!entry.name.empty())
-                {
-                    entries.push_back(std::move(entry));
-                    entry = DirEntry{};
-                }
-                entry.name = std::string(*token);
-                continue;
-            }
-            const std::optional<std::string_view> value = next_token();
-            if (!value.has_value())
-            {
-                break;
-            }
-            if (*token == "st_mtime")
-            {
-                entry.mtime = static_cast<std::int64_t>(to_u64(*value));
-            }
-            else if (*token == "st_size")
-            {
-                entry.size = to_u64(*value);
-            }
-            else if (*token == "st_mode")
-            {
-                entry.mode = static_cast<std::uint32_t>(to_u64(*value));
-            }
-            else if (*token == "st_ifmt" && entry.mode == 0)
-            {
-                entry.mode = mode_from_ifmt(*value);
-            }
+            entry.name = std::string(*token);
+            continue;
         }
-        if (!entry.name.empty())
+        const std::optional<std::string_view> value = next_token();
+        if (!value.has_value())
         {
-            entries.push_back(std::move(entry));
+            break;
+        }
+        if (*token == "st_mtime")
+        {
+            entry.mtime = static_cast<std::int64_t>(to_u64(*value));
+        }
+        else if (*token == "st_size")
+        {
+            entry.size = to_u64(*value);
+        }
+        else if (*token == "st_mode")
+        {
+            entry.mode = static_cast<std::uint32_t>(to_u64(*value));
+        }
+        else if (*token == "st_ifmt" && entry.mode == 0)
+        {
+            entry.mode = mode_from_ifmt(*value);
         }
     }
+    if (!entry.name.empty())
+    {
+        entries.push_back(std::move(entry));
+    }
+    return entries;
 }
 
 Result<std::optional<FileStat>> Afc::stat(std::string_view path)
@@ -369,11 +389,10 @@ Result<std::optional<FileStat>> Afc::stat(std::string_view path)
 
 Result<std::uint64_t> Afc::open_file(std::string_view path, std::uint64_t mode)
 {
-    std::vector<std::byte> request;
+    // `FILE_OPEN` carries the 8-byte mode first, then the NUL-terminated path.
+    std::vector<std::byte> request(8);
+    put_le64(request, 0, mode);
     append_path(request, path);
-    const std::size_t offset = request.size();
-    request.resize(offset + 8);
-    put_le64(request, offset, mode);
 
     auto answer = impl_->transact(kOpFileOpen, request);
     if (!answer)
@@ -389,7 +408,7 @@ Result<std::uint64_t> Afc::open_file(std::string_view path, std::uint64_t mode)
 
 Status Afc::pull(std::string_view remote, const std::filesystem::path &local)
 {
-    auto handle = open_file(remote, 0);
+    auto handle = open_file(remote, kFopenRdonly);
     if (!handle)
     {
         return tl::unexpected(handle.error());
@@ -401,18 +420,21 @@ Status Afc::pull(std::string_view remote, const std::filesystem::path &local)
         return tl::unexpected(Error{ErrorCode::Io, "the local file could not be created"});
     }
 
-    std::array<std::byte, 8> length_bytes{};
+    // `FILE_READ` carries the handle and the wanted length, and the device ends the
+    // file with a zero-code `STATUS` rather than a zero-length `DATA`.
+    std::array<std::byte, 16> request{};
+    put_le64(request, 0, *handle);
     Status result;
     for (;;)
     {
-        put_le64(length_bytes, 0, kChunkSize);
-        auto answer = impl_->transact(kOpFileRead, length_bytes);
+        put_le64(request, 8, kChunkSize);
+        auto answer = impl_->transact(kOpFileRead, request);
         if (!answer)
         {
             result = tl::unexpected(answer.error());
             break;
         }
-        if (answer->data.empty())
+        if (answer->operation == kOpStatus || answer->data.empty())
         {
             break;
         }
@@ -438,7 +460,7 @@ Status Afc::push(const std::filesystem::path &local, std::string_view remote)
         return tl::unexpected(Error{ErrorCode::Io, "the local file could not be read"});
     }
 
-    auto handle = open_file(remote, 4); // `AFC_FOPEN_WR`
+    auto handle = open_file(remote, kFopenWr);
     if (!handle)
     {
         std::fclose(file);
@@ -446,8 +468,8 @@ Status Afc::push(const std::filesystem::path &local, std::string_view remote)
     }
 
     std::vector<std::byte> buffer(kChunkSize);
-    std::vector<std::byte> request(8);
-    put_le64(request, 0, *handle);
+    std::array<std::byte, 8> handle_bytes{};
+    put_le64(handle_bytes, 0, *handle);
 
     Status result;
     for (;;)
@@ -457,10 +479,9 @@ Status Afc::push(const std::filesystem::path &local, std::string_view remote)
         {
             break;
         }
-        request.resize(8 + read);
-        std::copy_n(buffer.begin(), static_cast<std::ptrdiff_t>(read),
-                    request.begin() + static_cast<std::ptrdiff_t>(8));
-        auto answer = impl_->transact(kOpFileWrite, request);
+        // `FILE_WRITE` carries the handle as its data and the bytes as the
+        // payload, so `this_length` covers only the header and the handle.
+        auto answer = impl_->transact(kOpFileWrite, handle_bytes, std::span<const std::byte>(buffer).first(read));
         if (!answer)
         {
             result = tl::unexpected(answer.error());
@@ -469,8 +490,6 @@ Status Afc::push(const std::filesystem::path &local, std::string_view remote)
     }
     std::fclose(file);
 
-    std::array<std::byte, 8> handle_bytes{};
-    put_le64(handle_bytes, 0, *handle);
     (void)impl_->transact(kOpFileClose, handle_bytes);
     return result;
 }

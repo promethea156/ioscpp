@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.24)
 # here and the `-<pre-release>` suffix lives in the tag and the changelog.
 project(
   ioscpp
-  VERSION 0.1.0
+  VERSION 1.0.0
   DESCRIPTION "A simplified, dependency-free iOS device client library in C++"
   HOMEPAGE_URL "https://github.com/promethea156/ioscpp"
   LANGUAGES CXX
@@ -73,12 +73,25 @@ add_library(ioscpp
   src/connection.cpp
   src/crypto/pairing.cpp
   src/device.cpp
+  src/dtx_connection.cpp
   src/lockdown.cpp
+  src/plist_service.cpp
+  src/process_control.cpp
+  src/protocol/cdtunnel.cpp
+  src/protocol/dtx.cpp
+  src/protocol/http2.cpp
+  src/protocol/ipv6.cpp
+  src/protocol/json.cpp
+  src/protocol/keyed_archive.cpp
   src/protocol/plist.cpp
+  src/protocol/remotexpc.cpp
   src/protocol/usbmux.cpp
+  src/rsd.cpp
   src/session.cpp
   src/stream.cpp
   src/tcp/tcp_transport.cpp
+  src/tcp_link.cpp
+  src/tunnel.cpp
 )
 add_library(ioscpp::ioscpp ALIAS ioscpp)
 

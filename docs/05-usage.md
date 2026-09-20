@@ -26,6 +26,31 @@ std::cout << device.udid() << " " << device.product_type() << " "
           << device.product_version() << "\n";
 ```
 
+## Disconnect and reconnect
+
+`disconnect` tears the connection down innermost first (TLS, streams, mux, transport) and is
+idempotent. The transport is closed but owned by the caller, and a `Device` is tied to one transport,
+so a reconnect destroys the `Device`, re-discovers the device by its serial, opens a fresh transport, and
+connects again. A service stream the caller opened must be destroyed first, so its reset is sent while the
+link is still up.
+
+```cpp
+afc.reset();
+
+device->disconnect();
+device.reset();
+transport.reset();
+
+for (const auto &id : ioscpp::usb::UsbTransport::list().value())
+{
+    if (id.serial == serial)
+    {
+        transport = ioscpp::usb::UsbTransport::open(id).value();
+        device = ioscpp::Device::connect(*transport, pairing).value();
+    }
+}
+```
+
 ## List the attached devices
 
 ```cpp
@@ -48,11 +73,14 @@ auto stream = connection.connect(62078).value(); // lockdownd
 
 ## List a directory
 
+A `READ_DIR` answer carries the entry names alone, so `list` returns names; the type
+of an entry comes from `stat`.
+
 ```cpp
 auto afc = device.open_afc().value();
 for (const auto &entry : afc.list("/DCIM").value())
 {
-    std::cout << (entry.is_directory() ? "d " : "- ") << entry.name << "\n";
+    std::cout << entry.name << "\n";
 }
 ```
 
@@ -80,30 +108,43 @@ afc.push("local.txt", "/Documents/local.txt").value();
 
 ## Install and uninstall an app
 
-`install` uploads the IPA into `/PublicStaging` over `AFC` and then asks
-`installation_proxy` to install it. `uninstall` names the bundle id.
+On iOS 17.4 and later, `install(Rsd&, ipa)` uploads the IPA into `/PublicStaging` over the RSD
+`AFC` shim and then asks the RSD `installation_proxy` shim to install it.
+`uninstall(Rsd&, bundle_id)` names the bundle id. The pre-17.4 `install(Device&, ipa)` and
+`uninstall(Device&, bundle_id)` over the mux link stay as the fallback.
+
+An install the device refuses is a normal outcome, so it is `success == false` with the reason
+rather than an `Error`. A development-signed IPA whose provisioning profile lists the device
+installs; an unsigned or App Store IPA is refused with `ApplicationVerificationFailed`.
 
 ```cpp
-auto result = ioscpp::install(device, "app.ipa").value();
+auto result = ioscpp::install(*rsd, "app.ipa").value();
 if (!result.success)
 {
     std::cout << "install failed: " << result.failure_reason() << "\n";
 }
 
-ioscpp::uninstall(device, "com.example.app").value();
+ioscpp::uninstall(*rsd, "com.example.app").value();
 ```
 
 ## Launch, check, and close an app
 
-```cpp
-ioscpp::launch(device, "com.example.app").value();
+On iOS 17.4 and later, `launch(Rsd&, bundle_id)` opens the RSD
+`com.apple.instruments.dtservicehub` service and launches the app over its `DTX`
+process-control channel, returning the process id. `is_running(Rsd&, bundle_id)` resolves
+the bundle id to a process id, and `close(Rsd&, pid)` kills that process. The pre-17.4
+`launch(Device&, bundle_id)`, `is_running(Device&, bundle_id)`, and `close(Device&, pid)`
+over the mux-link `com.apple.instruments.remoteserver` stay as the fallback.
 
-if (ioscpp::is_running(device, "com.example.app").value())
+```cpp
+auto pid = ioscpp::launch(*rsd, "com.example.app").value();
+
+if (ioscpp::is_running(*rsd, "com.example.app").value())
 {
     std::cout << "running\n";
 }
 
-ioscpp::close(device, "com.example.app").value();
+ioscpp::close(*rsd, pid).value();
 ```
 
 ## Query device info

@@ -9,6 +9,7 @@
 
 #include "ioscpp/connection.hpp"
 #include "ioscpp/error.hpp"
+#include "ioscpp/lockdown.hpp"
 #include "ioscpp/protocol/usbmux.hpp"
 #include "ioscpp/testing/mock_transport.hpp"
 
@@ -117,4 +118,76 @@ TEST_CASE("a stream write sends an ACK frame", "[stream]")
     // `usbmuxd` marks a data frame `ACK` alone; the device resets any other flag.
     CHECK(tcp.flags == TcpAck);
     CHECK(written.back() == data.back());
+}
+
+TEST_CASE("a stream close sends one reset", "[stream]")
+{
+    testing::MockTransport transport;
+    auto connection = open_connection(transport);
+
+    transport.feed(tcp_frame(port, local_port, TcpSyn | TcpAck));
+    auto stream = Stream::open(connection, port);
+    REQUIRE(stream.has_value());
+
+    const std::size_t before = transport.written().size();
+    stream->close();
+    const std::size_t after = transport.written().size();
+    REQUIRE(after > before);
+
+    // The close is one RST frame.
+    const std::vector<std::byte> &written = transport.written();
+    const TcpHeader tcp = TcpHeader::decode(
+        std::span<const std::byte, kTcpHeaderSize>(written.data() + after - kTcpHeaderSize, kTcpHeaderSize));
+    CHECK((tcp.flags & TcpRst) != 0);
+
+    // A second close writes nothing.
+    stream->close();
+    CHECK(transport.written().size() == after);
+}
+
+TEST_CASE("a connection close closes the transport once", "[connection]")
+{
+    testing::MockTransport transport;
+    auto connection = open_connection(transport);
+
+    CHECK_FALSE(connection->closed());
+    connection->close();
+    CHECK(connection->closed());
+    CHECK(transport.closed());
+    CHECK(transport.close_count() == 1);
+
+    // A second close is a no-op.
+    connection->close();
+    CHECK(transport.close_count() == 1);
+}
+
+TEST_CASE("a device teardown is ordered innermost first", "[connection]")
+{
+    testing::MockTransport transport;
+    auto connection = open_connection(transport);
+
+    transport.feed(tcp_frame(port, local_port, TcpSyn | TcpAck));
+    auto stream = Stream::open(connection, port);
+    REQUIRE(stream.has_value());
+    auto lockdown = Lockdown::start(std::move(*stream));
+    REQUIRE(lockdown.has_value());
+
+    const std::size_t after_open = transport.written().size();
+
+    // `Device::disconnect` closes the session (TLS, then the stream reset) and
+    // then the mux and the transport. The stream reset is written before the
+    // transport is closed, and neither step repeats.
+    lockdown->close();
+    CHECK(transport.written().size() > after_open);
+    CHECK_FALSE(transport.closed());
+
+    lockdown->close();
+    CHECK(transport.close_count() == 0);
+
+    connection->close();
+    CHECK(transport.closed());
+    CHECK(transport.close_count() == 1);
+
+    connection->close();
+    CHECK(transport.close_count() == 1);
 }

@@ -70,7 +70,7 @@ struct Lockdown::Impl
         {
             if (!tls.has_value())
             {
-                return stream.read(buffer.subspan(offset));
+                return stream.read_exact(buffer.subspan(offset));
             }
             auto read = tls->read(buffer.subspan(offset));
             if (!read)
@@ -92,9 +92,27 @@ Lockdown::Lockdown(Stream stream)
 {
 }
 
-Lockdown::~Lockdown() = default;
+Lockdown::~Lockdown()
+{
+    close();
+}
+
 Lockdown::Lockdown(Lockdown &&) noexcept = default;
 Lockdown &Lockdown::operator=(Lockdown &&) noexcept = default;
+
+void Lockdown::close() noexcept
+{
+    if (impl_ == nullptr)
+    {
+        return;
+    }
+    if (impl_->tls.has_value())
+    {
+        impl_->tls->close();
+        impl_->tls.reset();
+    }
+    impl_->stream.close();
+}
 
 Result<Lockdown> Lockdown::start(Stream stream)
 {
@@ -227,7 +245,7 @@ Status Lockdown::start_session(crypto::Pairing &pairing)
     return {};
 }
 
-Result<std::uint16_t> Lockdown::start_service(std::string_view name)
+Result<Service> Lockdown::start_service(std::string_view name)
 {
     protocol::Plist::Dictionary request{
         {"Request", protocol::Plist("StartService")},
@@ -245,7 +263,15 @@ Result<std::uint16_t> Lockdown::start_service(std::string_view name)
     {
         return tl::unexpected(protocol_error("the device did not send a service port"));
     }
-    return static_cast<std::uint16_t>(*port->integer());
+
+    Service service;
+    service.port = static_cast<std::uint16_t>(*port->integer());
+    if (const protocol::Plist *enable_ssl = answer->find("EnableServiceSSL");
+        enable_ssl != nullptr && enable_ssl->boolean().has_value())
+    {
+        service.enable_ssl = *enable_ssl->boolean();
+    }
+    return service;
 }
 
 } // namespace ioscpp

@@ -47,6 +47,10 @@ The device presents a vendor-specific USB interface (class `0xff`, subclass `0xf
 
 The host key pair, the `lockdownd` pairing exchange, and the TLS session that follows pairing use **mbedTLS** (Apache-2.0), acquired with CMake **FetchContent**. This is required for every device connection: `lockdownd` refuses to start a service for an unpaired host. The public headers keep mbedTLS behind a pimpl, so it is a private dependency of the core.
 
+## HTTP/2
+
+The CoreDevice tunnel's RemoteXPC layer runs over HTTP/2, but the frames are simple and its `HEADERS` frames carry no fields, so no HPACK is needed and the layer is hand-rolled with no dependency, the way go-ios and pymobiledevice3 do it.
+
 ## Guiding Principles
 
 - **Self-contained**: no reliance on `usbmuxd`, `libimobiledevice`, or external binaries.

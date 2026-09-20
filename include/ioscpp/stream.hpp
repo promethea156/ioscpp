@@ -8,6 +8,7 @@
 #include <string_view>
 #include <vector>
 
+#include "ioscpp/byte_stream.hpp"
 #include "ioscpp/connection.hpp"
 #include "ioscpp/error.hpp"
 #include "ioscpp/export.hpp"
@@ -34,7 +35,7 @@ namespace ioscpp
  * routing, and it buffers a partial frame across reads, so concurrent calls on one
  * stream must be serialized by the caller.
  */
-class IOSCPP_API Stream
+class IOSCPP_API Stream : public ByteStream
 {
 public:
     /**
@@ -56,7 +57,7 @@ public:
     Stream &operator=(Stream &&other) noexcept;
 
     /// Writes data to the device.
-    Status write(std::span<const std::byte> data);
+    Status write(std::span<const std::byte> data) override;
 
     /**
      * @brief Reads exactly `buffer.size()` bytes from the device.
@@ -65,10 +66,19 @@ public:
      * buffered and handed out by later reads. An error is returned if the device
      * resets the connection first.
      */
-    Status read(std::span<std::byte> buffer);
+    Status read_exact(std::span<std::byte> buffer) override;
 
     /// Reads all output until the device resets the connection.
     Result<std::vector<std::byte>> read_all();
+
+    /**
+     * @brief Resets the port, releasing it on the device.
+     *
+     * The reset is sent once; a second call, or one after the stream has already
+     * been moved from, is a no-op. This is the stream half of an ordered
+     * teardown, and the destructor routes through it, so there is one path.
+     */
+    void close() noexcept override;
 
     /// The remote port this stream is connected to.
     std::uint16_t port() const noexcept

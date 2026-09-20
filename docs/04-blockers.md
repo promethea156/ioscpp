@@ -3,9 +3,9 @@
 Significant blockers hit during development, and how they were solved. Each entry keeps the
 symptom, the cause, and the fix, so the same trap is not walked into twice.
 
-The list is empty in the scaffold and fills in as the slices in
-[`03-roadmap.md`](03-roadmap.md) are implemented. The entries below are the ones already known
-from the reference implementations and are expected to be hit.
+It fills in as the slices in [`03-roadmap.md`](03-roadmap.md) are implemented: the entries
+below are the ones hit so far, and the ones known from the reference implementations and
+expected.
 
 ## Hit blockers
 
@@ -271,6 +271,108 @@ ClientHello. The reset was the certificate serial in the entry above, and these 
 mbedTLS stack defaults `ioscpp` keeps.
 
 
+### The device answers `READ_DIR` with one `DATA` and no `STATUS`
+
+**Symptom.** After the mux fix, the device test hung in `Afc::list`: the trace showed
+the device sent one `DATA` packet holding the whole root listing (`entire=151`) and then
+nothing more. `ctest -R "^device$"` never returned.
+
+**Cause.** `Afc::list` sent `READ_DIR` and looped until a `STATUS`, but the device ends a
+directory listing with the single `DATA` packet. `libimobiledevice`'s `afc_read_directory`
+calls `afc_receive_data` once and returns, and `pymobiledevice3`'s `listdir` waits for one
+response; neither reads a trailing `STATUS`. The mock test and `docs/06-afc-protocol.md`
+encoded the wrong belief, so the mock confirmed it.
+
+**Fix.** `Afc::list` sends `READ_DIR` with `transact` and parses the one `DATA` answer
+(`src/afc.cpp`). The mock no longer feeds a `STATUS` after the listing
+(`tests/afc_test.cpp`).
+
+### The device's listing carries names alone
+
+**Symptom.** With the hang fixed, the device test failed with `the media root listed no
+directory`. The raw answer was `.`, `..`, `Downloads`, `Books`, and so on, with no `st_*`
+keys.
+
+**Cause.** The device's `READ_DIR` answer is the entry names alone, each NUL-terminated;
+the stat keys the mock fed are not part of it. `DirEntry::is_directory` was therefore
+always false.
+
+**Fix.** The device test lists the root for a non-empty answer and stats `/` for the
+directory check (`tests/device_test.cpp`). The parser still reads stat keys when a device
+sends them.
+
+### `FILE_OPEN` carries the mode first, and answers `FILE_OPEN_RES`
+
+**Symptom.** The device test failed with `push: the device sent an unexpected AFC
+operation`. The device answered `FILE_OPEN` with opcode `0x0E`, which `transact` rejected.
+
+**Cause.** Two format errors: `Afc::open_file` sent the path and then the mode, while both
+`libimobiledevice`'s `afc_file_open` and `pymobiledevice3`'s `FopenRequest` send the
+8-byte mode first and then the path; and the answer's opcode is `FILE_OPEN_RES` (`0x0E`),
+which `afc_receive_data` accepts but `transact` did not.
+
+**Fix.** `Afc::open_file` puts the mode first (`src/afc.cpp`), and `transact` accepts
+`kOpFileOpenRes`.
+
+### The device caps one message at 65535 bytes
+
+**Symptom.** With list, stat, and open fixed, the device answered a `FILE_WRITE` with a
+control frame reading `asyncReadComplete, message was too large (65536 bytes, max = 65535)`,
+and the test hung.
+
+**Cause.** `Afc` chunked `FILE_WRITE`/`FILE_READ` at 64 KiB (`kChunkSize`), so the
+device's AFC message (`entire_length`) reached 65584 bytes, over the device's 16-bit cap.
+
+**Fix.** `Afc` chunks at 32 KiB (`src/afc.cpp`), so a message stays well under the cap.
+
+### The `CoreDeviceProxy` service resets a plaintext handshake
+
+**Symptom.** The device test connected to `CoreDeviceProxy`, sent the `CDTunnel` handshake
+request, and the device answered a mux control frame reading
+`socketIsClosed sock_receive returned errno 54` and a reset whose reason is
+`sessionUpcall connection closed`, with no handshake answer.
+
+**Cause.** The `StartService` answer for `CoreDeviceProxy` sets `EnableServiceSSL`, so the
+service requires TLS before it exchanges any data. The library sent the `CDTunnel` frame in
+plaintext, and the service closed the port. The frame bytes themselves match the reference, so
+the missing TLS was the whole fault.
+
+**Fix.** `Tunnel::open` wraps the service stream in `TlsSession`, using the pairing record,
+when the `StartService` answer sets `EnableServiceSSL`, and the handshake then goes over TLS
+(`src/tunnel.cpp`). `Lockdown::start_service` returns the flag alongside the port
+(`src/lockdown.cpp`), so a caller can no longer ignore it.
+
+**Note.** The `Tunnel` is a pimpl, like `Lockdown`, because the TLS session binds to the
+`Stream`'s address. A `Stream` member moved after the TLS session starts leaves the session's
+pointer dangling, and the first write then crashes.
+
+### A native RSD service is reset by an `RSDCheckin`
+
+**Symptom.** With the `DTX` codec and connection layer done, the device test's launch step failed
+with `the connection ended mid-message`, right after the `com.apple.instruments.dtservicehub`
+connection came up.
+
+**Cause.** `Rsd::start_service` ran the `RSDCheckin` handshake for every service, because the
+`installation_proxy` and `AFC` shims need it. But `com.apple.instruments.dtservicehub` is a native
+RemoteXPC-era service, not a lockdown shim: `pymobiledevice3`'s DTX provider runs the check-in only for a
+service whose name ends in `.shim.remote`, and a native service speaks its own protocol on the plain
+connection. The unexpected check-in made the device reset the port.
+
+**Fix.** `Rsd::start_service` runs the `RSDCheckin` only for a `.shim.remote` service
+(`src/rsd.cpp`); the launch then reaches the device and returns a pid.
+
+### `killPid:` is dropped when the channel closes right after it
+
+**Symptom.** With the launch working, the kill left the app running: `killPid:` was written and the
+channel and the tunnel were then torn down.
+
+**Cause.** `killPid:` is fire-and-forget and does not await a reply, so a bare `killPid:` is silently
+dropped when the connection closes immediately after it (`pymobiledevice3`'s `ProcessControl.kill`).
+`sendSignal:toPid:` awaits a reply, which proves the device acted on the request before the teardown.
+
+**Fix.** `ProcessControl::kill` sends `sendSignal:toPid:` with `SIGKILL` and awaits the reply
+(`src/process_control.cpp`).
+
 ## Expected blockers
 
 The entries here are the ones already known from the reference implementations. Most have
@@ -352,6 +454,49 @@ non-UTF-8 path fails with an opaque `AFC_E_*` status.
 staging directory and then installed from the device-side path. Installing without the upload, or
 from a path the host can see but the device cannot, fails.
 
+**Hit.** `install` uploads the IPA into `/PublicStaging` over `AFC` and passes that device-side
+path as `PackagePath` (`src/app.cpp`); a `stat` of the staged file reports its full size.
+
+### The mux-link `installation_proxy` accepts a connection but does not answer on iOS 17+
+
+`lockdownd` starts `com.apple.mobile.installation_proxy` over the mux link and the device accepts the
+port, but on iOS 17+ it does not answer an `Install` or a `Browse`: the request goes out and the
+connection then times out with no reply. The mux-link service is the legacy path, and `pymobiledevice3`
+reaches the same service over the **RSD** shim
+(`com.apple.mobile.installation_proxy.shim.remote`), which the RSD tunnel carries
+(`docs/03-roadmap.md`, Slice 9).
+
+**Hit.** `ioscpp_device_tests` staged an arm64 sample IPA (`MinimumOSVersion` 12.4) into
+`/PublicStaging` and sent the `Install` command `pymobiledevice3 apps install` sends, with Developer
+Mode on and the device unlocked; the device accepted the `installation_proxy` connection and never replied
+(`tests/device_test.cpp`). The `AFC` upload over the same mux link works, so the link is not the problem.
+
+**Fix.** The mux-link path stays as the pre-17.4 fallback, and `install(Rsd&)` and `uninstall(Rsd&)` now
+reach the same service over the RSD shim (`src/app.cpp`); the device test's opt-in round trip is verified on an
+iOS 18.7.8 device.
+
+### The plist length prefix is the plist size alone, not the size plus the prefix
+
+A service frames a plist the way `lockdownd` does: a 4-byte big-endian length, then the XML plist. The
+length is the plist size alone. Writing the size plus the prefix makes the device read four bytes past the
+message, wait for them, and reset the connection.
+
+**Hit.** `install(Rsd&, ipa)` staged the IPA over the RSD `AFC` shim and sent the `Install` command, and
+the device reset the connection; the staged file stat'd at its full size, so the upload was not the problem.
+The private `PlistService` wrote the size plus the prefix (`src/app.cpp`); it now writes the size alone
+through the shared `PlistService` (`src/plist_service.cpp`), and the installer shim answers with a status.
+
+### An unsigned package is refused with `ApplicationVerificationFailed`
+
+`installation_proxy` verifies a package's signature before it installs it. A development-signed IPA whose
+provisioning profile lists the device installs; an unsigned or App Store IPA is refused with
+`ApplicationVerificationFailed`, which is a device-side policy answer, not a protocol error.
+
+**Hit.** `install(Rsd&, ipa)` sent an unsigned IPA and the installer shim answered
+`ApplicationVerificationFailed`; `uninstall(Rsd&, bundle_id)` removed the same app over the installer shim,
+so the shim's command framing is right and only the signature is missing. A development-signed IPA whose
+provisioning profile lists the device then installed and uninstalled cleanly, so the path is verified.
+
 ### A CoreDevice service is not on the mux link, but on the RSD tunnel
 
 On iOS 17.4 and later, a `com.apple.dvt.*` service is not on a `lockdownd` port at all: it is on
@@ -367,9 +512,10 @@ the packets, or assuming the tunnel address is reachable, fails.
 
 ### RemoteXPC frames are not plists, and the flags word must be exact
 
-RemoteXPC is the CoreDevice counterpart of the mux framing, not of the plist codec: a 16-byte header
-whose flags word must be set exactly, then an `xpc` dictionary. Treating a RemoteXPC frame as a plist,
-or mis-setting the flags word, makes the device drop the connection.
+RemoteXPC is the CoreDevice counterpart of the mux framing, not of the plist codec: a fixed header
+(the magic, the flags word, the body length, the message id) whose flags word must be set exactly, then
+an `xpc` object. Treating a RemoteXPC frame as a plist, or mis-setting the flags word, makes the device
+drop the connection.
 
 ### A CoreDevice service speaks `DTX`, not a plist
 

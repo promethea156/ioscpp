@@ -18,6 +18,12 @@ if(IOSCPP_BUILD_USB)
     PRIVATE ioscpp::usb
   )
 
+  # Runs the same tour against every attached device, one thread per device.
+  add_executable(ioscpp_multi_example multi/main.cpp)
+  target_link_libraries(ioscpp_multi_example
+    PRIVATE ioscpp::usb
+  )
+
   # Pushes and pulls one file, timing each, for a transfer benchmark.
   add_executable(ioscpp_transfer_example transfer/main.cpp)
   target_link_libraries(ioscpp_transfer_example
@@ -38,6 +44,12 @@ if(IOSCPP_BUILD_USB)
       COMMAND ${CMAKE_COMMAND} -E copy_if_different
               $<TARGET_RUNTIME_DLLS:ioscpp_demo_example>
               $<TARGET_FILE_DIR:ioscpp_demo_example>
+      COMMAND_EXPAND_LISTS
+    )
+    add_custom_command(TARGET ioscpp_multi_example POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E copy_if_different
+              $<TARGET_RUNTIME_DLLS:ioscpp_multi_example>
+              $<TARGET_FILE_DIR:ioscpp_multi_example>
       COMMAND_EXPAND_LISTS
     )
     add_custom_command(TARGET ioscpp_transfer_example POST_BUILD
