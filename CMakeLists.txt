@@ -104,6 +104,7 @@ add_library(ioscpp
   src/protocol/ipv6.cpp
   src/protocol/json.cpp
   src/protocol/plist.cpp
+  src/protocol/remotexpc.cpp
   src/protocol/usbmux.cpp
   src/session.cpp
   src/stream.cpp

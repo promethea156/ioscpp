@@ -459,9 +459,10 @@ the packets, or assuming the tunnel address is reachable, fails.
 
 ### RemoteXPC frames are not plists, and the flags word must be exact
 
-RemoteXPC is the CoreDevice counterpart of the mux framing, not of the plist codec: a 16-byte header
-whose flags word must be set exactly, then an `xpc` dictionary. Treating a RemoteXPC frame as a plist,
-or mis-setting the flags word, makes the device drop the connection.
+RemoteXPC is the CoreDevice counterpart of the mux framing, not of the plist codec: a fixed header
+(the magic, the flags word, the body length, the message id) whose flags word must be set exactly, then
+an `xpc` object. Treating a RemoteXPC frame as a plist, or mis-setting the flags word, makes the device
+drop the connection.
 
 ### A CoreDevice service speaks `DTX`, not a plist
 
