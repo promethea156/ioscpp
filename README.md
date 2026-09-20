@@ -115,12 +115,13 @@ The fastest way to learn the library is to run [`examples/demo/main.cpp`](exampl
 1. finds an attached device and opens its USB interface, with the mux negotiation;
 2. pairs with it if it is not paired, starts the `lockdownd` session, and reads the identity;
 3. opens `AFC` and lists the media root;
-4. pushes a file into `/PublicStaging`;
-5. installs an app from an IPA, replacing an existing copy;
-6. launches it;
-7. closes it.
+4. pushes a file into `/PublicStaging`, stats it, and pulls it back;
+5. opens the CoreDevice tunnel and the RSD connection, listing the services;
+6. installs an app from an IPA, replacing an existing copy;
+7. launches it, checks it is running, and closes it;
+8. uninstalls it.
 
-Steps 5-7 are the app steps: the demo installs over the mux link, launches the app, and closes it; on iOS 17.4+ the install moves to the RSD shims (Slice 8).
+Steps 5-8 need iOS 17.4 or later, because the installer and the developer tools moved behind the tunnel there.
 
 To run it, you need a device with **a trusted host** (tap *Trust* on the device when asked) and an IPA to install. The install replaces that bundle, so it loses the bundle's data.
 

@@ -1,5 +1,7 @@
 #include "ioscpp/rsd.hpp"
 
+#include <cstddef>
+#include <cstdint>
 #include <map>
 #include <optional>
 #include <string>
@@ -73,6 +75,23 @@ std::map<std::string, RsdService, std::less<>> parse_services(const protocol::Xp
 }
 
 } // namespace
+
+RsdUuid rsd_uuid(std::string_view host_id)
+{
+    // FNV-1a over the host id, which is stable across runs and processes.
+    std::uint64_t hash = 0xcbf29ce484222325ULL;
+    for (const char c : host_id)
+    {
+        hash ^= static_cast<unsigned char>(c);
+        hash *= 0x100000001b3ULL;
+    }
+    RsdUuid uuid{};
+    for (std::size_t i = 0; i < uuid.size(); ++i)
+    {
+        uuid[i] = static_cast<std::byte>((hash >> ((i % 8) * 8)) & 0xff);
+    }
+    return uuid;
+}
 
 struct Rsd::Impl
 {
