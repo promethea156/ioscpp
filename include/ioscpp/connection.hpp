@@ -77,6 +77,21 @@ public:
         return usbmuxd_;
     }
 
+    /**
+     * @brief Tears down the mux and closes the transport.
+     *
+     * Every stream on the connection must be closed first, so the resets are sent
+     * while the link is still up; this closes the link itself. The call is
+     * idempotent, so a second one is a no-op.
+     */
+    void close() noexcept;
+
+    /// Whether the connection has been closed.
+    bool closed() const noexcept
+    {
+        return closed_;
+    }
+
 private:
     friend class Stream;
 
@@ -100,6 +115,7 @@ private:
     Session session_;
     std::uint16_t next_port_ = 1;
     bool negotiated_ = false;
+    bool closed_ = false;
 
     // The `usbmuxd` path: the device's id, and a factory for a fresh socket.
     bool usbmuxd_ = false;

@@ -284,6 +284,11 @@ Stream::~Stream()
     close_now();
 }
 
+void Stream::close() noexcept
+{
+    close_now();
+}
+
 void Stream::close_now() noexcept
 {
     if (closed_ || connection_ == nullptr)
@@ -298,6 +303,13 @@ void Stream::close_now() noexcept
         {
             owned_transport_->close();
         }
+        return;
+    }
+
+    // The connection is closed as a whole before a stream, the reset would be
+    // written to a dead transport and is skipped.
+    if (connection_->closed())
+    {
         return;
     }
 

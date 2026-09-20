@@ -22,18 +22,17 @@ Slice 8 onward stays open until a real device passes it.
 
 ### Current work
 
-Slices 4 to 6 are done and proven, so the next work is the iOS 17+ `RSD` tunnel (Slice 9, #8):
-Slice 7's app install and uninstall over the mux-link `installation_proxy` and its process control are
-both blocked on it (`04-blockers.md`), because iOS 17 moved the developer services onto CoreDevice over
-RemoteXPC. The reset after the ClientHello that held Slices 4 and 5 back was the host certificate's
+Slices 4 to 6 are done and proven, and so is the explicit disconnect and reconnect (#24), so the next
+work is the iOS 17+ `RSD` tunnel (Slice 9, #8): Slice 7's app install and uninstall over the mux-link
+`installation_proxy` and its process control are both blocked on it (`04-blockers.md`), because iOS 17 moved
+the developer services onto CoreDevice over RemoteXPC. The reset after the ClientHello that held Slices 4 and 5 back was the host certificate's
 zero-length serial (`04-blockers.md`); the ClientHello was ruled out by replaying the captured reference
 ClientHello byte for byte, and the framing, version, TLS version, and pre-TLS state were each ruled out in
 turn. The temporary experiment knobs that did the ruling out are retired (issue #20), so the default path
 reads no experiment env vars. Slice 6's four AFC format corrections are in `04-blockers.md`.
 
 The open work is ordered lowest first: the iOS 17+ `RSD` tunnel (#8), then validate app install, uninstall,
-and control on a device (#6), the explicit disconnect and reconnect (#24), the guided tour (#7), the CoreDevice
-tunnel plan (#23), and DTX (#9).
+and control on a device (#6), the guided tour (#7), the CoreDevice tunnel plan (#23), and DTX (#9).
 
 - [x] Slice 0: the project layout, the `Result<T>` error model, the `Transport` interface,
   the mock transport, and the build.

@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `Device::disconnect`, an idempotent, innermost-first teardown (TLS `close_notify`,
+  then the streams, the mux, and the transport), with the destructor routed through it.
+- `Stream::close`, `Lockdown::close`, and `Connection::close`, the idempotent pieces
+  `Device::disconnect` is built from.
+- The device test disconnects, re-discovers the device by serial, and reconnects on a
+  fresh transport; `IOSCPP_TEST_REPLUG` waits for a physical unplug and replug first.
+
 ### Fixed
 
 - `Afc::list` now reads the single `DATA` packet the device sends for `READ_DIR`,

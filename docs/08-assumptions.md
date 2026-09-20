@@ -133,19 +133,28 @@ re-enumerates and its USB address changes.
 **Why we believe it.** The wire capture in `04-blockers.md` shows the device reset the mux connection, and
 `usb::DeviceId` already selects a device by serial, so discovery is the same call the first connect uses.
 
-**Status.** Not implemented. Teardown is RAII only, and `Transport::reopen` means "a fresh `usbmuxd`
-socket per port", not a reconnect.
+**Status.** Implemented. The choice is the caller-owned transport: `Device::connect` keeps taking a
+`Transport&`, `Device` stays tied to that one transport, and a reconnect is `disconnect`, destroy the
+`Device`, re-discover by serial, open a fresh transport, and `connect` again. `Transport::reopen` still
+means "a fresh `usbmuxd` socket per port" and is not the reconnect.
 
-**Proof.** A device test unplugs and replugs the device and reconnects with no stale handle.
+**Proof.** `tests/device_test.cpp` disconnects, re-discovers the device by serial, and reconnects on a
+fresh transport; with `IOSCPP_TEST_REPLUG=1` it waits for a physical unplug and replug first, so the
+re-enumeration and the new USB address are exercised.
 
 ### `disconnect` is idempotent and ordered
 
 **Assumption.** `Device::disconnect` closes innermost first (TLS `close_notify`, then streams, mux, and
 transport) and a second call is a no-op.
 
-**Status.** Not implemented; only the destructors close today.
+**Status.** Proven. `Device::disconnect` closes the `Lockdown` session (`TlsSession::close` sends the
+`close_notify`, then `Stream::close` sends the reset) and then `Connection::close` closes the transport.
+Each of `Stream::close`, `Connection::close`, `Lockdown::close`, and `Device::disconnect` is idempotent,
+and the destructors route through them. A service stream the caller opened, such as an `Afc`, must be
+destroyed first, because `Device` does not own it.
 
-**Proof.** Two `disconnect` calls leave nothing open, and the mock transport reports the ordered close.
+**Proof.** Two `disconnect` calls leave nothing open, and `tests/stream_test.cpp` drives the same order over
+the mock transport: the stream reset is written before the transport close, and neither repeats.
 
 ## AFC
 
