@@ -112,8 +112,24 @@ library uploads the app over the tunnel and asks the phone's installer to instal
 then removes it. Verified on a real iPhone running iOS 18.7.8.
 
 One piece is left: **app control** (starting, checking, and closing an app). The
-phone moved that behind a different format called `DTX`, which the library does not
-speak yet.
+phone moved that behind a different format called `DTX`, which is what the library is
+building now.
+
+## What is being built now
+
+App control talks to the phone in a different format, called `DTX`. It is not a
+property list like the phone's other services: every message has its own fixed frame, a
+**magic word**, a **length**, and the two sides' names, and then its own list of small
+values. Sending a property list to a developer service, or reading its first reply as
+one, fails.
+
+The library can now build and read that frame, checked without a phone. What is left is
+the conversation on top of it:
+
+1. **Opening a channel.** The library asks the phone's developer tools for a numbered
+   channel, and the phone answers.
+2. **Starting and stopping an app.** Over that channel, the library asks the phone to
+   start an app and to close it, and reads each answer.
 
 ## The words this project uses
 

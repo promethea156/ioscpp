@@ -76,6 +76,7 @@ add_library(ioscpp
   src/lockdown.cpp
   src/plist_service.cpp
   src/protocol/cdtunnel.cpp
+  src/protocol/dtx.cpp
   src/protocol/http2.cpp
   src/protocol/ipv6.cpp
   src/protocol/json.cpp
