@@ -17,14 +17,14 @@ namespace ioscpp::usb
 
 /// Identifies an iOS USB device, by USB serial and optionally by product id.
 ///
-/// A device in normal mode exposes the mux interface with the same USB ids
-/// regardless of model, so the USB serial is how two attached devices are told
-/// apart. The serial is the USB `iSerial` descriptor string, the same value
-/// `idevice_id -l` prints.
+/// A device in normal mode exposes the mux interface with the same class,
+/// subclass, and protocol regardless of model, so the USB serial is how two
+/// attached devices are told apart. The serial is the USB `iSerial` descriptor
+/// string, the same value `idevice_id -l` prints.
 ///
-/// A default-constructed id matches the first device, and one with only `serial`
-/// set matches by serial alone, so a caller does not need to know the product id of
-/// a device whose serial they have.
+/// A default-constructed id matches the first Apple-vendor device, and one with
+/// only `serial` set matches by serial alone, so a caller does not need to know
+/// the product id of a device whose serial they have.
 struct IOSCPP_API DeviceId
 {
     /// The USB vendor id, or zero to match any vendor. Apple's is `0x05ac`.
@@ -63,7 +63,8 @@ public:
     /// The default timeout for each bulk transfer, in milliseconds.
     static constexpr unsigned int kDefaultTransferTimeoutMs = 5000;
 
-    /// The default total a single transfer waits before it gives up, in milliseconds.
+    /// The default total a read or write waits across retries before it gives up,
+    /// in milliseconds.
     static constexpr unsigned int kDefaultTransferBudgetMs = 120000;
 
     /// Whether a USB device matching `id` is currently present.

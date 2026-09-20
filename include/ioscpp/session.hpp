@@ -25,8 +25,8 @@ struct IOSCPP_API Frame
  * @brief A framed mux session over a transport.
  *
  * This is the layer that deals in complete frames (a header plus its payload) rather
- * than raw bytes, and that owns the mux sequence numbers. It is what
- * `usbmuxd`'s `device_data_input` is on the device side:
+ * than raw bytes, and that owns the mux sequence numbers. It is the host-side
+ * counterpart of `usbmuxd`'s `device_data_input`:
  *
  *   https://github.com/libimobiledevice/usbmuxd/blob/master/src/device.c
  *
@@ -63,7 +63,8 @@ public:
         version_ = version;
     }
 
-    /// Resets the sequence numbers, as the version-2 setup packet does.
+    /// Resets the sequence numbers, as the version-2 setup packet does. The
+    /// receive sequence restarts at `0xffff`, matching `usbmuxd`.
     void reset_sequences() noexcept
     {
         tx_seq_ = 0;

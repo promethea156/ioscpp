@@ -46,7 +46,7 @@ enum class MuxProtocol : std::uint32_t
 /**
  * @brief A mux frame header.
  *
- * This mirrors `usbmuxd`'s `struct mux_header`: four 32-bit and two 16-bit words,
+ * This mirrors `usbmuxd`'s `struct mux_header`: three 32-bit and two 16-bit words,
  * sent big-endian:
  *
  *   https://github.com/libimobiledevice/usbmuxd/blob/master/src/device.c

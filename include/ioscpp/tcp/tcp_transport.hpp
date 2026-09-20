@@ -37,7 +37,8 @@ public:
     /// The default timeout for a single `recv` or `send`, in milliseconds.
     static constexpr unsigned int kDefaultTransferTimeoutMs = 5000;
 
-    /// The default total a read waits before it gives up, in milliseconds.
+    /// The default total a read or write waits across retries before it gives
+    /// up, in milliseconds.
     static constexpr unsigned int kDefaultTransferBudgetMs = 120000;
 
     /**

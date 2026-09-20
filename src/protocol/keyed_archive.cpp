@@ -62,17 +62,15 @@ std::size_t append_object(const Plist &value, Plist::Array &objects)
         objects.push_back(class_dictionary("NSDictionary", "NSObject"));
         Plist::Array keys;
         keys.reserve(items.size());
-        for (const auto &[key, item] : items)
+        for (const auto &entry : items)
         {
-            (void)item;
-            keys.push_back(Plist::uid(append_object(Plist(key), objects)));
+            keys.push_back(Plist::uid(append_object(Plist(entry.first), objects)));
         }
         Plist::Array refs;
         refs.reserve(items.size());
-        for (const auto &[key, item] : items)
+        for (const auto &entry : items)
         {
-            (void)key;
-            refs.push_back(Plist::uid(append_object(item, objects)));
+            refs.push_back(Plist::uid(append_object(entry.second, objects)));
         }
         Plist::Dictionary dictionary;
         dictionary.emplace("$class", Plist::uid(class_slot));
@@ -85,7 +83,9 @@ std::size_t append_object(const Plist &value, Plist::Array &objects)
     return objects.size() - 1;
 }
 Result<Plist> resolve(const Plist &value, const Plist::Array &objects, std::size_t depth);
-/// Resolves a `Uid` to its slot and every list of `Uid`s to its entries.
+/// Resolves a `Uid` to its slot, an array to its resolved entries, and an
+/// `NSArray`/`NSDictionary` class dictionary to a plain array or dictionary. A
+/// custom class object is returned unchanged.
 Result<Plist> resolve_object(const Plist &value, const Plist::Array &objects, std::size_t depth)
 {
     if (value.type() == PlistType::Uid)

@@ -16,7 +16,7 @@ namespace ioscpp
 /// The result of running a command over a device service.
 struct IOSCPP_API CommandResult
 {
-    /// Combined standard output and standard error.
+    /// The device's message: for an install or uninstall, its failure reason.
     std::string output;
     /// The service's status code.
     std::int32_t status = 0;

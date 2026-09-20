@@ -1,13 +1,13 @@
 // The parallel tour: every feature once against every attached device.
 //
-// This is the same tour as `examples/demo`, run for every device that is
-// attached, one thread per device: a `Device`, a `Stream`, and a `Connection` are
-// not thread-safe, but different devices are independent, so one thread per device
-// is how several are driven at once.
+// This is the same tour as `examples/demo` (minus its 15-second pause), run for
+// every device that is attached, one thread per device: a `Device`, a `Stream`, and
+// a `Connection` are not thread-safe, but different devices are independent, so one
+// thread per device is how several are driven at once.
 //
-// Read this file next to its output. Every line is prefixed with the device's USB
-// serial, so two devices are told apart. Stop `usbmuxd` first, and tap the *Trust
-// This Computer?* prompt on each device when it appears.
+// Read this file next to its output. Every per-device line is prefixed with the
+// device's USB serial, so two devices are told apart. Stop `usbmuxd` first, and tap
+// the *Trust This Computer?* prompt on each device when it appears.
 //
 // The file steps ride the mux link, which every iOS version speaks. The app steps
 // need iOS 17.4 or later, because the installer and the developer tools moved
@@ -52,13 +52,14 @@ bool run_tour(const ioscpp::usb::DeviceId &id, const std::string &bundle_id, con
 {
     using namespace ioscpp;
 
-    // Pair if needed, start the lockdown session, and read the identity.
+    // Find the device and open its USB interface.
     auto transport = usb::UsbTransport::open(id);
     if (!transport)
     {
         report(id.serial, "open: " + transport.error().message);
         return false;
     }
+    // Pair if needed, start the lockdown session, and read the identity.
     auto pairing = crypto::Pairing::load_for_udid(id.serial);
     if (!pairing)
     {
@@ -199,7 +200,7 @@ int main(int argc, char **argv)
     std::cout << devices->size() << " device(s) attached\n";
 
     // One thread per device: they are independent, so every tour runs at once.
-    // Each result is a distinct element, so the threads do not share one.
+    // Each thread writes its own element of `results`, so no two share one.
     std::vector<std::thread> tours;
     std::vector<char> results(devices->size(), 0);
     for (std::size_t i = 0; i < devices->size(); ++i)
@@ -218,7 +219,7 @@ int main(int argc, char **argv)
     bool ok = true;
     for (const char result : results)
     {
-        ok = result != 0 && ok;
+        ok = ok && result != 0;
     }
     return ok ? 0 : 1;
 }

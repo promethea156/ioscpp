@@ -69,6 +69,9 @@ constexpr std::uint32_t kMessagePlist = 8;
 constexpr std::uint32_t kPlistVersion = 1;
 constexpr std::uint32_t kResultOk = 0;
 
+/// The number of stale frames skipped while waiting for the version answer.
+constexpr int kVersionRetryAttempts = 10;
+
 } // namespace
 
 Connection::Connection(Transport &transport)
@@ -122,7 +125,7 @@ Result<Connection> Connection::open(Transport &transport)
     // A device that is still tearing down the previous run's connection can send a
     // stale frame first, so non-version frames are skipped.
     Result<Frame> answer = tl::unexpected(protocol_error("the device did not answer the version request"));
-    for (int attempt = 0; attempt < 10; ++attempt)
+    for (int attempt = 0; attempt < kVersionRetryAttempts; ++attempt)
     {
         answer = connection.session_.receive();
         if (!answer)
@@ -169,7 +172,6 @@ Result<Connection> Connection::open(Transport &transport)
         std::this_thread::sleep_for(std::chrono::milliseconds(300));
     }
 
-    connection.negotiated_ = true;
     return connection;
 }
 
@@ -201,6 +203,8 @@ Result<protocol::Plist> Connection::muxd_request(protocol::Plist request)
     const std::string body = request.to_xml();
     const std::size_t length = 16 + body.size();
 
+    // A `usbmuxd` message is a 16-byte header, then the body: the version, the
+    // message type, a tag, and the result for a `Result` message.
     std::vector<std::byte> message(length);
     put_le32(message, 0, static_cast<std::uint32_t>(length));
     put_le32(message, 4, kPlistVersion);

@@ -22,9 +22,9 @@ inline constexpr std::size_t kIpv6MaxPacketSize = kIpv6HeaderSize + 65535;
 /**
  * @brief The fixed IPv6 header.
  *
- * Only the fields the tunnel needs are decoded: the version, the payload length,
- * the next header, and the two addresses. The payload length counts every byte
- * after the fixed header, including any extension headers.
+ * `decode` fills every field, but the framer uses only the version and the payload
+ * length, and a `TcpLink` also reads the next header. The payload length counts
+ * every byte after the fixed header, including any extension headers.
  */
 struct IOSCPP_API Ipv6Header
 {

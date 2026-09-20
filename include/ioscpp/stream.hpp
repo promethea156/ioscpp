@@ -22,9 +22,9 @@ namespace ioscpp
  * There are two kinds of stream, matching the two ways into a @ref Connection.
  * On a direct USB link, a stream is a mux TCP connection to one port: `open`
  * performs the SYN / SYN|ACK / ACK exchange and leaves the connection
- * established, `write` sends `PSH|ACK` frames, and `read` collects the device's
- * data frames and acknowledges each with an `ACK`. This is what `usbmuxd` does on
- * the host side:
+ * established, `write` sends `ACK`-only data frames, and `read_exact` collects the
+ * device's data frames and acknowledges each with an `ACK`. This is what `usbmuxd`
+ * does on the host side:
  *
  *   https://github.com/libimobiledevice/usbmuxd/blob/master/src/device.c
  *
@@ -99,12 +99,13 @@ private:
 
     Stream(std::shared_ptr<Connection> connection, std::uint16_t local_port, std::uint16_t remote_port);
 
-    // Sends a reset if it has not been sent. The destructor and the move
-    // assignment both need it.
+    // Sends a reset if it has not been sent. `close`, the destructor, and the
+    // move assignment all need it.
     void close_now() noexcept;
 
     // Receives frames until one carries data for this stream, which is appended to
-    // the buffer. Returns false when the device reset the connection instead.
+    // the buffer. Returns false when the device reset the port, or, over `usbmuxd`,
+    // when the stream ended.
     Result<bool> receive_more();
 
     // Records the diagnostic the device attached to an RST, if any, for a later

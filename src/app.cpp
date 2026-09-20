@@ -71,10 +71,6 @@ Result<PackageResult> run_installer(PlistService &service, protocol::Plist::Dict
             result.success = true;
             return result;
         }
-        if (const protocol::Plist *percent = status->find("PercentComplete"); percent != nullptr)
-        {
-            result.output = state != nullptr ? state->string_or() : std::string();
-        }
     }
 }
 

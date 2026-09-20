@@ -30,14 +30,20 @@ inline constexpr std::uint8_t kPing = 0x6;
 inline constexpr std::uint8_t kGoAway = 0x7;
 inline constexpr std::uint8_t kWindowUpdate = 0x8;
 
-/// The `END_STREAM`, `END_HEADERS`, and `ACK` flags, the ones this layer sets or reads.
-inline constexpr std::uint8_t kEndStream = 0x1;
+/// The `ACK` and `END_HEADERS` flags, the ones this layer sets or reads.
 inline constexpr std::uint8_t kAck = 0x1;
 inline constexpr std::uint8_t kEndHeaders = 0x4;
 
-/// The two settings this layer reads: the stream limit and the window size.
+/// The two SETTINGS this layer uses: the stream limit it advertises and the
+/// window size it reads.
 inline constexpr std::uint16_t kSettingsMaxConcurrentStreams = 0x3;
 inline constexpr std::uint16_t kSettingsInitialWindowSize = 0x4;
+
+/// The concurrent stream limit this layer advertises.
+inline constexpr std::uint32_t kMaxConcurrentStreams = 100;
+
+/// The size of one SETTINGS entry: the 16-bit id and the 32-bit value.
+inline constexpr std::size_t kSettingEntrySize = 6;
 
 /// The HTTP/2 default window size, which a peer's window starts at.
 inline constexpr std::int32_t kDefaultWindowSize = 65535;
@@ -175,7 +181,7 @@ Status Http2::Impl::fill(std::size_t count)
 {
     while (buffer.size() < count)
     {
-        std::byte chunk[16384];
+        std::byte chunk[kMaxFrameSize];
         auto read = transport->read(chunk);
         if (!read)
         {
@@ -216,6 +222,7 @@ Status Http2::Impl::read_frame()
     switch (type)
     {
         case kData:
+            // An empty DATA frame carries nothing, so it is ignored.
             if (length > 0)
             {
                 Http2Message message;
@@ -227,8 +234,9 @@ Status Http2::Impl::read_frame()
         case kSettings:
             if ((flags & kAck) == 0)
             {
-                // Apply the peer's window size, then acknowledge.
-                for (std::size_t offset = 0; offset + 6 <= length; offset += 6)
+                // Apply the peer's window size, then acknowledge. A trailing
+                // partial entry is ignored.
+                for (std::size_t offset = 0; offset + kSettingEntrySize <= length; offset += kSettingEntrySize)
                 {
                     const std::uint16_t id = static_cast<std::uint16_t>(
                         (static_cast<unsigned>(byte_at(payload, offset)) << 8) | byte_at(payload, offset + 1));
@@ -274,7 +282,7 @@ Status Http2::Impl::read_frame()
             break;
         case kGoAway:
         {
-            // The error code and last stream id are the first two 32-bit fields.
+            // The first 32-bit field is the last stream id, the second the error code.
             failed = true;
             error = protocol_error(length >= 8 ? "the peer sent GOAWAY (code " + std::to_string(read_u32(payload, 4)) +
                                                      ", last stream " + std::to_string(read_u32(payload, 0)) + ")"
@@ -325,7 +333,7 @@ Result<Http2> Http2::connect(Transport &transport)
     }
 
     std::vector<std::byte> payload;
-    append_setting(payload, kSettingsMaxConcurrentStreams, 100);
+    append_setting(payload, kSettingsMaxConcurrentStreams, kMaxConcurrentStreams);
     append_setting(payload, kSettingsInitialWindowSize, kHttp2WindowSize);
     std::vector<std::byte> settings;
     append_frame(settings, kSettings, 0, 0, payload);

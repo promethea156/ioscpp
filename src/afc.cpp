@@ -186,6 +186,9 @@ struct Afc::Impl
             return tl::unexpected(protocol_error("the AFC magic does not match"));
         }
 
+        // A reply is a single packet, so `entire_length` is the whole payload.
+        // `this_length` is short only on a request that splits its header from its
+        // payload, such as `FILE_WRITE`, so it is validated and not used here.
         const std::uint64_t entire_length = get_le64(header, 8);
         const std::uint64_t this_length = get_le64(header, 16);
         const std::uint64_t packet_number = get_le64(header, 24);

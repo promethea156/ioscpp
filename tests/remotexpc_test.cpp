@@ -14,7 +14,7 @@ using namespace ioscpp::protocol;
 namespace
 {
 
-/// Reads `count` bytes of a hex string into a byte vector.
+/// Decodes a hex string into a byte vector, two characters per byte.
 std::vector<std::byte> hex_bytes(std::string_view hex)
 {
     std::vector<std::byte> out;

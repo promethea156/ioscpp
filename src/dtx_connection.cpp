@@ -33,7 +33,7 @@ std::uint32_t read_u32(std::span<const std::byte> bytes, std::size_t offset)
     return value;
 }
 
-/// Archives `value` into the payload of a method call or channel request.
+/// Archives `selector` as the payload of a method call or channel request.
 std::vector<std::byte> archived(std::string_view selector)
 {
     return protocol::KeyedArchive::archive(protocol::Plist(std::string(selector)));
@@ -165,6 +165,8 @@ Result<protocol::Dtx> DtxConnection::send_and_await_reply(protocol::Dtx request)
         {
             return tl::unexpected(message.error());
         }
+        // A reply shares the request's identifier and has a non-zero conversation
+        // index; the request set its own index to 0.
         if (message->identifier == request.identifier && message->conversation_index > 0)
         {
             return *message;

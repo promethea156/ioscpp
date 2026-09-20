@@ -27,11 +27,9 @@ namespace
 constexpr std::uint8_t kMuxInterfaceClass = 0xFF;
 constexpr std::uint8_t kMuxInterfaceSubClass = 0xFE;
 constexpr std::uint8_t kMuxInterfaceProtocol = 0x02;
-// Apple's vendor id; a device in normal mode presents a product id in this range.
-constexpr std::uint16_t kAppleVendorId = 0x05AC;
 
-// One bulk transfer holds at most one mux frame. `usbmuxd` sends up to 3 × 16 KiB
-// per transfer, so the read buffer is at least that large.
+// A bulk transfer can deliver up to 3 × 16 KiB, which may hold several partial
+// or whole mux frames, so the read buffer is that large.
 constexpr std::size_t kReadBufferSize = 3 * 16384;
 
 Error fail(std::string_view what, int code)
@@ -517,10 +515,9 @@ unsigned int UsbTransport::transfer_budget() const noexcept
 
 Result<std::size_t> UsbTransport::read(std::span<std::byte> buffer)
 {
-    // One bulk transfer is read at a time, but the caller may ask for fewer
-    // bytes than the transfer carries, so the remainder is buffered and handed
-    // out by later reads. The session relies on this to read a header and then a
-    // payload from two separate transfers.
+    // One bulk transfer is read at a time and the caller may ask for fewer bytes
+    // than it carries, so the remainder is buffered and handed out by later reads.
+    // A header and a payload that arrive in one transfer are split across two.
     if (impl_->incoming_offset >= impl_->incoming.size())
     {
         impl_->incoming.resize(kReadBufferSize);
@@ -557,6 +554,8 @@ Status UsbTransport::write(std::span<const std::byte> data)
     }
 
     int transferred = 0;
+    // libusb takes a non-const buffer even for an OUT transfer; it does not write
+    // through it.
     const int rc = impl_->bulk_transfer(
         impl_->endpoint_out, const_cast<unsigned char *>(reinterpret_cast<const unsigned char *>(data.data())),
         static_cast<int>(data.size()), &transferred);

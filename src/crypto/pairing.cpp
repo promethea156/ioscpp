@@ -45,19 +45,15 @@ struct Random
 {
     mbedtls_entropy_context entropy{};
     mbedtls_ctr_drbg_context drbg{};
-    bool ready = false;
 
     Random()
     {
         mbedtls_entropy_init(&entropy);
         mbedtls_ctr_drbg_init(&drbg);
         const char *personalization = "ioscpp";
-        if (mbedtls_ctr_drbg_seed(&drbg, mbedtls_entropy_func, &entropy,
-                                  reinterpret_cast<const unsigned char *>(personalization),
-                                  std::strlen(personalization)) == 0)
-        {
-            ready = true;
-        }
+        (void)mbedtls_ctr_drbg_seed(&drbg, mbedtls_entropy_func, &entropy,
+                                    reinterpret_cast<const unsigned char *>(personalization),
+                                    std::strlen(personalization));
     }
 
     ~Random()
@@ -135,7 +131,7 @@ Result<mbedtls_pk_context> generate_key_pair()
     return key;
 }
 
-/// Writes a private key as DER.
+/// Writes a private key as PEM.
 Result<std::vector<std::byte>> write_key(mbedtls_pk_context &key)
 {
     std::array<unsigned char, 4096> buffer{};
@@ -148,7 +144,7 @@ Result<std::vector<std::byte>> write_key(mbedtls_pk_context &key)
                   "-----BEGIN RSA PRIVATE KEY-----\n", "-----END RSA PRIVATE KEY-----\n");
 }
 
-/// Writes a certificate for `subject_key`, signed by `issuer_key`, as DER.
+/// Writes a certificate for `subject_key`, signed by `issuer_key`, as PEM.
 Result<std::vector<std::byte>> write_certificate(mbedtls_pk_context &subject_key, mbedtls_pk_context &issuer_key,
                                                  bool is_ca, bool has_key_usage)
 {
@@ -205,6 +201,8 @@ struct Chain
     std::vector<std::byte> device_certificate;
 };
 
+/// Generates the certificate chain for a `Pair` request: a fresh root CA, a host
+/// leaf signed by it, and a device leaf built from `device_public_key`.
 Result<Chain> generate_chain(std::span<const std::byte> device_public_key)
 {
     auto root_key = generate_key_pair();
@@ -398,9 +396,8 @@ Result<Pairing> Pairing::load(const std::filesystem::path &record_path)
     }
 
     // A fresh record: generate the host key, the self-signed certificate, and the
-    // identity strings. The host id and the system build id are stable across
-    // runs, matching `generate_host_id` and `SYSTEM_BUID`, so a record the device
-    // already holds is recognised:
+    // identity strings. The host id and the system build id are fixed UUIDs, so a
+    // record the device already holds is recognised:
     //   https://github.com/doronz88/pymobiledevice3/blob/master/pymobiledevice3/pair_records.py
     pairing.impl_->host_id = "6BA7B810-9DAD-11D1-80B4-00C04FD430C8";
     pairing.impl_->system_buid = "30142955-444094379208051516";
@@ -612,11 +609,6 @@ Status pair(Lockdown &lockdown, Pairing &pairing)
         std::this_thread::sleep_for(retry_delay);
     }
 
-    if (const protocol::Plist *error = answer->find("Error"); error != nullptr)
-    {
-        return tl::unexpected(Error{ErrorCode::Device, error->string_or("pairing failed")});
-    }
-
     auto copy = [&](std::string_view key, std::vector<std::byte> &out)
     {
         const protocol::Plist *item = answer->find(key);
@@ -681,7 +673,8 @@ namespace
 int tls_send(void *context, const unsigned char *data, std::size_t length)
 {
     auto *stream = static_cast<Stream *>(context);
-    if (std::getenv("IOSCPP_TRACE") != nullptr)
+    // A TLS record header is five bytes, so the trace reads that many only.
+    if (std::getenv("IOSCPP_TRACE") != nullptr && length >= 5)
     {
         std::fprintf(stderr, "[tls send] len=%zu first=%02x%02x%02x%02x%02x\n", length, data[0], data[1], data[2],
                      data[3], data[4]);

@@ -119,7 +119,8 @@ public:
     /// The string, or `fallback` when the value is not a string.
     std::string string_or(std::string_view fallback = {}) const;
 
-    /// The value as an unsigned integer, widening a 32-bit or 64-bit integer.
+    /// The value converted to an unsigned integer; a negative integer wraps to
+    /// its two's-complement bit pattern.
     std::optional<std::uint64_t> as_uint64() const noexcept;
 
 private:
@@ -134,9 +135,9 @@ private:
  * A `dvt` service does not exchange plists: it exchanges DTX messages, which have a
  * fixed 32-byte header, a 16-byte payload header, an optional auxiliary dictionary,
  * and then the payload bytes (`docs/04-blockers.md`). The header carries the identifier
- * a reply shares, the conversation index (0 for a request, 1 for a reply), the channel
- * code, and the `ExpectsReply` flag, and the payload header carries the message type and
- * the two lengths.
+ * a reply shares, the conversation index (0 for a request, incremented for each reply),
+ * the channel code, and the `ExpectsReply` flag, and the payload header carries the
+ * message type and the two lengths.
  *
  * `encode` writes the whole frame, so the two lengths and the header size are derived
  * rather than left to the caller, and `parse` reads one whole message. Fragmentation is
@@ -155,7 +156,8 @@ public:
     std::uint16_t fragment_count = 1;
     /// The identifier a request and its reply share.
     std::uint32_t identifier = 0;
-    /// Whether this is a request (0) or a reply (1).
+    /// The message's position in its conversation: 0 for a request, and
+    /// incremented for each reply.
     std::uint32_t conversation_index = 0;
     /// The channel the message rides on. Channel 0 is the global channel.
     std::int32_t channel_code = 0;

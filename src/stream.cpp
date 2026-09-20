@@ -28,12 +28,16 @@ Error protocol_error(std::string message)
     return Error{ErrorCode::Protocol, std::move(message)};
 }
 
-/// The largest payload one mux frame carries, matching `usbmuxd`'s `USB_MTU`.
+/// The payload capacity `usbmuxd` derives from `USB_MTU` (3 × 16 KiB) after both headers.
 constexpr std::size_t kMaxPayload = 3 * 16384 - protocol::kMuxHeaderSize - protocol::kTcpHeaderSize;
 
-/// The advertised receive window, matching `usbmuxd`'s `tx_win` (`131072`). The
-/// header carries the high 16 bits, so the value on the wire is `tx_win >> 8`.
+/// The advertised receive window, matching `usbmuxd`'s `tx_win` (`131072`). `usbmuxd`
+/// scales the 32-bit window by 256 to fit the 16-bit header field, and the receiver
+/// shifts it back left by 8.
 constexpr std::uint16_t kTcpWindow = 131072 >> 8;
+
+/// The receive buffer size for one transport read, matching `usbmuxd`'s `USB_MRU`.
+constexpr std::size_t kUsbMru = 16384;
 
 void put_le16(std::span<std::byte> bytes, std::size_t offset, std::uint16_t value) noexcept
 {
@@ -362,7 +366,7 @@ Result<bool> Stream::receive_more()
 {
     if (usbmuxd_)
     {
-        std::array<std::byte, 16384> buffer{};
+        std::array<std::byte, kUsbMru> buffer{};
         auto read = owned_transport_->read(buffer);
         if (!read)
         {
