@@ -29,6 +29,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Device::tunnel`, the iOS 17.4+ `CoreDeviceProxy` handshake, returning the RSD address,
   port, and MTU, with `protocol::Cdtunnel`'s header-length helper; the device test opens
   the tunnel and is skipped on an older device.
+- `TcpLink`, a userspace TCP client over the tunnel: it re-frames the tunnel's IPv6 packets
+  with `protocol::Ipv6Framer`, runs the SYN / SYN|ACK / ACK exchange to an RSD port, and
+  moves the connection's bytes. Tested device-free against a scripted IPv6/TCP peer, and the
+  device test reaches the RSD port on a real device.
 
 ### Fixed
 
