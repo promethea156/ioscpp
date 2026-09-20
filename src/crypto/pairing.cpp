@@ -75,21 +75,6 @@ int rng(void *context, unsigned char *output, std::size_t size)
     return mbedtls_ctr_drbg_random(&random().drbg, output, size);
 }
 
-std::string random_hex(std::size_t bytes)
-{
-    static constexpr std::string_view digits = "0123456789ABCDEF";
-    std::vector<unsigned char> buffer(bytes);
-    (void)mbedtls_ctr_drbg_random(&random().drbg, buffer.data(), buffer.size());
-    std::string text;
-    text.reserve(bytes * 2);
-    for (const unsigned char byte : buffer)
-    {
-        text.push_back(digits[byte >> 4]);
-        text.push_back(digits[byte & 0x0f]);
-    }
-    return text;
-}
-
 std::vector<std::byte> as_bytes(const unsigned char *data, std::size_t size)
 {
     return std::vector<std::byte>(reinterpret_cast<const std::byte *>(data),
@@ -317,7 +302,6 @@ struct Pairing::Impl
     std::vector<std::byte> root_private_key;
     std::vector<std::byte> device_certificate;
     std::vector<std::byte> escrow_bag;
-    std::vector<std::byte> session_key;
     std::string wifi_mac_address;
     std::string session_id;
 };
@@ -335,7 +319,6 @@ Result<Pairing> Pairing::load(const std::filesystem::path &record_path)
 {
     Pairing pairing;
     pairing.impl_->path = record_path;
-    pairing.impl_->session_key = as_bytes(reinterpret_cast<const unsigned char *>(random_hex(10).data()), 10);
 
     if (std::filesystem::exists(record_path))
     {
@@ -508,11 +491,6 @@ std::span<const std::byte> Pairing::device_certificate() const noexcept
 std::span<const std::byte> Pairing::root_certificate() const noexcept
 {
     return impl_->root_certificate;
-}
-
-std::span<const std::byte> Pairing::session_key() const noexcept
-{
-    return impl_->session_key;
 }
 
 Status pair(Lockdown &lockdown, Pairing &pairing)

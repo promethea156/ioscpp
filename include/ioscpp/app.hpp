@@ -18,8 +18,6 @@ struct IOSCPP_API CommandResult
 {
     /// The device's message: for an install or uninstall, its failure reason.
     std::string output;
-    /// The service's status code.
-    std::int32_t status = 0;
     /// Whether the device reported the command worked.
     bool success = false;
 };
@@ -34,9 +32,6 @@ struct IOSCPP_API PackageResult : CommandResult
 {
     /// The reason inside the `Error` field, or an empty string when there is none.
     std::string failure_reason() const;
-
-    /// The device's `Error` message, kept for @ref failure_reason.
-    std::string failure_reason_cache;
 };
 
 /**

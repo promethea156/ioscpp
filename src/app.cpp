@@ -61,7 +61,6 @@ Result<PackageResult> run_installer(PlistService &service, protocol::Plist::Dict
         if (const protocol::Plist *error = status->find("Error"); error != nullptr)
         {
             result.output = error->string_or("installation failed");
-            result.failure_reason_cache = result.output;
             return result;
         }
 
@@ -78,7 +77,7 @@ Result<PackageResult> run_installer(PlistService &service, protocol::Plist::Dict
 
 std::string PackageResult::failure_reason() const
 {
-    return failure_reason_cache;
+    return output;
 }
 
 Result<PackageResult> install(Device &device, const std::filesystem::path &ipa)

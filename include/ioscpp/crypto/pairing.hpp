@@ -91,9 +91,6 @@ public:
     /// The device's PEM-encoded root certificate.
     std::span<const std::byte> root_certificate() const noexcept;
 
-    /// The 20-byte AES session key derived by the pairing exchange.
-    std::span<const std::byte> session_key() const noexcept;
-
 private:
     friend Status pair(Lockdown &lockdown, Pairing &pairing);
     friend class TlsSession;
