@@ -173,6 +173,16 @@ Result<Connection> Connection::open(Transport &transport)
     return connection;
 }
 
+void Connection::close() noexcept
+{
+    if (closed_)
+    {
+        return;
+    }
+    closed_ = true;
+    session_.transport().close();
+}
+
 Status Connection::send_tcp(const protocol::TcpHeader &header, std::span<const std::byte> payload)
 {
     const std::array<std::byte, protocol::kTcpHeaderSize> encoded = header.encode();

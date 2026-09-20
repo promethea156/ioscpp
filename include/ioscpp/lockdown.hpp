@@ -79,6 +79,15 @@ public:
     /// The underlying stream, for a caller that needs the raw channel.
     Stream &stream() noexcept;
 
+    /**
+     * @brief Closes the `lockdownd` session, innermost first.
+     *
+     * Sends the TLS `close_notify` when the session is encrypted, then resets
+     * the stream. The call is idempotent, so a second one is a no-op, and the
+     * destructor routes through it, so there is one path.
+     */
+    void close() noexcept;
+
 private:
     friend Status crypto::pair(Lockdown &lockdown, crypto::Pairing &pairing);
 
