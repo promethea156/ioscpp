@@ -41,6 +41,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `SETTINGS`, `WINDOW_UPDATE`, `HEADERS`, `DATA`, `PING`, and `GOAWAY`, with the peer's window
   tracked so a payload over 64 KiB is split across `DATA` frames. Hand-rolled, tested device-free
   against a scripted peer.
+- `Rsd`, the Remote Service Discovery connection over the tunnel: the device handshake, the service
+  dictionary, `start_service` with its `RSDCheckin`, and a `TcpLink` to a named service. The device
+  test lists the RSD services and reaches one, on an iOS 18.7.8 device.
 
 ### Fixed
 
@@ -68,6 +71,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The tunnel's HTTP/2 layer is hand-rolled, with no dependency: nghttp2's session enforces
   HTTP semantics and drops the `DATA` of an empty-`HEADERS` stream, so the layer implements
   the framing itself, as go-ios and pymobiledevice3 do.
+- `TcpLink` is now a `Transport`, so the HTTP/2 layer reads and writes it directly.
+- `XpcWrapper::encode` now writes the flags word exactly as it is set rather than
+  normalizing `AlwaysSet` and `DataPresent`, so the RSD setup frames match the reference.
 - The mbedTLS TLS debug callback is now behind `IOSCPP_TRACE`, so a normal run no
   longer prints the handshake.
 - The `app` process-control functions are documented as unvalidated and blocked on the

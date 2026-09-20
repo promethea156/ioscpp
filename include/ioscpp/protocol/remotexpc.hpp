@@ -201,7 +201,7 @@ struct IOSCPP_API XpcWrapper
     /// Builds a request: `AlwaysSet`, `DataPresent`, and, when asked, `WantingReply`.
     static XpcWrapper request(std::uint64_t message_id, Xpc payload, bool wanting_reply = true);
 
-    /// Encodes the header and the body, normalizing the `AlwaysSet` and `DataPresent` flags.
+    /// Encodes the header and the body with the flags word exactly as it is set.
     std::vector<std::byte> encode() const;
 
     /// Decodes the wrapper, which must consume `bytes` exactly.

@@ -35,8 +35,9 @@ Slice 9's first increment, the `CDTunnel` frame codec and the raw-IPv6 re-framer
 device-free over the mock; its second, the `CoreDeviceProxy` handshake on `Device`, is done and proven
 on an iOS 18.7.8 device; its third, the userspace IPv6 + TCP link, is done device-free against a
 scripted peer and reaches the RSD port on the device; its fourth, the `protocol::RemoteXpc` codec, is
-done device-free; and its fifth, the `protocol::Http2` layer, is done device-free against a scripted
-peer (`docs/10-coredevice-tunnel.md`). The open work is
+done device-free; its fifth, the `protocol::Http2` layer, is done device-free against a scripted
+peer; and its sixth, the `Rsd` connection, is done and proven on an iOS 18.7.8 device, which
+lists the RSD services and reaches one (`docs/10-coredevice-tunnel.md`). The open work is
 ordered lowest first:
 the rest of the iOS 17+ `RSD` tunnel (#8), then validate app install, uninstall, and control on a
 device (#6), the guided tour (#7), and DTX (#9).
@@ -49,10 +50,10 @@ device (#6), the guided tour (#7), and DTX (#9).
 - [x] Slice 4: the USB transport.
 - [x] Slice 5: pairing and `lockdownd`.
 - [x] Slice 6: `AFC` file listing and transfer.
-- [ ] Slice 7: app install, uninstall, and control (blocked on Slice 9).
+- [ ] Slice 7: app install, uninstall, and control over the `RSD` tunnel (next).
 - [ ] Slice 8: the guided tour and the device integration test.
-- [ ] Slice 9: the iOS 17+ `RSD` tunnel, so app install/uninstall and the CoreDevice
-  services are reachable (next).
+- [x] Slice 9: the iOS 17+ `RSD` tunnel, so app install/uninstall and the CoreDevice
+  services are reachable.
 
 ## Slice 0: Layout, error model, and transport
 
