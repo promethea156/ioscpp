@@ -122,8 +122,9 @@ verified, for the same reason.
 An ordinary TCP connection to `[serverAddress]:serverRSDPort` is the RSD. It is the CoreDevice
 counterpart of the mux, and it has three layers of its own:
 
-- **HTTP/2.** `nghttp2` (MIT) drives this layer, a private dependency of the core behind a pimpl. It
-  is I/O-free (`session_mem_recv` in, `session_mem_send` out), so it fits the blocking `TcpLink`.
+- **HTTP/2.** The layer is hand-rolled, with no dependency. The frames are simple and the `HEADERS`
+  frames carry no fields, so no HPACK is needed, which is how go-ios and pymobiledevice3 do it; nghttp2's
+  session enforces HTTP semantics and drops the `DATA` of an empty-`HEADERS` stream, so it does not fit.
   The connection opens with the HTTP/2 preface `PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n`, then a
   `SETTINGS` frame, a connection `WINDOW_UPDATE`, and a `HEADERS` frame for the control stream. Every
   RemoteXPC message travels in a `DATA` frame on stream 1 (the reply channel is stream 3), and the first
@@ -160,8 +161,9 @@ plist codec (a type word, then a length-prefixed value, with an aligned string),
 - `protocol::RemoteXpc`: `XpcWrapper`, the wrapper's header and body; `XpcPayload`, the payload magic
   and version; and `Xpc`, the `xpc` object codec (`Null`, `Bool`, `Int64`, `Uint64`, `Double`, `Date`,
   `Data`, `String`, `Uuid`, `Array`, and `Dictionary`). A codec, tested device-free.
-- `protocol::Http2`: the preface, `SETTINGS`, `HEADERS`, `DATA`, and `WINDOW_UPDATE`, with flow control
-  for a payload over 64 KiB. `nghttp2` underneath, behind a pimpl, tested device-free against a scripted peer.
+- `protocol::Http2`: the preface, `SETTINGS`, `HEADERS`, `DATA`, `PING`, and `WINDOW_UPDATE`, with the
+  peer's window tracked so a payload over 64 KiB is split across `DATA` frames. Hand-rolled, tested device-free
+  against a scripted peer.
 - `Rsd`: the device handshake, the service dictionary, `start_service` with its `RSDCheckin`, and a
   `Stream` to a named service.
 - `Device::tunnel()`: starts `CoreDeviceProxy`, runs the handshake, and returns a `Tunnel` with
@@ -184,12 +186,10 @@ plist codec (a type word, then a length-prefixed value, with an aligned string),
 
 ## Build integration
 
-The hand-rolled link adds no dependency, so it is unchanged. `nghttp2` is a third `FetchContent`
-dependency next to mbedTLS and libusb, built library-only and static, and linked privately into `ioscpp`;
-it never appears in a public header, so the core stays free of it. `lwIP` remains the fallback for the link if
-the hand-rolled stack proves too fragile, and would add a vendored dependency and a `netif` port. The new sources
-join the `ioscpp` target in `CMakeLists.txt`; the codecs and the link are transport-agnostic, so they belong to
-the core and not to `ioscpp-usb`.
+The hand-rolled link and HTTP/2 layer add no dependency, so the build is unchanged. `lwIP` remains the
+fallback for the link if the hand-rolled stack proves too fragile, and would add a vendored dependency and a
+`netif` port. The new sources join the `ioscpp` target in `CMakeLists.txt`; the codecs and the link are
+transport-agnostic, so they belong to the core and not to `ioscpp-usb`.
 
 ## Increments
 
@@ -206,8 +206,9 @@ Each increment is end to end and leaves the repository working:
 4. `protocol::RemoteXpc`, the `XpcWrapper` frame, the `XpcPayload`, and the `xpc` object codec,
    device-free. No new dependency. **Done.** `Xpc`, `XpcPayload`, and `XpcWrapper` round-trip the eleven
    object kinds, and a pinned byte vector covers the dictionary's field order and padding.
-5. `protocol::Http2`, the preface, `SETTINGS`, `HEADERS`, `DATA`, and `WINDOW_UPDATE`, with flow control
-   for a payload over 64 KiB, over `nghttp2` behind a pimpl, device-free against a scripted peer.
+5. `protocol::Http2`, the preface, `SETTINGS`, `HEADERS`, `DATA`, `PING`, and `WINDOW_UPDATE`, with the
+   peer's window tracked so a payload over 64 KiB is split across `DATA` frames, hand-rolled, device-free against a
+   scripted peer. **Done.**
 6. `Rsd`, the device handshake, the service dictionary, `start_service` with its `RSDCheckin`, and a
    `Stream` to a named service, with a device test that lists the RSD services and reaches one over the
    tunnel. This is Slice 9's done-when.

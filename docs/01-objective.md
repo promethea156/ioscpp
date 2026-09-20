@@ -49,7 +49,7 @@ The host key pair, the `lockdownd` pairing exchange, and the TLS session that fo
 
 ## HTTP/2
 
-The CoreDevice tunnel's RemoteXPC layer runs over HTTP/2, which uses **nghttp2** (MIT), acquired with CMake **FetchContent** and built library-only and static. It is a private dependency of the core, kept behind a pimpl, so it never appears in a public header.
+The CoreDevice tunnel's RemoteXPC layer runs over HTTP/2, but the frames are simple and its `HEADERS` frames carry no fields, so no HPACK is needed and the layer is hand-rolled with no dependency, the way go-ios and pymobiledevice3 do it.
 
 ## Guiding Principles
 
