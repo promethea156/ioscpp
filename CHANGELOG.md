@@ -7,11 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-09-20
+
+### Removed
+
+- `CommandResult::status`, `PackageResult::failure_reason_cache`, and
+  `crypto::Pairing::session_key()`. The library never set or read them, so the
+  result types and the pairing record hold only what the library uses.
+
 ### Fixed
 
 - `usb::UsbTransport::list` no longer reports a device whose USB serial cannot be read.
   An empty serial is not a usable selector, so listing it let `open` alias the first
   device when two were attached.
+- The XML prolog skip no longer drops the `<` of `<plist>` when the prolog has no
+  trailing whitespace.
 
 ## [1.0.0] - 2026-09-20
 
@@ -175,6 +185,7 @@ identity; `AFC` and the app functions ship unvalidated on hardware.
 - `usb::UsbTransport` trims the serial descriptor's trailing NUL padding, so the
   pairing record is written as `<serial>.plist` and is found again on the next run.
 
-[Unreleased]: https://github.com/promethea156/ioscpp/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/promethea156/ioscpp/compare/v2.0.0...HEAD
+[2.0.0]: https://github.com/promethea156/ioscpp/releases/tag/v2.0.0
 [1.0.0]: https://github.com/promethea156/ioscpp/releases/tag/v1.0.0
 [0.1.0-rc.1]: https://github.com/promethea156/ioscpp/releases/tag/v0.1.0-rc.1
