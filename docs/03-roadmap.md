@@ -143,6 +143,9 @@ between steps.
 
 ## Slice 9: The iOS 17+ `RSD` tunnel
 
+The plan, with the layers, the wire formats, the API surface, the testing plan, and the
+userspace-TCP/IP decision, is in [`10-coredevice-tunnel.md`](10-coredevice-tunnel.md).
+
 iOS 17 moved the developer services off `lockdownd` and onto **CoreDevice** over
 **RemoteXPC**, and a CoreDevice service is only reachable over an **RSD** (Remote Service
 Discovery) tunnel to the device. On a device of 17.4 or later, `lockdownd` exposes the
