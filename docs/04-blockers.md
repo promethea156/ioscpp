@@ -346,6 +346,33 @@ when the `StartService` answer sets `EnableServiceSSL`, and the handshake then g
 `Stream`'s address. A `Stream` member moved after the TLS session starts leaves the session's
 pointer dangling, and the first write then crashes.
 
+### A native RSD service is reset by an `RSDCheckin`
+
+**Symptom.** With the `DTX` codec and connection layer done, the device test's launch step failed
+with `the connection ended mid-message`, right after the `com.apple.instruments.dtservicehub`
+connection came up.
+
+**Cause.** `Rsd::start_service` ran the `RSDCheckin` handshake for every service, because the
+`installation_proxy` and `AFC` shims need it. But `com.apple.instruments.dtservicehub` is a native
+RemoteXPC-era service, not a lockdown shim: `pymobiledevice3`'s DTX provider runs the check-in only for a
+service whose name ends in `.shim.remote`, and a native service speaks its own protocol on the plain
+connection. The unexpected check-in made the device reset the port.
+
+**Fix.** `Rsd::start_service` runs the `RSDCheckin` only for a `.shim.remote` service
+(`src/rsd.cpp`); the launch then reaches the device and returns a pid.
+
+### `killPid:` is dropped when the channel closes right after it
+
+**Symptom.** With the launch working, the kill left the app running: `killPid:` was written and the
+channel and the tunnel were then torn down.
+
+**Cause.** `killPid:` is fire-and-forget and does not await a reply, so a bare `killPid:` is silently
+dropped when the connection closes immediately after it (`pymobiledevice3`'s `ProcessControl.kill`).
+`sendSignal:toPid:` awaits a reply, which proves the device acted on the request before the teardown.
+
+**Fix.** `ProcessControl::kill` sends `sendSignal:toPid:` with `SIGKILL` and awaits the reply
+(`src/process_control.cpp`).
+
 ## Expected blockers
 
 The entries here are the ones already known from the reference implementations. Most have

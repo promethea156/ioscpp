@@ -52,9 +52,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   tunnel: the IPA is staged in `/PublicStaging` over the `AFC` shim, then installed over the
   `installation_proxy` shim. Verified on an iOS 18.7.8 device: a development-signed IPA installs
   and uninstalls, and an unsigned IPA is refused with `ApplicationVerificationFailed`.
+- `protocol::Dtx`, the `DTX` message codec a `com.apple.dvt.*` service speaks: the 32-byte header,
+  the payload header, the auxiliary primitive dictionary, and the acknowledgement, with a pinned byte
+  vector.
+- `protocol::KeyedArchive`, the `NSKeyedArchive` a `DTX` argument rides in, with a `Uid` kind on
+  `Plist`, matched byte for byte against `plistlib`.
+- `DtxConnection` and `DtxChannel`, the `DTX` request/reply and channel layer over a `ByteStream`:
+  the frame sizing, the identifier a request and its reply share, the acknowledgement a message that
+  expects a reply receives, the capability handshake, and `request_channel` and `method_call`.
+- `ProcessControl` and the `launch(Rsd&, bundle_id)`, `close(Rsd&, pid)`, and
+  `is_running(Rsd&, bundle_id)` process control: they open the RSD `dtservicehub` channel and
+  return the launched process id. Verified on an iOS 18.7.8 device.
 
 ### Fixed
 
+- `Rsd::start_service` now runs its `RSDCheckin` only for a `.shim.remote` service, so a native
+  service like `com.apple.instruments.dtservicehub` is no longer reset by a check-in it does not
+  expect.
+- `launch`, `close`, and `is_running` now speak `DTX` rather than a plist protocol, so they no longer
+  name a service that does not exist.
 - `Device::tunnel` now wraps the `CoreDeviceProxy` stream in TLS when the `StartService`
   answer sets `EnableServiceSSL`, so the `CDTunnel` handshake is no longer sent in plaintext
   and the device no longer resets the port. `Lockdown::start_service` returns the flag
@@ -77,6 +93,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `launch` and `is_running` now return a process id and take an `Rsd&` as well as a
+  `Device&`, and `close` now takes a process id, so a caller no longer matches a bundle id
+  against a process list.
 - The CoreDevice tunnel plan now records that RemoteXPC runs over HTTP/2, so the last
   increment is three (`protocol::RemoteXpc`, `protocol::Http2`, and `Rsd`) rather than one.
 - The tunnel's HTTP/2 layer is hand-rolled, with no dependency: nghttp2's session enforces

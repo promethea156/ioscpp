@@ -10,6 +10,7 @@
 #include "ioscpp/error.hpp"
 #include "ioscpp/lockdown.hpp"
 #include "ioscpp/plist_service.hpp"
+#include "ioscpp/process_control.hpp"
 #include "ioscpp/protocol/plist.hpp"
 #include "ioscpp/stream.hpp"
 
@@ -18,13 +19,14 @@ namespace ioscpp
 namespace
 {
 
-/// The `installation_proxy` and process-control service names.
+/// The `installation_proxy` service name and the instruments service names.
 constexpr std::string_view kInstallationProxy = "com.apple.mobile.installation_proxy";
-constexpr std::string_view kProcessControl = "com.apple.mobile.instruments";
+constexpr std::string_view kInstruments = "com.apple.instruments.remoteserver";
 
 /// The RSD shim service names the iOS 17.4+ path uses.
 constexpr std::string_view kInstallationProxyShim = "com.apple.mobile.installation_proxy.shim.remote";
 constexpr std::string_view kAfcShim = "com.apple.afc.shim.remote";
+constexpr std::string_view kInstrumentsRsd = "com.apple.instruments.dtservicehub";
 
 /// The staging directory an IPA is uploaded into before it is installed.
 constexpr std::string_view kStagingDirectory = "/PublicStaging";
@@ -204,89 +206,94 @@ Result<PackageResult> uninstall(Rsd &rsd, std::string_view bundle_id)
     return run_installer(service, std::move(command));
 }
 
-Result<CommandResult> launch(Device &device, std::string_view bundle_id)
+Result<std::uint64_t> launch(Device &device, std::string_view bundle_id)
 {
-    auto service = open_service(device, kProcessControl);
-    if (!service)
+    auto stream = device.start_service(kInstruments);
+    if (!stream)
     {
-        return tl::unexpected(service.error());
+        return tl::unexpected(stream.error());
     }
-
-    protocol::Plist::Dictionary command{
-        {"BundleId", protocol::Plist(bundle_id)},
-        {"Command", protocol::Plist("process_launch")},
-    };
-    if (Status status = service->send(protocol::Plist::dictionary(std::move(command))); !status)
+    auto control = ProcessControl::start(*stream);
+    if (!control)
     {
-        return tl::unexpected(status.error());
+        return tl::unexpected(control.error());
     }
-
-    auto answer = service->receive();
-    if (!answer)
-    {
-        return tl::unexpected(answer.error());
-    }
-
-    CommandResult result;
-    const protocol::Plist *error = answer->find("Error");
-    result.success = error == nullptr;
-    result.output = error != nullptr ? error->string_or("launch failed") : std::string();
-    return result;
+    return control->launch(bundle_id);
 }
 
-Status close(Device &device, std::string_view bundle_id)
+Status close(Device &device, std::uint64_t pid)
 {
-    auto service = open_service(device, kProcessControl);
-    if (!service)
+    auto stream = device.start_service(kInstruments);
+    if (!stream)
     {
-        return tl::unexpected(service.error());
+        return tl::unexpected(stream.error());
     }
-
-    protocol::Plist::Dictionary command{
-        {"BundleId", protocol::Plist(bundle_id)},
-        {"Command", protocol::Plist("process_kill")},
-    };
-    return service->send(protocol::Plist::dictionary(std::move(command)));
+    auto control = ProcessControl::start(*stream);
+    if (!control)
+    {
+        return tl::unexpected(control.error());
+    }
+    return control->kill(pid);
 }
 
 Result<bool> is_running(Device &device, std::string_view bundle_id)
 {
-    auto service = open_service(device, kProcessControl);
-    if (!service)
+    auto stream = device.start_service(kInstruments);
+    if (!stream)
     {
-        return tl::unexpected(service.error());
+        return tl::unexpected(stream.error());
     }
+    auto control = ProcessControl::start(*stream);
+    if (!control)
+    {
+        return tl::unexpected(control.error());
+    }
+    return control->is_running(bundle_id);
+}
 
-    protocol::Plist::Dictionary command{{"Command", protocol::Plist("process_list")}};
-    if (Status status = service->send(protocol::Plist::dictionary(std::move(command))); !status)
+Result<std::uint64_t> launch(Rsd &rsd, std::string_view bundle_id)
+{
+    auto link = rsd.start_service(kInstrumentsRsd);
+    if (!link)
     {
-        return tl::unexpected(status.error());
+        return tl::unexpected(link.error());
     }
+    auto control = ProcessControl::start(*link);
+    if (!control)
+    {
+        return tl::unexpected(control.error());
+    }
+    return control->launch(bundle_id);
+}
 
-    auto answer = service->receive();
-    if (!answer)
+Status close(Rsd &rsd, std::uint64_t pid)
+{
+    auto link = rsd.start_service(kInstrumentsRsd);
+    if (!link)
     {
-        return tl::unexpected(answer.error());
+        return tl::unexpected(link.error());
     }
-    if (const protocol::Plist *error = answer->find("Error"); error != nullptr)
+    auto control = ProcessControl::start(*link);
+    if (!control)
     {
-        return tl::unexpected(Error{ErrorCode::Device, error->string_or("process_list failed")});
+        return tl::unexpected(control.error());
     }
+    return control->kill(pid);
+}
 
-    const protocol::Plist *list = answer->find("ProcessList");
-    if (list == nullptr || list->array() == nullptr)
+Result<bool> is_running(Rsd &rsd, std::string_view bundle_id)
+{
+    auto link = rsd.start_service(kInstrumentsRsd);
+    if (!link)
     {
-        return false;
+        return tl::unexpected(link.error());
     }
-    for (const protocol::Plist &process : *list->array())
+    auto control = ProcessControl::start(*link);
+    if (!control)
     {
-        const protocol::Plist *name = process.find("BundleId");
-        if (name != nullptr && name->string_or() == bundle_id)
-        {
-            return true;
-        }
+        return tl::unexpected(control.error());
     }
-    return false;
+    return control->is_running(bundle_id);
 }
 
 } // namespace ioscpp
