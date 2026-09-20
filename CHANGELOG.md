@@ -37,6 +37,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the exact flags word, the body length, and the message id), `XpcPayload` (the payload magic and
   version), and `Xpc`, the `xpc` object codec over eleven kinds. Tested device-free, with a
   pinned byte vector for the dictionary's field order and padding.
+- `protocol::Http2`, the HTTP/2 framing the RemoteXPC messages ride on: the connection preface,
+  `SETTINGS`, `WINDOW_UPDATE`, `HEADERS`, `DATA`, `PING`, and `GOAWAY`, with the peer's window
+  tracked so a payload over 64 KiB is split across `DATA` frames. Hand-rolled, tested device-free
+  against a scripted peer.
 
 ### Fixed
 
@@ -61,8 +65,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The CoreDevice tunnel plan now records that RemoteXPC runs over HTTP/2, so the last
   increment is three (`protocol::RemoteXpc`, `protocol::Http2`, and `Rsd`) rather than one.
-- The tunnel's HTTP/2 layer now uses `nghttp2` (MIT), a private `FetchContent` dependency
-  built library-only and static behind a pimpl, in place of a hand-rolled HTTP/2 client.
+- The tunnel's HTTP/2 layer is hand-rolled, with no dependency: nghttp2's session enforces
+  HTTP semantics and drops the `DATA` of an empty-`HEADERS` stream, so the layer implements
+  the framing itself, as go-ios and pymobiledevice3 do.
 - The mbedTLS TLS debug callback is now behind `IOSCPP_TRACE`, so a normal run no
   longer prints the handshake.
 - The `app` process-control functions are documented as unvalidated and blocked on the
