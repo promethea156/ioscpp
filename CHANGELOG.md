@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-09-20
+
 ### Added
 
 - `Device::disconnect`, an idempotent, innermost-first teardown (TLS `close_notify`,
@@ -68,6 +70,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `examples/demo` now walks every feature once against one device: connect, identity, AFC
   list/push/stat/pull, the `CoreDevice` tunnel, the RSD connection, install, launch, the running
   check, close, and uninstall over the RSD shims.
+- `examples/multi`, the same tour as `examples/demo` run against every attached device, one
+  thread per device, with each device's output prefixed by its USB serial.
 
 ### Fixed
 
@@ -165,5 +169,6 @@ identity; `AFC` and the app functions ship unvalidated on hardware.
 - `usb::UsbTransport` trims the serial descriptor's trailing NUL padding, so the
   pairing record is written as `<serial>.plist` and is found again on the next run.
 
-[Unreleased]: https://github.com/promethea156/ioscpp/compare/v0.1.0-rc.1...HEAD
+[Unreleased]: https://github.com/promethea156/ioscpp/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/promethea156/ioscpp/releases/tag/v1.0.0
 [0.1.0-rc.1]: https://github.com/promethea156/ioscpp/releases/tag/v0.1.0-rc.1
