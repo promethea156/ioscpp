@@ -22,8 +22,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   number serialized without a fraction.
 - `protocol::Cdtunnel`, the `CDTunnel` frame codec and the handshake request and response,
   tested device-free over the mock.
-- `protocol::Ipv6` and `Ipv6Framer`, the fixed IPv6 header and the re-framer that turns the
-  tunnel's boundary-less byte stream into whole packets, tested device-free over the mock.
+- `protocol::Ipv6` and `Ipv6Framer`, the fixed IPv6 header and the re-framer that turns
+  the tunnel's boundary-less byte stream into whole packets, tested device-free over the mock.
+- `docs/00-start-here.md`, a plain-language tour of the project with a glossary, and a
+  plain-language introduction to the CoreDevice tunnel plan.
 
 ### Fixed
 
