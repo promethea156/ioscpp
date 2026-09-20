@@ -73,6 +73,7 @@ add_library(ioscpp
   src/connection.cpp
   src/crypto/pairing.cpp
   src/device.cpp
+  src/dtx_connection.cpp
   src/lockdown.cpp
   src/plist_service.cpp
   src/protocol/cdtunnel.cpp
