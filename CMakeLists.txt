@@ -74,6 +74,7 @@ add_library(ioscpp
   src/crypto/pairing.cpp
   src/device.cpp
   src/lockdown.cpp
+  src/plist_service.cpp
   src/protocol/cdtunnel.cpp
   src/protocol/http2.cpp
   src/protocol/ipv6.cpp

@@ -439,10 +439,36 @@ reaches the same service over the **RSD** shim
 (`com.apple.mobile.installation_proxy.shim.remote`), which the RSD tunnel carries
 (`docs/03-roadmap.md`, Slice 9).
 
-**Hit.** `ioscpp_device_tests` staged `BitBarSampleApp.ipa` (arm64, `MinimumOSVersion` 12.4) into
+**Hit.** `ioscpp_device_tests` staged an arm64 sample IPA (`MinimumOSVersion` 12.4) into
 `/PublicStaging` and sent the `Install` command `pymobiledevice3 apps install` sends, with Developer
 Mode on and the device unlocked; the device accepted the `installation_proxy` connection and never replied
 (`tests/device_test.cpp`). The `AFC` upload over the same mux link works, so the link is not the problem.
+
+**Fix.** The mux-link path stays as the pre-17.4 fallback, and `install(Rsd&)` and `uninstall(Rsd&)` now
+reach the same service over the RSD shim (`src/app.cpp`); the device test's opt-in round trip is verified on an
+iOS 18.7.8 device.
+
+### The plist length prefix is the plist size alone, not the size plus the prefix
+
+A service frames a plist the way `lockdownd` does: a 4-byte big-endian length, then the XML plist. The
+length is the plist size alone. Writing the size plus the prefix makes the device read four bytes past the
+message, wait for them, and reset the connection.
+
+**Hit.** `install(Rsd&, ipa)` staged the IPA over the RSD `AFC` shim and sent the `Install` command, and
+the device reset the connection; the staged file stat'd at its full size, so the upload was not the problem.
+The private `PlistService` wrote the size plus the prefix (`src/app.cpp`); it now writes the size alone
+through the shared `PlistService` (`src/plist_service.cpp`), and the installer shim answers with a status.
+
+### An unsigned package is refused with `ApplicationVerificationFailed`
+
+`installation_proxy` verifies a package's signature before it installs it. A development-signed IPA whose
+provisioning profile lists the device installs; an unsigned or App Store IPA is refused with
+`ApplicationVerificationFailed`, which is a device-side policy answer, not a protocol error.
+
+**Hit.** `install(Rsd&, ipa)` sent an unsigned IPA and the installer shim answered
+`ApplicationVerificationFailed`; `uninstall(Rsd&, bundle_id)` removed the same app over the installer shim,
+so the shim's command framing is right and only the signature is missing. A development-signed IPA whose
+provisioning profile lists the device then installed and uninstalled cleanly, so the path is verified.
 
 ### A CoreDevice service is not on the mux link, but on the RSD tunnel
 

@@ -177,17 +177,19 @@ mode before the path and answers `FILE_OPEN_RES`, and a message is capped at 655
 ### Install needs the package staged, then installed by device path
 
 **Assumption.** An IPA is uploaded over `AFC` into `/PublicStaging` and then installed over
-`installation_proxy` from that device-side path, and launch/close/is_running work over process
-control.
+`installation_proxy` from that device-side path. On iOS 17.4 and later both run over the RSD shims
+(`com.apple.afc.shim.remote` and `com.apple.mobile.installation_proxy.shim.remote`), and
+launch/close/is_running work over process control.
 
 **Why we believe it.** `docs/04-blockers.md` and the `installation_proxy.c` reference describe the
 staging and install. go-ios's `instruments/processcontrol.go` implements launch/close as `DTX` method
 calls (`launchSuspendedProcessWithDevicePath:...`, `killPid:`) over `com.apple.instruments.remoteserver`,
 not as the plist service the code first used.
 
-**Status.** `App` is written, but no device test covers it. On iOS 17+ the mux-link `installation_proxy`
-accepts a connection but does not answer (`docs/04-blockers.md`), and process control is a `DTX` service,
-not a plist one, so both are blocked on the `RSD` tunnel (Slice 9).
+**Status.** `App` is written. On iOS 17.4 and later `install(Rsd&)` and `uninstall(Rsd&)` ride the RSD
+shims, and the device test's opt-in round trip is verified on an iOS 18.7.8 device: a development-signed
+IPA installs and uninstalls. Process control is a `DTX` service, not a plist one, so it is blocked on the
+`DTX` codec (Slice 10).
 
 **Proof.** The demo installs, launches, checks, and closes an app on a device.
 
@@ -221,6 +223,21 @@ hand-rolled minimal IPv6 + TCP client over `lwIP` are in
 [`10-coredevice-tunnel.md`](10-coredevice-tunnel.md).
 
 **Proof.** A device of iOS 17.4 or later lists the RSD services over the tunnel.
+
+### The RSD shim services are lockdown-style plist services
+
+**Assumption.** The iOS 17.4+ `AFC` and installer shims (`com.apple.afc.shim.remote` and
+`com.apple.mobile.installation_proxy.shim.remote`) are not RemoteXPC services: after the
+`RSDCheckin`, each speaks the same length-prefixed plist framing `lockdownd` does.
+
+**Why we believe it.** pymobiledevice3's `RSD_SERVICE_NAME` reaches both over the RSD tunnel with
+an `RSDCheckin` and then the same messages as the mux-link services.
+
+**Status.** Proven on a device. The device test stages an IPA over the `AFC` shim and the installer
+shim answers a status, and `uninstall(Rsd&)` removes an app over the installer shim
+(`docs/04-blockers.md`).
+
+**Proof.** A device of iOS 17.4 or later installs a development-signed app over the RSD shims.
 
 ## Test fidelity
 

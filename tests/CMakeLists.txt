@@ -13,6 +13,7 @@ add_executable(ioscpp_tests
   http2_test.cpp
   ipv6_test.cpp
   json_test.cpp
+  plist_service_test.cpp
   plist_test.cpp
   remotexpc_test.cpp
   session_test.cpp
