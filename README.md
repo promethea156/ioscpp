@@ -4,7 +4,7 @@ A small, self-contained **iOS device client, as a C++20 library**.
 
 `ioscpp` talks to an iPhone or iPad directly, over USB, with **no `usbmuxd`, no `libimobiledevice`, and no external binary**. Embed it in a C++ program and it lists and transfers files, and installs and removes apps.
 
-> **Status: 1.0.0.** Connect, Info, Files, app install/uninstall, and app process control are proven on devices, including two driven at once, on iOS 17.5.1 and 18.7.8. The protocol slices are tracked in [`docs/03-roadmap.md`](docs/03-roadmap.md). Every fallible operation returns a `Result<T>` instead of throwing.
+> **Status: 2.0.0.** Connect, Info, Files, app install/uninstall, and app process control are proven on devices, including two driven at once, on iOS 17.5.1 and 18.7.8. The protocol slices are tracked in [`docs/03-roadmap.md`](docs/03-roadmap.md). Every fallible operation returns a `Result<T>` instead of throwing.
 
 ## How this was built
 
