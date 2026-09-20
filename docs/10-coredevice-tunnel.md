@@ -117,20 +117,35 @@ segments sized by the MTU's MSS. It does not retransmit, because the reliable mu
 carries every byte; the TCP checksum it sends is over the IPv6 pseudo-header, and the one it receives is not
 verified, for the same reason.
 
-## Layer 4: RSD and RemoteXPC
+## Layer 4: HTTP/2, RemoteXPC, and RSD
 
-An ordinary TCP connection to `[serverAddress]:serverRSDPort` is the RSD. It speaks RemoteXPC, the
-CoreDevice counterpart of the mux framing and the plist codec:
+An ordinary TCP connection to `[serverAddress]:serverRSDPort` is the RSD. It is the CoreDevice
+counterpart of the mux, and it has three layers of its own:
 
-- The RSD handshake is a plist handshake over a 16-byte multiplexed RemoteXPC frame whose **flags word
-  must be set exactly**; a wrong flags word makes the device drop the connection.
-- The body is an `xpc` dictionary, not a plist, so it needs its own codec.
-- `Rsd::get_service` sends `GetService` for a service name and returns a `Stream` to the named service's
-  port; the RSD service dictionary lists the `com.apple.dt.*` services.
+- **HTTP/2.** `nghttp2` (MIT) drives this layer, a private dependency of the core behind a pimpl. It
+  is I/O-free (`session_mem_recv` in, `session_mem_send` out), so it fits the blocking `TcpLink`.
+  The connection opens with the HTTP/2 preface `PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n`, then a
+  `SETTINGS` frame, a connection `WINDOW_UPDATE`, and a `HEADERS` frame for the control stream. Every
+  RemoteXPC message travels in a `DATA` frame on stream 1 (the reply channel is stream 3), and the first
+  requests have a **fixed frame order** the device validates: a `HEADERS` for stream 1, the init `DATA`, a
+  `HEADERS` for stream 3, then the term `DATA` for stream 1 and the init-handshake `DATA` for stream 3.
+  The device answers `GOAWAY` on a wrong stream id and `FLOW_CONTROL_ERROR` when a large payload ignores
+  the granted window, so `SETTINGS` and `WINDOW_UPDATE` must be tracked for a payload over 64 KiB.
+- **RemoteXPC.** Inside a `DATA` frame, each message is a 16-byte `XpcWrapper` whose **flags word must
+  be set exactly**; a wrong flags word makes the device drop the connection. The flags carry `ALWAYS_SET`,
+  `DATA_PRESENT` when a payload follows, and `WANTING_REPLY` for a request. The body is a `XpcPayload`
+  (magic `0x42133742`, protocol version 5) and then an `xpc` object, not a plist, so it needs its own codec.
+- **RSD.** The first RemoteXPC request is the device handshake (a dictionary with the host `UUID`), whose
+  answer carries `Properties` and `Services`, the service dictionary that lists the `com.apple.dt.*` services and
+  their ports. A service is then started by opening a connection to its port and exchanging the `RSDCheckin`
+  plist (a `Label`, `ProtocolVersion` 2, and the `Request`), which answers with `RSDCheckin` and then a
+  `StartService` message the host ignores.
 
-The exact RemoteXPC header and `xpc` codec are pinned against go-ios's RSD/RemoteXPC packages and
-pymobiledevice3's `remote/remote_service_discovery.py`, `remote/remote_service.py`, and
-`remote/xpc_message.py` during implementation, the same way the mux and plist codecs were pinned.
+The exact HTTP/2 framing, RemoteXPC header, and `xpc` codec are pinned against pymobiledevice3's
+`remote/remotexpc.py`, `remote/xpc_message.py`, and `remote/remote_service_discovery.py`, and go-ios's
+`ios/rsd.go`, the same way the mux and plist codecs were pinned. The XPC codec is the same shape as the
+plist codec (a type word, then a length-prefixed value, with an aligned string), so `protocol::Json` and
+`protocol::Plist` are the models it follows.
 
 ## API surface
 
@@ -140,8 +155,12 @@ pymobiledevice3's `remote/remote_service_discovery.py`, `remote/remote_service.p
   A codec, tested device-free.
 - `TcpLink`: re-frame the tunnel's IPv6 packets and run a small TCP client over them, with a blocking
   `connect` to `[address]:port`, `read`, `write`, and `close`. Tested device-free against a scripted peer.
-- `RemoteXpc` and `Rsd`: the frame header, the `xpc` dictionary, `GetService`, and a `Stream` to a
-  named service.
+- `protocol::RemoteXpc`: the `XpcWrapper` 16-byte frame, the `XpcPayload`, and the `xpc` object codec.
+  A codec, tested device-free.
+- `protocol::Http2`: the preface, `SETTINGS`, `HEADERS`, `DATA`, and `WINDOW_UPDATE`, with flow control
+  for a payload over 64 KiB. `nghttp2` underneath, behind a pimpl, tested device-free against a scripted peer.
+- `Rsd`: the device handshake, the service dictionary, `start_service` with its `RSDCheckin`, and a
+  `Stream` to a named service.
 - `Device::tunnel()`: starts `CoreDeviceProxy`, runs the handshake, and returns a `Tunnel` with
   `client_address`, `address`, `port`, and `mtu`. The `Tunnel` is a `Transport`, so `TcpLink` reads its
   packets directly, and the RSD connection follows. `Device::disconnect` tears it down innermost first (see
@@ -162,10 +181,12 @@ pymobiledevice3's `remote/remote_service_discovery.py`, `remote/remote_service.p
 
 ## Build integration
 
-The hand-rolled link adds no dependency, so the build is unchanged. `lwIP` would add a vendored
-dependency and a `netif` port, and would be a `FetchContent` entry next to mbedTLS if the fallback is taken.
-The new sources join the `ioscpp` target in `CMakeLists.txt`; the codecs and the link are transport-agnostic,
-so they belong to the core and not to `ioscpp-usb`.
+The hand-rolled link adds no dependency, so it is unchanged. `nghttp2` is a third `FetchContent`
+dependency next to mbedTLS and libusb, built library-only and static, and linked privately into `ioscpp`;
+it never appears in a public header, so the core stays free of it. `lwIP` remains the fallback for the link if
+the hand-rolled stack proves too fragile, and would add a vendored dependency and a `netif` port. The new sources
+join the `ioscpp` target in `CMakeLists.txt`; the codecs and the link are transport-agnostic, so they belong to
+the core and not to `ioscpp-usb`.
 
 ## Increments
 
@@ -179,8 +200,16 @@ Each increment is end to end and leaves the repository working:
 3. The userspace IPv6 + TCP link, device-free against the scripted peer, then reaching the RSD port on a device.
    **Done.** `TcpLink` re-frames the tunnel with `protocol::Ipv6Framer`, runs the handshake, and the device
    test reaches the RSD port on an iOS 18.7.8 device.
-4. `protocol::RemoteXpc`, `Rsd`, and `GetService`, with a device test that lists the RSD services and reaches
-   one over the tunnel. This is Slice 9's done-when.
+4. `protocol::RemoteXpc`, the `XpcWrapper` 16-byte frame, the `XpcPayload`, and the `xpc` object codec,
+   device-free over the mock. No new dependency.
+5. `protocol::Http2`, the preface, `SETTINGS`, `HEADERS`, `DATA`, and `WINDOW_UPDATE`, with flow control
+   for a payload over 64 KiB, over `nghttp2` behind a pimpl, device-free against a scripted peer.
+6. `Rsd`, the device handshake, the service dictionary, `start_service` with its `RSDCheckin`, and a
+   `Stream` to a named service, with a device test that lists the RSD services and reaches one over the
+   tunnel. This is Slice 9's done-when.
+
+Increments 4 to 6 were one increment in the first plan; the references show that RemoteXPC runs over
+HTTP/2, so it is three, each end to end.
 
 ## Risks and blockers
 
