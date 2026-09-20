@@ -2,9 +2,9 @@
 
 A small, self-contained **iOS device client, as a C++20 library**.
 
-`ioscpp` talks to an iPhone or iPad directly, over USB, with **no `usbmuxd`, no `libimobiledevice`, and no external binary**. Embed it in a C++ program and it lists and transfers files, installs and removes apps, and starts and stops them.
+`ioscpp` talks to an iPhone or iPad directly, over USB, with **no `usbmuxd`, no `libimobiledevice`, and no external binary**. Embed it in a C++ program and it lists and transfers files, and installs and removes apps.
 
-> **Status: 0.1.0 (scaffold).** The project layout, the public headers, the `Result<T>` error model, and the device-free test suite exist and build. The protocol slices are tracked in [`docs/03-roadmap.md`](docs/03-roadmap.md). Every fallible operation returns a `Result<T>` instead of throwing.
+> **Status: pre-0.2.0.** Connect, Info, Files, and app install/uninstall are proven on a device, on iOS 18.7.8. App process control is written but not yet validated (Slice 10). The protocol slices are tracked in [`docs/03-roadmap.md`](docs/03-roadmap.md). Every fallible operation returns a `Result<T>` instead of throwing.
 
 ## How this was built
 
@@ -47,11 +47,11 @@ a green run is just as useful as a red one, and see [Contributing](#contributing
 - **Connect**: discover a device over USB, pair with it, and reach any `lockdownd` service.
 - **Info**: query the device's model, iOS version, and unique id.
 - **Files**: list a directory, `stat` a path, and pull or push a file over `AFC`.
-- **Apps**: install and uninstall an app, launch it, check whether it is running, and close it.
+- **Apps**: install and uninstall an app over the RSD `AFC` and `installation_proxy` shims on iOS 17.4+, or the mux link below; launch it, check whether it is running, and close it.
 
-Connect, Info, and Files are proven on a device. Apps is written but not yet validated on
-hardware: on iOS 17+ it is blocked on the `RSD` tunnel, which is Slice 9 in
-[`docs/03-roadmap.md`](docs/03-roadmap.md).
+Connect, Info, Files, and app install/uninstall are proven on a device. App process control
+(`launch`/`close`/`is_running`) is written but not yet validated: it is a `DTX` service,
+Slice 10 in [`docs/03-roadmap.md`](docs/03-roadmap.md).
 
 ## Build it
 
@@ -120,6 +120,8 @@ The fastest way to learn the library is to run [`examples/demo/main.cpp`](exampl
 6. launches it;
 7. closes it.
 
+Steps 5-7 are the app steps and are still being finalized: the demo installs over the mux link, and on iOS 17.4+ that moves to the RSD shims (Slice 8), while launch and close are a `DTX` service (Slice 10).
+
 To run it, you need a device with **a trusted host** (tap *Trust* on the device when asked) and an IPA to install. The install replaces that bundle, so it loses the bundle's data.
 
 ```
@@ -134,7 +136,7 @@ It uses the first attached device. When it finishes, open the source and read it
 
 ```
 include/ioscpp/         Public headers (transport, protocol, session, stream,
-                         device, lockdown, afc, app)
+                         device, lockdown, afc, app, rsd)
 include/ioscpp/crypto/   The pairing record, backed by mbedTLS
 include/ioscpp/tcp/       The TCP transport, over the platform's sockets
 include/ioscpp/usb/       The USB transport, backed by libusb

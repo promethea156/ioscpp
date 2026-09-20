@@ -10,7 +10,7 @@ protocol assumptions explicit while they are still small enough to get right.
 
 ## Status
 
-Slices 0 to 6 are done. Slice 4 is proven on a device: `ioscpp_device_tests` walks the
+Slices 0 to 7 and Slice 9 are done; Slice 8 is the open one. Slice 4 is proven on a device: `ioscpp_device_tests` walks the
 descriptors, claims the mux interface, connects, and reads the device's identity, and it skips with
 code 77 when no matching device is attached. Slice 5 is proven too: the pairing exchange completes, the
 record is saved and reused, `StartSession` wraps `lockdownd` in TLS, and the device reports its
@@ -23,25 +23,25 @@ device-exercised, and process control moves to Slice 10's `DTX`.
 
 ### Current work
 
-Slices 4 to 6 are done and proven, and so is the explicit disconnect and reconnect (#24), so the next
-work is the iOS 17+ `RSD` tunnel (Slice 9, #8): Slice 7's app install and uninstall over the mux-link
-`installation_proxy` and its process control are both blocked on it (`04-blockers.md`), because iOS 17 moved
-the developer services onto CoreDevice over RemoteXPC. The reset after the ClientHello that held Slices 4 and 5 back was the host certificate's
+Slices 0 to 9 are done, so the next work is the guided tour (Slice 8, #7): `examples/demo`
+and `tests/device_test.cpp` walk every implemented feature against one device, including a
+replug between steps, and the demo's install moves from the mux link to the RSD shims. After
+that is `DTX` (Slice 10, #9), the `dvt` and `fetch-symbols` services and the
+`launch`/`close`/`is_running` process control that is the last piece of Slice 7 (#6).
+
+Slice 9, the iOS 17+ `RSD` tunnel, is complete: the `CDTunnel` frame codec and the raw-IPv6
+re-framer, the `CoreDeviceProxy` handshake on `Device`, the userspace IPv6 + TCP link, the
+`protocol::RemoteXpc` codec, the `protocol::Http2` layer, and the `Rsd` connection are each done
+and proven on an iOS 18.7.8 device, which lists the RSD services and reaches one
+(`docs/10-coredevice-tunnel.md`). Slice 7's install and uninstall then rode the RSD `AFC` and
+`installation_proxy` shims and are device-exercised; its process control moves to `DTX` (Slice 10).
+
+The reset after the ClientHello that held Slices 4 and 5 back was the host certificate's
 zero-length serial (`04-blockers.md`); the ClientHello was ruled out by replaying the captured reference
 ClientHello byte for byte, and the framing, version, TLS version, and pre-TLS state were each ruled out in
 turn. The temporary experiment knobs that did the ruling out are retired (issue #20), so the default path
-reads no experiment env vars. Slice 6's four AFC format corrections are in `04-blockers.md`.
-
-Slice 9's first increment, the `CDTunnel` frame codec and the raw-IPv6 re-framer, is done
-device-free over the mock; its second, the `CoreDeviceProxy` handshake on `Device`, is done and proven
-on an iOS 18.7.8 device; its third, the userspace IPv6 + TCP link, is done device-free against a
-scripted peer and reaches the RSD port on the device; its fourth, the `protocol::RemoteXpc` codec, is
-done device-free; its fifth, the `protocol::Http2` layer, is done device-free against a scripted
-peer; and its sixth, the `Rsd` connection, is done and proven on an iOS 18.7.8 device, which
-lists the RSD services and reaches one (`docs/10-coredevice-tunnel.md`). Slice 7's install and
-uninstall over the RSD shims are done and device-exercised; its process control moves to `DTX`
-(Slice 10). The open work is ordered lowest first:
-validate a successful install with a development-signed IPA (#6), the guided tour (#7), and DTX (#9).
+reads no experiment env vars. Slice 6's four AFC format corrections, and Slice 7's plist length-prefix fix,
+are in `04-blockers.md`.
 
 - [x] Slice 0: the project layout, the `Result<T>` error model, the `Transport` interface,
   the mock transport, and the build.
