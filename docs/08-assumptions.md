@@ -179,17 +179,19 @@ mode before the path and answers `FILE_OPEN_RES`, and a message is capped at 655
 **Assumption.** An IPA is uploaded over `AFC` into `/PublicStaging` and then installed over
 `installation_proxy` from that device-side path. On iOS 17.4 and later both run over the RSD shims
 (`com.apple.afc.shim.remote` and `com.apple.mobile.installation_proxy.shim.remote`), and
-launch/close/is_running work over process control.
+launch/close/is_running run over the RSD `com.apple.instruments.dtservicehub` service.
 
 **Why we believe it.** `docs/04-blockers.md` and the `installation_proxy.c` reference describe the
-staging and install. go-ios's `instruments/processcontrol.go` implements launch/close as `DTX` method
-calls (`launchSuspendedProcessWithDevicePath:...`, `killPid:`) over `com.apple.instruments.remoteserver`,
-not as the plist service the code first used.
+staging and install. pymobiledevice3's `ProcessControl` implements launch/close/is_running as `DTX`
+method calls (`launchSuspendedProcessWithDevicePath:...`, `sendSignal:toPid:`,
+`processIdentifierForBundleIdentifier:`) over the `com.apple.instruments.server.services.processcontrol`
+channel, not as the plist service the code first used.
 
 **Status.** `App` is written. On iOS 17.4 and later `install(Rsd&)` and `uninstall(Rsd&)` ride the RSD
 shims, and the device test's opt-in round trip is verified on an iOS 18.7.8 device: a development-signed
-IPA installs and uninstalls. Process control is a `DTX` service, not a plist one, so it is blocked on the
-`DTX` codec (Slice 10).
+IPA installs and uninstalls. `launch(Rsd&)`, `is_running(Rsd&)`, and `close(Rsd&)` ride the RSD
+`dtservicehub` service over `DTX`, and the same round trip launches the installed app, finds it running by
+its bundle id, and kills it by pid.
 
 **Proof.** The demo installs, launches, checks, and closes an app on a device.
 

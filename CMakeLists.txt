@@ -76,6 +76,7 @@ add_library(ioscpp
   src/dtx_connection.cpp
   src/lockdown.cpp
   src/plist_service.cpp
+  src/process_control.cpp
   src/protocol/cdtunnel.cpp
   src/protocol/dtx.cpp
   src/protocol/http2.cpp

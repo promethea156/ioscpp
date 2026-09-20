@@ -24,6 +24,7 @@
 
 #include "ioscpp/device.hpp"
 
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
@@ -34,6 +35,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <vector>
 
 #include "ioscpp/afc.hpp"
@@ -343,6 +345,38 @@ int main()
                             else
                             {
                                 std::cout << "install: installed " << bundle << "\n";
+
+                                // Process control rides the RSD
+                                // `dtservicehub` over DTX: launch the app,
+                                // prove it runs, and kill it by pid.
+                                auto launched = ioscpp::launch(*rsd, bundle);
+                                if (!launched)
+                                {
+                                    ok = check(false, "launching over the RSD failed") && ok;
+                                    std::cerr << "launch: " << launched.error().message << "\n";
+                                }
+                                else
+                                {
+                                    std::cout << "launch: launched pid " << *launched << "\n";
+                                    auto running = ioscpp::is_running(*rsd, bundle);
+                                    ok =
+                                        check(running.has_value() && *running, "the launched app is not running") && ok;
+
+                                    // Leave the app on screen for a moment, so a
+                                    // person watching the run can see it launch.
+                                    std::cout << "launch: leaving the app up for 10s\n";
+                                    std::this_thread::sleep_for(std::chrono::seconds(10));
+
+                                    if (auto closed = ioscpp::close(*rsd, *launched); !closed)
+                                    {
+                                        ok = check(false, "closing over the RSD failed") && ok;
+                                        std::cerr << "close: " << closed.error().message << "\n";
+                                    }
+                                    else
+                                    {
+                                        std::cout << "launch: closed pid " << *launched << "\n";
+                                    }
+                                }
 
                                 auto uninstalled = ioscpp::uninstall(*rsd, bundle);
                                 if (!uninstalled)

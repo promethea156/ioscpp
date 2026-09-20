@@ -7,6 +7,7 @@
 //
 // Usage: ioscpp_demo_example <bundle-id> <app.ipa>
 
+#include <cstdint>
 #include <cstdio>
 #include <filesystem>
 #include <iostream>
@@ -125,6 +126,7 @@ int main(int argc, char **argv)
     }
 
     step(6, "launch the app");
+    std::uint64_t pid = 0;
     auto launched = launch(*device, bundle_id);
     if (!launched)
     {
@@ -132,13 +134,17 @@ int main(int argc, char **argv)
     }
     else
     {
-        std::cout << (launched->success ? "launched" : "launch refused") << "\n";
+        pid = *launched;
+        std::cout << "launched pid " << pid << "\n";
     }
 
     step(7, "close the app");
-    if (auto closed = close(*device, bundle_id); !closed)
+    if (pid != 0)
     {
-        std::cerr << "close: " << closed.error().message << "\n";
+        if (auto closed = close(*device, pid); !closed)
+        {
+            std::cerr << "close: " << closed.error().message << "\n";
+        }
     }
     return 0;
 }
