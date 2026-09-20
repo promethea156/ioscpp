@@ -32,6 +32,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `Device::tunnel` now wraps the `CoreDeviceProxy` stream in TLS when the `StartService`
+  answer sets `EnableServiceSSL`, so the `CDTunnel` handshake is no longer sent in plaintext
+  and the device no longer resets the port. `Lockdown::start_service` returns the flag
+  alongside the port, and `Tunnel` is a pimpl so the TLS session's stream pointer stays
+  valid when the tunnel moves.
 - `Afc::list` now reads the single `DATA` packet the device sends for `READ_DIR`,
   instead of waiting for a `STATUS` it never sends, so listing no longer hangs.
 - `Afc::open_file` now sends the mode before the path and accepts the device's

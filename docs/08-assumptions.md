@@ -209,9 +209,11 @@ with no root.
 required. In C++ that is `lwIP` behind a custom `netif`, or a minimal IPv6 + TCP client: the tunnel needs
 only outbound TCP connections to a few RSD ports, so no ARP, DHCP, routing, or ICMP is needed.
 
-**Status.** Planned, not implemented; `CoreDeviceProxy` needs iOS 17.4 or later, which the
-device has. The layers, the wire formats, the API surface, the testing plan, and the choice of a
-hand-rolled minimal IPv6 + TCP client over `lwIP` are in
+**Status.** Partly implemented and proven on a device. The `CoreDeviceProxy` handshake runs over
+TLS and returns the RSD address, port, and MTU on an iOS 18.7.8 device
+(`docs/10-coredevice-tunnel.md`, increment 2). The userspace TCP/IP link and the RSD connection,
+which reach a service, are not implemented; the layers, the wire formats, the API surface, the testing
+plan, and the choice of a hand-rolled minimal IPv6 + TCP client over `lwIP` are in
 [`10-coredevice-tunnel.md`](10-coredevice-tunnel.md).
 
 **Proof.** A device of iOS 17.4 or later lists the RSD services over the tunnel.

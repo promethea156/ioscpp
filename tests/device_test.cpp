@@ -271,11 +271,11 @@ int main()
         }
         else
         {
-            std::cout << "tunnel: address=" << tunnel->address << " port=" << tunnel->port << " mtu=" << tunnel->mtu
-                      << "\n";
-            ok = check(!tunnel->address.empty(), "the tunnel reported no RSD address") && ok;
-            ok = check(tunnel->port != 0, "the tunnel reported no RSD port") && ok;
-            ok = check(tunnel->mtu != 0, "the tunnel reported no MTU") && ok;
+            std::cout << "tunnel: address=" << tunnel->address() << " port=" << tunnel->port()
+                      << " mtu=" << tunnel->mtu() << "\n";
+            ok = check(!tunnel->address().empty(), "the tunnel reported no RSD address") && ok;
+            ok = check(tunnel->port() != 0, "the tunnel reported no RSD port") && ok;
+            ok = check(tunnel->mtu() != 0, "the tunnel reported no MTU") && ok;
         }
     }
     else

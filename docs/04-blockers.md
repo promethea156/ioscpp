@@ -325,6 +325,27 @@ device's AFC message (`entire_length`) reached 65584 bytes, over the device's 16
 
 **Fix.** `Afc` chunks at 32 KiB (`src/afc.cpp`), so a message stays well under the cap.
 
+### The `CoreDeviceProxy` service resets a plaintext handshake
+
+**Symptom.** The device test connected to `CoreDeviceProxy`, sent the `CDTunnel` handshake
+request, and the device answered a mux control frame reading
+`socketIsClosed sock_receive returned errno 54` and a reset whose reason is
+`sessionUpcall connection closed`, with no handshake answer.
+
+**Cause.** The `StartService` answer for `CoreDeviceProxy` sets `EnableServiceSSL`, so the
+service requires TLS before it exchanges any data. The library sent the `CDTunnel` frame in
+plaintext, and the service closed the port. The frame bytes themselves match the reference, so
+the missing TLS was the whole fault.
+
+**Fix.** `Tunnel::open` wraps the service stream in `TlsSession`, using the pairing record,
+when the `StartService` answer sets `EnableServiceSSL`, and the handshake then goes over TLS
+(`src/tunnel.cpp`). `Lockdown::start_service` returns the flag alongside the port
+(`src/lockdown.cpp`), so a caller can no longer ignore it.
+
+**Note.** The `Tunnel` is a pimpl, like `Lockdown`, because the TLS session binds to the
+`Stream`'s address. A `Stream` member moved after the TLS session starts leaves the session's
+pointer dangling, and the first write then crashes.
+
 ## Expected blockers
 
 The entries here are the ones already known from the reference implementations. Most have

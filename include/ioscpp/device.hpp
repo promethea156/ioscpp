@@ -12,34 +12,10 @@
 #include "ioscpp/lockdown.hpp"
 #include "ioscpp/stream.hpp"
 #include "ioscpp/transport.hpp"
+#include "ioscpp/tunnel.hpp"
 
 namespace ioscpp
 {
-
-/**
- * @brief An open CoreDevice tunnel to a device.
- *
- * On iOS 17.4 and later the developer services are behind a `CoreDeviceProxy`
- * handshake that hands out an RSD IPv6 address and port. After the handshake the
- * `stream` is a raw IPv6 byte stream with no packet boundaries, so it is re-framed
- * and carried by a userspace TCP/IP link before the RSD port is reachable
- * (`docs/10-coredevice-tunnel.md`). The tunnel grows to own that link and the RSD
- * connection in later increments.
- *
- * The `stream` keeps the connection alive, so the tunnel must be destroyed before
- * @ref Device::disconnect, which tears the connection down.
- */
-struct IOSCPP_API Tunnel
-{
-    /// The `CoreDeviceProxy` connection, now the tunnel's raw IPv6 byte stream.
-    Stream stream;
-    /// The RSD IPv6 address on the device.
-    std::string address;
-    /// The RSD port on the device.
-    std::uint16_t port = 0;
-    /// The MTU the tunnel's re-framer uses.
-    std::uint16_t mtu = 0;
-};
 
 /**
  * @brief A connected, paired iOS device.
