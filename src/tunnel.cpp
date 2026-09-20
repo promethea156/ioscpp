@@ -35,6 +35,7 @@ struct Tunnel::Impl
 
     Stream stream;
     std::optional<crypto::TlsSession> tls;
+    std::string client_address;
     std::string address;
     std::uint16_t port = 0;
     std::uint16_t mtu = 0;
@@ -88,6 +89,20 @@ Tunnel::~Tunnel() = default;
 Tunnel::Tunnel(Tunnel &&) noexcept = default;
 Tunnel &Tunnel::operator=(Tunnel &&) noexcept = default;
 
+void Tunnel::close()
+{
+    if (impl_ == nullptr)
+    {
+        return;
+    }
+    if (impl_->tls.has_value())
+    {
+        impl_->tls->close();
+        impl_->tls.reset();
+    }
+    impl_->stream.close();
+}
+
 Result<Tunnel> Tunnel::open(Stream stream, crypto::Pairing &pairing, bool enable_ssl)
 {
     // The stream is moved into the `Impl` before the TLS session binds to it, so
@@ -137,10 +152,16 @@ Result<Tunnel> Tunnel::open(Stream stream, crypto::Pairing &pairing, bool enable
         return tl::unexpected(response.error());
     }
 
+    tunnel.impl_->client_address = std::move(response->client_address);
     tunnel.impl_->address = std::move(response->server_address);
     tunnel.impl_->port = response->server_rsd_port;
     tunnel.impl_->mtu = response->client_mtu;
     return tunnel;
+}
+
+std::string_view Tunnel::client_address() const noexcept
+{
+    return impl_->client_address;
 }
 
 std::string_view Tunnel::address() const noexcept
