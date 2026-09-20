@@ -111,6 +111,12 @@ and a single retransmission timer. The link sits below the re-framer: it reads w
 whole IPv6 packets, and exposes a blocking `connect` to `[address]:port` and a byte-stream socket to the
 RSD port.
 
+**Implemented.** `TcpLink` is that client: it re-frames the tunnel with `protocol::Ipv6Framer`, runs the
+SYN / SYN|ACK / ACK exchange in `connect`, and moves the connection's bytes in `read` and `write`, with the
+segments sized by the MTU's MSS. It does not retransmit, because the reliable mux below the tunnel already
+carries every byte; the TCP checksum it sends is over the IPv6 pseudo-header, and the one it receives is not
+verified, for the same reason.
+
 ## Layer 4: RSD and RemoteXPC
 
 An ordinary TCP connection to `[serverAddress]:serverRSDPort` is the RSD. It speaks RemoteXPC, the
@@ -132,12 +138,14 @@ pymobiledevice3's `remote/remote_service_discovery.py`, `remote/remote_service.p
   JSON. A codec, tested device-free.
 - `protocol::Ipv6`: parse and build the fixed IPv6 header and re-frame a byte stream into whole packets.
   A codec, tested device-free.
+- `TcpLink`: re-frame the tunnel's IPv6 packets and run a small TCP client over them, with a blocking
+  `connect` to `[address]:port`, `read`, `write`, and `close`. Tested device-free against a scripted peer.
 - `RemoteXpc` and `Rsd`: the frame header, the `xpc` dictionary, `GetService`, and a `Stream` to a
   named service.
-- `Device::tunnel()` (name pinned during implementation): starts `CoreDeviceProxy`, runs the handshake, and
-  returns a `Tunnel` with `address`, `port`, and `mtu`. The `Tunnel` owns the userspace link and the RSD
-  connection, so the caller reaches services by name; `Device::disconnect` tears it down innermost first
-  (see `docs/08-assumptions.md`).
+- `Device::tunnel()`: starts `CoreDeviceProxy`, runs the handshake, and returns a `Tunnel` with
+  `client_address`, `address`, `port`, and `mtu`. The `Tunnel` is a `Transport`, so `TcpLink` reads its
+  packets directly, and the RSD connection follows. `Device::disconnect` tears it down innermost first (see
+  `docs/08-assumptions.md`).
 
 ## Testing
 
@@ -167,8 +175,10 @@ Each increment is end to end and leaves the repository working:
    dependency. **Done.**
 2. The `CoreDeviceProxy` handshake on `Device`, returning the RSD address and port, with a device test that
    skips on a pre-17.4 device. **Done and proven on an iOS 18.7.8 device**: the handshake answers over TLS
-   and reports the RSD address, port, and MTU. The address and port are not reachable until increment 3.
+   and reports the RSD address, port, and MTU.
 3. The userspace IPv6 + TCP link, device-free against the scripted peer, then reaching the RSD port on a device.
+   **Done.** `TcpLink` re-frames the tunnel with `protocol::Ipv6Framer`, runs the handshake, and the device
+   test reaches the RSD port on an iOS 18.7.8 device.
 4. `protocol::RemoteXpc`, `Rsd`, and `GetService`, with a device test that lists the RSD services and reaches
    one over the tunnel. This is Slice 9's done-when.
 

@@ -82,6 +82,7 @@ add_library(ioscpp
   src/session.cpp
   src/stream.cpp
   src/tcp/tcp_transport.cpp
+  src/tcp_link.cpp
   src/tunnel.cpp
 )
 add_library(ioscpp::ioscpp ALIAS ioscpp)

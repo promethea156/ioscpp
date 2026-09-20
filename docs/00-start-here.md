@@ -93,11 +93,15 @@ the result. That is what the new tests do.
 
 ## Where it is going
 
-The rest of the tunnel is built in three more steps:
+Since then, two more pieces are done and proven on a real iPhone running iOS 18.7.8:
 
-1. Do the handshake with a real iPhone running iOS 17.4 or later, and read back the
-   address and port.
-2. Build the small network layer, and open a connection through the tunnel.
+1. **The handshake.** The library asks the phone for the tunnel, the phone answers
+   with the address, the port, and the size limit, and the library reads them back.
+2. **The small network layer.** The library wraps a request in network packets, opens
+   a connection through the tunnel to the numbered door, and the phone accepts it.
+
+One step is left:
+
 3. Learn the next data format the tunnel speaks, then ask the phone to list its
    services and reach one.
 
@@ -121,6 +125,7 @@ are written but not yet working on hardware.
 | `RemoteXPC` | The format the tunnel speaks after the handshake. |
 | `DTX` | The format the developer tools speak, the next layer after `RemoteXPC`. |
 | IPv6 | The kind of network packets the tunnel carries. |
+| TCP | The standard way two computers send data reliably. The link speaks it over the tunnel. |
 | JSON | A common text format for structured data, used by the tunnel handshake. |
 
 ## Where to read more

@@ -13,7 +13,8 @@
 // and loses its data.
 //
 // The tunnel step opens the iOS 17.4+ CoreDevice tunnel and checks the RSD
-// address, port, and MTU; it is skipped on an older device.
+// address, port, and MTU, then opens a userspace TCP link to the RSD port; it is
+// skipped on an older device.
 //
 // The lifecycle step disconnects, re-discovers the device by serial, and
 // reconnects on a fresh transport. `IOSCPP_TEST_REPLUG` waits for a physical
@@ -36,6 +37,7 @@
 #include "ioscpp/afc.hpp"
 #include "ioscpp/app.hpp"
 #include "ioscpp/crypto/pairing.hpp"
+#include "ioscpp/tcp_link.hpp"
 #include "ioscpp/usb/usb_transport.hpp"
 
 namespace
@@ -276,6 +278,33 @@ int main()
             ok = check(!tunnel->address().empty(), "the tunnel reported no RSD address") && ok;
             ok = check(tunnel->port() != 0, "the tunnel reported no RSD port") && ok;
             ok = check(tunnel->mtu() != 0, "the tunnel reported no MTU") && ok;
+
+            // The link re-frames the tunnel's IPv6 packets and opens a TCP
+            // connection to the RSD port; the RemoteXPC handshake over it is
+            // the next increment.
+            if (ok)
+            {
+                auto link = ioscpp::TcpLink::open(*tunnel, tunnel->client_address(), tunnel->mtu());
+                ok = check(link.has_value(), "the userspace TCP link did not open") && ok;
+                if (!link)
+                {
+                    std::cerr << "link: " << link.error().message << "\n";
+                }
+                else
+                {
+                    ioscpp::Status connected = link->connect(tunnel->address(), tunnel->port());
+                    ok = check(connected.has_value(), "the RSD port did not accept the connection") && ok;
+                    if (!connected)
+                    {
+                        std::cerr << "link: " << connected.error().message << "\n";
+                    }
+                    else
+                    {
+                        std::cout << "link: connected to the RSD port " << tunnel->port() << "\n";
+                        link->close();
+                    }
+                }
+            }
         }
     }
     else

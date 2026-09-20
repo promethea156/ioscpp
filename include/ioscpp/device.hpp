@@ -71,9 +71,9 @@ public:
      *
      * Starts `com.apple.internal.devicecompute.CoreDeviceProxy`, sends the
      * `CDTunnel` handshake request, and reads the device's answer into the RSD
-     * address, port, and MTU. This is the first increment of Slice 9
-     * (`docs/10-coredevice-tunnel.md`); the tunnel's link and RSD connection
-     * follow, so the returned address and port are not reachable yet.
+     * address, port, and MTU. The returned `Tunnel` is the raw IPv6 packet
+     * stream a `TcpLink` re-frames to reach the RSD port
+     * (`docs/10-coredevice-tunnel.md`); the RSD connection itself follows.
      *
      * The service does not exist before iOS 17.4, so the call is an
      * `ErrorCode::Device` error there.
