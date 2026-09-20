@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `Device::disconnect` is built from.
 - The device test disconnects, re-discovers the device by serial, and reconnects on a
   fresh transport; `IOSCPP_TEST_REPLUG` waits for a physical unplug and replug first.
+- The iOS 17+ CoreDevice tunnel plan (`docs/10-coredevice-tunnel.md`): the four layers, the
+  `CDTunnel` handshake and raw-IPv6 re-framer formats, the RSD/RemoteXPC surface, the testing
+  plan, and the choice of a hand-rolled minimal IPv6 + TCP client over `lwIP`.
 
 ### Fixed
 
