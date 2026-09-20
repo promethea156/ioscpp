@@ -345,8 +345,8 @@ int main()
 
                                     // Leave the app on screen for a moment, so a
                                     // person watching the run can see it launch.
-                                    std::cout << "launch: leaving the app up for 10s\n";
-                                    std::this_thread::sleep_for(std::chrono::seconds(10));
+                                    std::cout << "launch: leaving the app up for 15s\n";
+                                    std::this_thread::sleep_for(std::chrono::seconds(15));
 
                                     if (auto closed = ioscpp::close(*rsd, *launched); !closed)
                                     {

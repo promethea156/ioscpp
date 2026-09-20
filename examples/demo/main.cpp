@@ -12,12 +12,14 @@
 //
 // Usage: ioscpp_demo_example <bundle-id> <app.ipa>
 
+#include <chrono>
 #include <cstdint>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "ioscpp/afc.hpp"
@@ -172,6 +174,12 @@ int main(int argc, char **argv)
     std::cout << "launched pid " << *launched << "\n";
     auto running = is_running(*rsd, bundle_id);
     std::cout << (running.has_value() && *running ? "running" : "not running") << "\n";
+
+    // Leave the app on screen for a moment, so a person watching the run can
+    // see it launch.
+    std::cout << "leaving the app up for 15s\n";
+    std::this_thread::sleep_for(std::chrono::seconds(15));
+
     if (auto closed = close(*rsd, *launched); !closed)
     {
         std::cerr << "close: " << closed.error().message << "\n";
