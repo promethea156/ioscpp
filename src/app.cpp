@@ -155,22 +155,30 @@ Result<PackageResult> install(Device &device, const std::filesystem::path &ipa)
         return tl::unexpected(Error{ErrorCode::InvalidArgument, "the IPA is not a regular file"});
     }
 
-    auto afc = device.open_afc();
-    if (!afc)
-    {
-        return tl::unexpected(afc.error());
-    }
-    (void)afc->make_directory(kStagingDirectory);
-
     const std::string remote = std::string(kStagingDirectory) + "/" + ipa.filename().string();
-    if (Status status = afc->push(ipa, remote); !status)
+    // The mux connection carries one service at a time: the AFC stream is closed
+    // before the installation_proxy stream opens, because a stream left open
+    // discards the other's frames (see `Stream::receive_more`).
     {
-        return tl::unexpected(status.error());
+        auto afc = device.open_afc();
+        if (!afc)
+        {
+            return tl::unexpected(afc.error());
+        }
+        (void)afc->make_directory(kStagingDirectory);
+
+        if (Status status = afc->push(ipa, remote); !status)
+        {
+            return tl::unexpected(status.error());
+        }
     }
 
+    // An install names the staged package only: `ApplicationIdentifier` belongs to
+    // uninstall, and sending an empty one with the install makes the device refuse
+    // it. The package is a development build, so `PackageType` is `Developer`,
+    // which is what `pymobiledevice3 apps install --developer` sets.
     protocol::Plist::Dictionary command{
-        {"ApplicationIdentifier", protocol::Plist()},
-        {"ClientOptions", protocol::Plist::dictionary({})},
+        {"ClientOptions", protocol::Plist::dictionary({{"PackageType", protocol::Plist("Developer")}})},
         {"Command", protocol::Plist("Install")},
         {"PackagePath", protocol::Plist(remote)},
     };

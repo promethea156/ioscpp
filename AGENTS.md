@@ -58,7 +58,7 @@ The first time a host pairs with a device, the device shows a *Trust This Comput
 
 ### The device test is destructive when it is configured to be
 
-`ioscpp_device_tests` exits with code 77 (a CTest skip) when no matching device is attached; `IOSCPP_TEST_SERIAL` names the device to match when several are attached, and the first is used otherwise. Today it connects, reads the device's identity, and exercises AFC listing, stat, and a push/pull round trip in `/PublicStaging`; the opt-in install and uninstall round trip (`IOSCPP_TEST_IPA` and `IOSCPP_TEST_BUNDLE`) is the goal of Slice 7. That round trip uninstalls and reinstalls the bundle and loses its data, so only set those variables for an app the user has agreed to replace.
+`ioscpp_device_tests` exits with code 77 (a CTest skip) when no matching device is attached; `IOSCPP_TEST_SERIAL` names the device to match when several are attached, and the first is used otherwise. Today it connects, reads the device's identity, and exercises AFC listing, stat, and a push/pull round trip in `/PublicStaging`; the opt-in install and uninstall round trip (`IOSCPP_TEST_IPA` and `IOSCPP_TEST_BUNDLE`) is the goal of Slice 7, which is blocked on the `RSD` tunnel. That round trip uninstalls and reinstalls the bundle and loses its data, so only set those variables for an app the user has agreed to replace.
 
 ## Testing
 

@@ -47,6 +47,9 @@ struct IOSCPP_API PackageResult : CommandResult
  * an `Error`.
  *
  * @warning The install replaces an existing copy of the same bundle and loses its data.
+ *
+ * @note Not yet validated on a device: on iOS 17+ the mux-link `installation_proxy` accepts
+ * the connection but does not answer, so this is blocked on the `RSD` tunnel.
  */
 Result<PackageResult> IOSCPP_API install(Device &device, const std::filesystem::path &ipa);
 
@@ -58,6 +61,9 @@ Result<PackageResult> IOSCPP_API uninstall(Device &device, std::string_view bund
  *
  * Uses the process-control service. An app that cannot be started is
  * `success == false` with the reason, not an `Error`.
+ *
+ * @note Not yet validated on a device: the real process-control service is `DTX`, not a
+ * plist one, so this is blocked on the `RSD` tunnel.
  */
 Result<CommandResult> IOSCPP_API launch(Device &device, std::string_view bundle_id);
 

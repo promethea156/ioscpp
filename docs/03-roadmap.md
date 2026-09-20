@@ -16,21 +16,24 @@ code 77 when no matching device is attached. Slice 5 is proven too: the pairing 
 record is saved and reused, `StartSession` wraps `lockdownd` in TLS, and the device reports its
 `ProductType` and `ProductVersion` through `GetValue`. Slice 6 is proven: the device test lists the
 media root, stats it and a missing path, and round-trips a 200 KiB file through `/PublicStaging` with
-the bytes compared. Slice 7 onward stays open until a real device passes it.
+the bytes compared. Slice 7's install and uninstall over the mux-link `installation_proxy`, and its
+process control, both turned out to need the iOS 17+ `RSD` tunnel, so Slice 7 is blocked on Slice 9 and
+Slice 8 onward stays open until a real device passes it.
 
 ### Current work
 
-Slices 4 to 6 are done and proven, so the next work is Slice 7: validate app install, uninstall, and
-control against a real device (#6). The reset after the ClientHello that held Slices 4 and 5 back
-was the host certificate's zero-length serial (`04-blockers.md`); the ClientHello was ruled out by
-replaying the captured reference ClientHello byte for byte, and the framing, version, TLS version,
-and pre-TLS state were each ruled out in turn. The temporary experiment knobs that did the ruling
-out are retired (issue #20), so the default path reads no experiment env vars. Slice 6's four AFC
-format corrections are in `04-blockers.md`.
+Slices 4 to 6 are done and proven, so the next work is the iOS 17+ `RSD` tunnel (Slice 9, #8):
+Slice 7's app install and uninstall over the mux-link `installation_proxy` and its process control are
+both blocked on it (`04-blockers.md`), because iOS 17 moved the developer services onto CoreDevice over
+RemoteXPC. The reset after the ClientHello that held Slices 4 and 5 back was the host certificate's
+zero-length serial (`04-blockers.md`); the ClientHello was ruled out by replaying the captured reference
+ClientHello byte for byte, and the framing, version, TLS version, and pre-TLS state were each ruled out in
+turn. The temporary experiment knobs that did the ruling out are retired (issue #20), so the default path
+reads no experiment env vars. Slice 6's four AFC format corrections are in `04-blockers.md`.
 
-The open work is ordered P5 to P10, lowest first: validate Slice 7 on a device (#6), add the explicit
-disconnect and reconnect (#24), then the guided tour (#7), the CoreDevice tunnel plan and
-implementation (#23, #8), and DTX (#9).
+The open work is ordered lowest first: the iOS 17+ `RSD` tunnel (#8), then validate app install, uninstall,
+and control on a device (#6), the explicit disconnect and reconnect (#24), the guided tour (#7), the CoreDevice
+tunnel plan (#23), and DTX (#9).
 
 - [x] Slice 0: the project layout, the `Result<T>` error model, the `Transport` interface,
   the mock transport, and the build.
@@ -40,9 +43,10 @@ implementation (#23, #8), and DTX (#9).
 - [x] Slice 4: the USB transport.
 - [x] Slice 5: pairing and `lockdownd`.
 - [x] Slice 6: `AFC` file listing and transfer.
-- [ ] Slice 7: app install, uninstall, and control.
+- [ ] Slice 7: app install, uninstall, and control (blocked on Slice 9).
 - [ ] Slice 8: the guided tour and the device integration test.
-- [ ] Slice 9: the iOS 17+ `RSD` tunnel, so the CoreDevice services are reachable.
+- [ ] Slice 9: the iOS 17+ `RSD` tunnel, so app install/uninstall and the CoreDevice
+  services are reachable (next).
 
 ## Slice 0: Layout, error model, and transport
 
@@ -120,6 +124,11 @@ frame is an `ErrorCode::Protocol` error.
 - `app.hpp`: `install` and `uninstall` over `installation_proxy`, and `launch`, `close`, and
   `is_running` over process control.
 
+**Blocked on Slice 9.** On iOS 17+ the mux-link `installation_proxy` accepts a connection but does not
+answer, and process control is not a plist service at all: both need the `RSD` tunnel
+(`docs/04-blockers.md`). The staging, install, and control code is written but stays unvalidated until
+the tunnel exists.
+
 **Done when:** the tour installs, launches, checks, and closes an app.
 
 ## Slice 8: The guided tour and the device integration test
@@ -143,9 +152,9 @@ handshake returns the tunnel interface's address, MTU, and RSD port and then car
 tunnel's IPv6 packets as data. On 17.0–17.3.1 the same tunnel is reached over the Wi-Fi
 **RemotePairing** route instead.
 
-The tunnel is what every later CoreDevice feature needs, so it is scheduled after the
-`lockdownd`, AFC, app install, and guided-tour work that runs over the plain mux (P8), and
-it is built the same way the rest of the library is: no `usbmuxd`, no `tunneld`
+The tunnel is what app install, uninstall, and control, and every later CoreDevice feature, need,
+so it is the next work after the `lockdownd` and AFC work that runs over the plain mux, and it is
+built the same way the rest of the library is: no `usbmuxd`, no `tunneld`
 daemon, and no TUN interface. The device's own tunnel address is only reachable from this
 process, which is the userspace model; a kernel-routable tunnel is a later improvement.
 
