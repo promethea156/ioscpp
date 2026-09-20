@@ -98,16 +98,8 @@ automatically (`CMakeLists.txt`).
 ### USB driver
 
 libusb on Windows cannot open the device through Apple's `usbaapl64` driver; the mux
-interface needs a libusb-compatible driver bound to it. Bind one to the interface only, so the
-rest of the device keeps Apple's driver.
-
-1. Install [Zadig](https://zadig.akeo.ie/).
-2. Put the device in the normal (unlocked) mode and plug it in.
-3. In Zadig, enable *List All Devices*, pick the Apple device, and install a driver.
-4. Replug the device.
-
-Replacing the whole composite device's driver instead of one interface can make iTunes
-re-pair it; binding the single interface avoids that.
+interface needs a libusb-compatible driver bound to it. Bind one to the interface only,
+so the rest of the device keeps Apple's driver.
 
 **Use libusb-win32, not WinUSB.** libusb's WinUSB backend never sends
 `SET_CONFIGURATION` to the device; its libusb0 backend does. A device in its initial
@@ -115,7 +107,36 @@ USB mode does not sit in the configuration that carries the mux interface, so a 
 driver leaves the mux interface unreachable, and `list` reports `no device attached`.
 libusb-win32 (`libusb0.sys`) is needed for `ioscpp` to select the configuration
 itself, as `usbmuxd` does. A device that is already in the right configuration, for
-example because Apple Mobile Device Support selected it, works with either.
+example because Apple Mobile Device Support selected it, works with either. `libusbK`
+cannot select a configuration either, so it has the same limit as WinUSB.
+
+Install the driver with **Device Manager**, so no installer is needed:
+
+1. Download the libusb-win32 binary package (`libusb-win32-bin-1.4.0.2.zip`) from
+   [SourceForge](https://sourceforge.net/projects/libusb-win32/files/libusb-win32-release/)
+   and extract it.
+2. The package's `bin\libusb0.inf` ships another device's hardware id, in the `DeviceID`
+   string of its `[Strings]` section. Set it to the mux interface's hardware id,
+   `VID_05AC&PID_12A8&MI_01`; check the interface's *Hardware Ids* in Device Manager if
+   the interface number differs.
+3. Put the device in the normal (unlocked) mode and plug it in.
+4. In **Device Manager**, find the mux interface: *View* -> *Devices by connection*, then
+   the Apple composite device and its `Apple Mobile Device USB Device` (interface 1).
+5. *Update driver* -> *Browse my computer* -> *Let me pick from a list* -> *Have Disk* ->
+   browse to `libusb0.inf` -> **libusb-win32** -> install.
+6. Replug the device.
+
+The binding is per device, so every device a host talks to needs the step once; it survives
+replugs. With two devices attached and only one bound, the unbound one has no readable serial,
+so `list` leaves it out and it is not driven.
+
+Editing the INF leaves its catalog signature stale, so a machine with driver signature
+enforcement on can refuse the package; the install then needs enforcement off, or the package
+re-signed. [Zadig](https://zadig.akeo.ie/) generates and signs a package for the device
+instead, with no INF editing, so it is the shorter route when the manual one is refused.
+
+Replacing the whole composite device's driver instead of one interface can make iTunes
+re-pair it; binding the single interface avoids that.
 
 The libusb0 driver also needs `libusbK.dll` in `System32`; the libusbK setup
 provides it.
@@ -179,18 +200,18 @@ work around that.
 ### Reaching a reference through Apple Mobile Device Support
 
 Apple's own stack is the most faithful reference, and it needs no second host. It
-does need the device back on Apple's driver, which `Zadig` cannot install, and it
-is exclusive with `ioscpp` on the device, so capture the reference and switch back.
+does need the device back on Apple's driver, which the libusb0 package cannot install,
+and it is exclusive with `ioscpp` on the device, so capture the reference and switch back.
 
 1. Install the **desktop** iTunes support package, not the Microsoft Store build,
    which is a UWP package and does not register the driver or the service the same
    way. `iTunes64Setup.exe /extract` unpacks it, then install
    `AppleMobileDeviceSupport64.msi`, which registers `Apple Mobile Device Service`
    and the `usbaapl64` driver.
-2. Restore the driver in **Device Manager**, since `Zadig` only installs its own
-   drivers: *Update driver* -> *Browse my computer* -> *Let me pick from a list* ->
-   *Apple Mobile Device USB Driver*. Do not uninstall with *delete the driver
-   software* ticked, or the `libusb0` binding is lost and the `Zadig` step is
+2. Restore the driver in **Device Manager**, since *Have Disk* only installs the
+   package it is pointed at: *Update driver* -> *Browse my computer* -> *Let me pick
+   from a list* -> *Apple Mobile Device USB Driver*. Do not uninstall with *delete the
+   driver software* ticked, or the `libusb0` binding is lost and the driver step is
    redone.
 3. Start the service, answer the trust prompt, and confirm the reference reaches the
    device:
@@ -207,8 +228,8 @@ is exclusive with `ioscpp` on the device, so capture the reference and switch ba
    `tshark -r ref_run.pcapng -Y 'usb.src == "device" && usb.data_len > 40'`.
    The device answers with a ServerHello, which is the reference the host's own
    handshake was compared against (`04-blockers.md`).
-5. Stop the service, rebind the mux interface to `libusb-win32` in `Zadig`, and
-   run `ioscpp` again.
+5. Stop the service, rebind the mux interface to `libusb-win32` as above, and run
+   `ioscpp` again.
 
 ## Verify
 
