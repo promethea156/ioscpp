@@ -1,23 +1,21 @@
 #include "ioscpp/device.hpp"
 
-#include <array>
 #include <cstdio>
 #include <cstdlib>
 #include <memory>
 #include <string>
 #include <string_view>
 #include <utility>
-#include <vector>
 
 #include "ioscpp/afc.hpp"
 #include "ioscpp/connection.hpp"
 #include "ioscpp/crypto/pairing.hpp"
 #include "ioscpp/error.hpp"
 #include "ioscpp/lockdown.hpp"
-#include "ioscpp/protocol/cdtunnel.hpp"
 #include "ioscpp/protocol/plist.hpp"
 #include "ioscpp/protocol/usbmux.hpp"
 #include "ioscpp/stream.hpp"
+#include "ioscpp/tunnel.hpp"
 
 namespace ioscpp
 {
@@ -179,12 +177,12 @@ Lockdown &Device::lockdown() noexcept
 
 Result<Stream> Device::start_service(std::string_view name)
 {
-    auto port = impl_->lockdown.start_service(name);
-    if (!port)
+    auto service = impl_->lockdown.start_service(name);
+    if (!service)
     {
-        return tl::unexpected(port.error());
+        return tl::unexpected(service.error());
     }
-    return Stream::open(impl_->connection, *port);
+    return Stream::open(impl_->connection, service->port);
 }
 
 Result<Afc> Device::open_afc()
@@ -199,47 +197,22 @@ Result<Afc> Device::open_afc()
 
 Result<Tunnel> Device::tunnel()
 {
-    auto stream = start_service(kCoreDeviceProxyService);
+    auto service = impl_->lockdown.start_service(kCoreDeviceProxyService);
+    if (!service)
+    {
+        return tl::unexpected(service.error());
+    }
+
+    auto stream = Stream::open(impl_->connection, service->port);
     if (!stream)
     {
         return tl::unexpected(stream.error());
     }
 
-    const protocol::CdtunnelRequest request;
-    const std::vector<std::byte> frame = protocol::cdtunnel_encode(request.to_json());
-    if (Status status = stream->write(frame); !status)
-    {
-        return tl::unexpected(status.error());
-    }
-
-    // The tunnel's stream has no packet boundaries, so the header is read first
-    // and its length then decides how much of the body to read.
-    std::array<std::byte, protocol::kCdtunnelHeaderSize> header{};
-    if (Status status = stream->read(header); !status)
-    {
-        return tl::unexpected(status.error());
-    }
-    auto length = protocol::cdtunnel_header_length(header);
-    if (!length)
-    {
-        return tl::unexpected(length.error());
-    }
-
-    std::vector<std::byte> body(*length);
-    if (Status status = stream->read(body); !status)
-    {
-        return tl::unexpected(status.error());
-    }
-
-    auto response =
-        protocol::CdtunnelResponse::parse(std::string(reinterpret_cast<const char *>(body.data()), body.size()));
-    if (!response)
-    {
-        return tl::unexpected(response.error());
-    }
-
-    return Tunnel{std::move(*stream), std::move(response->server_address), response->server_rsd_port,
-                  response->client_mtu};
+    // `CoreDeviceProxy` sets `EnableServiceSSL`, so the service requires TLS
+    // before it answers the handshake. Sending the frame in plaintext makes the
+    // device reset the port (`sessionUpcall connection closed`).
+    return Tunnel::open(std::move(*stream), *impl_->pairing, service->enable_ssl);
 }
 
 } // namespace ioscpp

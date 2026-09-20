@@ -16,3 +16,4 @@
 #include "ioscpp/stream.hpp"
 #include "ioscpp/tcp/tcp_transport.hpp"
 #include "ioscpp/transport.hpp"
+#include "ioscpp/tunnel.hpp"
