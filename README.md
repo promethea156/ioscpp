@@ -4,7 +4,7 @@ A small, self-contained **iOS device client, as a C++20 library**.
 
 `ioscpp` talks to an iPhone or iPad directly, over USB, with **no `usbmuxd`, no `libimobiledevice`, and no external binary**. Embed it in a C++ program and it lists and transfers files, and installs and removes apps.
 
-> **Status: 1.0.0.** Connect, Info, Files, app install/uninstall, and app process control are proven on a device, on iOS 18.7.8. The protocol slices are tracked in [`docs/03-roadmap.md`](docs/03-roadmap.md). Every fallible operation returns a `Result<T>` instead of throwing.
+> **Status: 1.0.0.** Connect, Info, Files, app install/uninstall, and app process control are proven on devices, including two driven at once, on iOS 17.5.1 and 18.7.8. The protocol slices are tracked in [`docs/03-roadmap.md`](docs/03-roadmap.md). Every fallible operation returns a `Result<T>` instead of throwing.
 
 ## How this was built
 
@@ -51,7 +51,9 @@ a green run is just as useful as a red one, and see [Contributing](#contributing
 
 Connect, Info, Files, app install/uninstall, and app process control are proven on a
 device. Process control rides the RSD `com.apple.instruments.dtservicehub` service over
-`DTX`, Slice 10 in [`docs/03-roadmap.md`](docs/03-roadmap.md).
+`DTX`, Slice 10 in [`docs/03-roadmap.md`](docs/03-roadmap.md). Several devices are
+independent, so a program can drive every attached device at once, one thread per device;
+[`examples/multi`](examples/multi/main.cpp) does exactly that.
 
 ## Build it
 
@@ -131,7 +133,17 @@ build/examples/Release/ioscpp_demo_example <bundle-id> <app.ipa>
 
 The binary is under `build/examples/Release/` for a multi-config generator (Visual Studio, Xcode) and `build/examples/` for a single-config one (Makefiles, Ninja).
 
-It uses the first attached device. When it finishes, open the source and read it next to the output: each `step(...)` in the source is one of the seven steps above.
+It uses the first attached device. When it finishes, open the source and read it next to the output: each `step(...)` in the source is one of the eight steps above.
+
+## Run it against every device
+
+[`examples/multi/main.cpp`](examples/multi/main.cpp) is the same tour run against every attached device at once, one thread per device. A `Device`, a `Stream`, and a `Connection` are not thread-safe, but different devices are independent, so one thread per device is how several are driven together. Every line is prefixed with the device's USB serial, so two devices are told apart.
+
+```
+build/examples/Release/ioscpp_multi_example <bundle-id> <app.ipa>
+```
+
+Every device needs the host setup in [`docs/09-platform-setup.md`](docs/09-platform-setup.md), including its own USB driver binding on Windows. Each device's install replaces that bundle on that device, so it loses the bundle's data there.
 
 ## Project Layout
 
