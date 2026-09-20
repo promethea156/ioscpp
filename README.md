@@ -114,11 +114,11 @@ cmake --build build --target ioscpp_docs
 
 The fastest way to learn the library is to run [`examples/demo/main.cpp`](examples/demo/main.cpp) and read it as it runs. It is one file, and every step is commented with what the call does on the device and which protocol it speaks, so the source is the walkthrough. It:
 
-1. finds an attached device and opens its USB interface, with the mux negotiation;
-2. pairs with it if it is not paired, starts the `lockdownd` session, and reads the identity;
+1. finds an attached device and opens its USB interface;
+2. negotiates the mux, pairs with it if it is not paired, starts the `lockdownd` session, and reads the identity;
 3. opens `AFC` and lists the media root;
 4. pushes a file into `/PublicStaging`, stats it, and pulls it back;
-5. opens the CoreDevice tunnel and the RSD connection, listing the services;
+5. opens the CoreDevice tunnel and the RSD connection, reporting how many services it lists;
 6. installs an app from an IPA, replacing an existing copy;
 7. launches it, checks it is running, and closes it;
 8. uninstalls it.

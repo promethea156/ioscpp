@@ -32,23 +32,27 @@ Error device_error(std::string message)
 /// The suffix a lockdown service shimmed over the RSD carries.
 constexpr std::string_view kShimSuffix = ".shim.remote";
 
+/// The `RemoteXPCVersionFlags` and `MessagingProtocolVersion` the device handshake sends.
+constexpr std::uint64_t kRemoteXpcVersionFlags = 0x0100000000000006ULL;
+constexpr std::uint64_t kMessagingProtocolVersion = 7;
+
 /// The device handshake the RSD answers `Properties` and `Services` to.
 protocol::Xpc device_handshake(const RsdUuid &uuid)
 {
     protocol::Xpc::Dictionary properties;
-    properties.emplace("RemoteXPCVersionFlags", protocol::Xpc::uint64(0x0100000000000006ULL));
+    properties.emplace("RemoteXPCVersionFlags", protocol::Xpc::uint64(kRemoteXpcVersionFlags));
     properties.emplace("SensitivePropertiesVisible", protocol::Xpc(true));
 
     protocol::Xpc::Dictionary handshake;
     handshake.emplace("MessageType", protocol::Xpc("Handshake"));
-    handshake.emplace("MessagingProtocolVersion", protocol::Xpc::uint64(7));
+    handshake.emplace("MessagingProtocolVersion", protocol::Xpc::uint64(kMessagingProtocolVersion));
     handshake.emplace("UUID", protocol::Xpc::uuid(uuid));
     handshake.emplace("Properties", protocol::Xpc::dictionary(std::move(properties)));
     handshake.emplace("Services", protocol::Xpc::dictionary({}));
     return protocol::Xpc::dictionary(std::move(handshake));
 }
 
-/// The reply's `Properties` and `Services`, parsed into the service dictionary.
+/// The reply's `Services`, parsed into the service dictionary.
 std::map<std::string, RsdService, std::less<>> parse_services(const protocol::Xpc &reply)
 {
     std::map<std::string, RsdService, std::less<>> services;

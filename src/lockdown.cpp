@@ -30,6 +30,9 @@ Error protocol_error(std::string message)
     return Error{ErrorCode::Protocol, std::move(message)};
 }
 
+// The smallest valid XML plist is `<plist/>`, which is eight bytes.
+constexpr std::uint32_t kMinPlistLength = 8;
+
 void put_be32(std::span<std::byte> bytes, std::uint32_t value) noexcept
 {
     bytes[0] = static_cast<std::byte>((value >> 24) & 0xff);
@@ -160,7 +163,7 @@ Result<protocol::Plist> Lockdown::request(protocol::Plist request)
         return tl::unexpected(status.error());
     }
     const std::uint32_t length = get_be32(length_bytes);
-    if (length < 8)
+    if (length < kMinPlistLength)
     {
         return tl::unexpected(protocol_error("the lockdownd answer is too short"));
     }

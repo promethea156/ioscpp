@@ -42,15 +42,15 @@ struct Date
 /**
  * @brief A property list value.
  *
- * Property lists are how every control message on the device is encoded, so this is the
- * foundation the `lockdownd`, `installation_proxy`, and process-control clients are
- * built on. The value is a variant over the nine plist kinds, and the accessors return
- * an empty `optional` (or a null pointer) when the held kind does not match rather than
- * converting.
+ * Property lists are how the `lockdownd` and `installation_proxy` control messages are
+ * encoded, so this is the foundation those clients are built on. The value is a variant
+ * over the ten plist kinds, and the accessors return an empty `optional` (or a null
+ * pointer) when the held kind does not match rather than converting.
  *
  * The codec parses both the XML form, which is what `lockdownd` and
  * `installation_proxy` send, and the binary `bplist00` form, which some services use.
- * Serialization writes the XML form, which every device accepts.
+ * @ref to_xml writes the XML form, which every device accepts, and @ref to_binary
+ * writes the `bplist00` form.
  *
  * A dictionary keeps its keys sorted, so a serialized dictionary is deterministic.
  */

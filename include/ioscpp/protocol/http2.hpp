@@ -23,7 +23,7 @@ inline constexpr std::uint32_t kHttp2ControlStream = 1;
 /// The stream the server sends its replies on.
 inline constexpr std::uint32_t kHttp2ReplyStream = 3;
 
-/// The initial window the client grants, the HTTP/2 default plus its own increment.
+/// The receive window the client grants (16 MiB).
 inline constexpr std::uint32_t kHttp2WindowSize = 16 * 1024 * 1024;
 
 /// The connection-level window increment the client grants to reach @ref kHttp2WindowSize.

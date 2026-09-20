@@ -20,10 +20,11 @@ namespace ioscpp::protocol
  * whose `root` is a `Uid` into `$objects`, and the `$objects` table whose first
  * slot is `$null`.
  *
- * An object that is a string, number, `Data`, or date is stored inline in
- * `$objects`; an array or dictionary is stored as a dictionary with a `$class`
- * `Uid` and the `NS.keys`/`NS.objects` `Uid` lists, and its class is another
- * `$objects` entry. A `Uid` refers to a slot by index.
+ * An object that is not an array or dictionary (a string, number, `Data`, date,
+ * boolean, or null) is stored inline in `$objects`; an array or dictionary is
+ * stored as a dictionary with a `$class` `Uid` and the `NS.keys`/`NS.objects`
+ * `Uid` lists, and its class is another `$objects` entry. A `Uid` refers to a slot
+ * by index.
  *
  * @warning An archive is not a plist a service exchanges: it is the wrapper a `DTX`
  * argument rides in, so it is built and read here, not by the caller.

@@ -163,8 +163,8 @@ TEST_CASE("a message round-trips over the control stream", "[http2]")
     const std::vector<std::byte> reply = {std::byte{9}, std::byte{8}};
     transport.feed(data_frame(kHttp2ReplyStream, reply));
 
-    // The handshake opens both the control stream and the reply stream, then the
-    // reply arrives on the reply stream.
+    // The client opens the control stream and the reply stream, then the reply
+    // arrives on the reply stream.
     REQUIRE(http2->open(kHttp2ControlStream).has_value());
     REQUIRE(http2->open(kHttp2ReplyStream).has_value());
     REQUIRE(http2->write(kHttp2ControlStream, request).has_value());

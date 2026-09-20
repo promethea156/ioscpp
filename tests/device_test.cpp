@@ -14,9 +14,9 @@
 // provisioning profile; an unsigned IPA is refused with
 // `ApplicationVerificationFailed`.
 //
-// The tunnel step opens the iOS 17.4+ CoreDevice tunnel and checks the RSD
-// address, port, and MTU, then opens a userspace TCP link to the RSD port; it is
-// skipped on an older device.
+// The tunnel step opens the iOS 17.4+ CoreDevice tunnel, checks the RSD address,
+// port, and MTU, opens a userspace TCP link to the RSD port, connects the RSD,
+// and starts one service; it is skipped on an older device.
 //
 // The lifecycle step disconnects, re-discovers the device by serial, and
 // reconnects on a fresh transport. `IOSCPP_TEST_REPLUG` waits for a physical
@@ -240,8 +240,7 @@ int main()
 
     // The CoreDevice tunnel needs iOS 17.4 or later, so the step is skipped on
     // anything older. The handshake returns the RSD address, port, and MTU; the
-    // tunnel's link and RSD connection are later increments, so the endpoint is
-    // not reachable yet.
+    // link and the RSD connection below reach the endpoint.
     if (version_at_least(device->product_version(), 17, 4))
     {
         auto tunnel = device->tunnel();

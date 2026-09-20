@@ -62,7 +62,7 @@ public:
     /// Writes the whole of `data` to the connection.
     Status write(std::span<const std::byte> data) override;
 
-    /// Closes the connection, sending a FIN.
+    /// Closes the connection, sending a FIN when it was established.
     void close() override;
 
 private:

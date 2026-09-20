@@ -38,6 +38,7 @@ constexpr std::string_view kBase64Alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefgh
 std::string base64_encode(std::span<const std::byte> data)
 {
     std::string out;
+    // Four output characters per three input bytes, rounded up.
     out.reserve(((data.size() + 2) / 3) * 4);
     std::size_t i = 0;
     while (i + 3 <= data.size())
@@ -210,15 +211,19 @@ void civil_from_days(std::int64_t z, std::int64_t &y, unsigned &m, unsigned &d) 
 
 /// The plist epoch, 2001-01-01T00:00:00Z, in seconds from the Unix epoch.
 constexpr std::int64_t kPlistEpochSeconds = 978307200;
+constexpr std::int64_t kSecondsPerDay = 86400;
 
 std::string format_date(std::int64_t seconds_since_2001)
 {
-    std::int64_t seconds = seconds_since_2001 + kPlistEpochSeconds;
-    const std::int64_t days = seconds >= 0 ? seconds / 86400 : (seconds - 86399) / 86400;
-    std::int64_t remainder = seconds - days * 86400;
+    const std::int64_t seconds = seconds_since_2001 + kPlistEpochSeconds;
+    // Integer division truncates toward zero, so a negative time is shifted down
+    // by almost a day to get the floor the civil-date conversion expects.
+    const std::int64_t days =
+        seconds >= 0 ? seconds / kSecondsPerDay : (seconds - (kSecondsPerDay - 1)) / kSecondsPerDay;
+    std::int64_t remainder = seconds - days * kSecondsPerDay;
     if (remainder < 0)
     {
-        remainder += 86400;
+        remainder += kSecondsPerDay;
     }
 
     std::int64_t year = 0;
@@ -387,7 +392,6 @@ private:
             if (text_.substr(position_).starts_with("<?"))
             {
                 skip_to('>');
-                ++position_;
             }
             else if (text_.substr(position_).starts_with("<!--"))
             {
@@ -397,7 +401,6 @@ private:
             else if (text_.substr(position_).starts_with("<!"))
             {
                 skip_to('>');
-                ++position_;
             }
             else
             {
@@ -406,6 +409,7 @@ private:
         }
     }
 
+    /// Advances past the next `character`, or to the end when it is absent.
     void skip_to(char character)
     {
         const std::size_t end = text_.find(character, position_);
@@ -421,22 +425,6 @@ private:
             return true;
         }
         return false;
-    }
-
-    /// Reads the text up to the next `<`, then consumes it.
-    std::string read_text()
-    {
-        const std::size_t start = position_;
-        const std::size_t end = text_.find('<', position_);
-        if (end == std::string_view::npos)
-        {
-            position_ = text_.size();
-        }
-        else
-        {
-            position_ = end;
-        }
-        return std::string(text_.substr(start, position_ - start));
     }
 
     /// Parses a self-closing or paired element's body and consumes its close tag.
@@ -627,6 +615,33 @@ private:
 // Binary plist
 // ---------------------------------------------------------------------------
 
+// A binary plist object starts with a one-byte marker. For most kinds the high
+// nibble is the kind and the low nibble is a count, an exponent of the byte count
+// for the fixed-width kinds, or `kMarkerCountFollows` when the real count follows
+// as an integer object. The null, false, and true markers are whole bytes with no
+// such split. The constants below are the markers this codec reads and writes.
+constexpr std::uint8_t kMarkerNull = 0x00;
+constexpr std::uint8_t kMarkerFalse = 0x08;
+constexpr std::uint8_t kMarkerTrue = 0x09;
+constexpr std::uint8_t kMarkerInt = 0x10;
+constexpr std::uint8_t kMarkerReal = 0x20;
+constexpr std::uint8_t kMarkerDate = 0x30;
+constexpr std::uint8_t kMarkerData = 0x40;
+constexpr std::uint8_t kMarkerAscii = 0x50;
+constexpr std::uint8_t kMarkerUtf16 = 0x60;
+constexpr std::uint8_t kMarkerUid = 0x80;
+constexpr std::uint8_t kMarkerArray = 0xa0;
+constexpr std::uint8_t kMarkerDictionary = 0xd0;
+// The low nibble that says the count did not fit and follows as an int object.
+constexpr std::uint8_t kMarkerCountFollows = 0x0f;
+
+// The 32-byte trailer that ends a binary plist: six unused bytes, then the offset
+// table's entry size, the reference size, the object count, the top object, and the
+// offset table's offset, the last three as 8-byte big-endian integers.
+constexpr std::size_t kTrailerSize = 32;
+constexpr std::size_t kTrailerOffsetSizeIndex = 6;
+constexpr std::size_t kTrailerRefSizeIndex = 7;
+
 void put_be(std::vector<std::byte> &out, std::uint64_t value, std::size_t size)
 {
     for (std::size_t i = 0; i < size; ++i)
@@ -636,28 +651,32 @@ void put_be(std::vector<std::byte> &out, std::uint64_t value, std::size_t size)
 }
 
 /// Emits an integer object with the smallest size that holds `value`.
+///
+/// The low nibble of an int marker is the base-2 exponent of the byte count, so
+/// the sizes are `kMarkerInt` (1 byte), `kMarkerInt | 1` (2), `kMarkerInt | 2`
+/// (4), and `kMarkerInt | 3` (8).
 void append_int(std::vector<std::byte> &out, std::int64_t value)
 {
     if (value >= 0)
     {
         if (value <= 0xff)
         {
-            out.push_back(std::byte{0x10});
+            out.push_back(std::byte{kMarkerInt});
             put_be(out, static_cast<std::uint64_t>(value), 1);
         }
         else if (value <= 0xffff)
         {
-            out.push_back(std::byte{0x11});
+            out.push_back(std::byte{kMarkerInt | 1});
             put_be(out, static_cast<std::uint64_t>(value), 2);
         }
         else if (value <= 0xffffffffLL)
         {
-            out.push_back(std::byte{0x12});
+            out.push_back(std::byte{kMarkerInt | 2});
             put_be(out, static_cast<std::uint64_t>(value), 4);
         }
         else
         {
-            out.push_back(std::byte{0x13});
+            out.push_back(std::byte{kMarkerInt | 3});
             put_be(out, static_cast<std::uint64_t>(value), 8);
         }
         return;
@@ -665,22 +684,22 @@ void append_int(std::vector<std::byte> &out, std::int64_t value)
 
     if (value >= -128)
     {
-        out.push_back(std::byte{0x10});
+        out.push_back(std::byte{kMarkerInt});
         put_be(out, static_cast<std::uint64_t>(static_cast<std::uint8_t>(value)), 1);
     }
     else if (value >= -32768)
     {
-        out.push_back(std::byte{0x11});
+        out.push_back(std::byte{kMarkerInt | 1});
         put_be(out, static_cast<std::uint64_t>(static_cast<std::uint16_t>(value)), 2);
     }
     else if (value >= -2147483648LL)
     {
-        out.push_back(std::byte{0x12});
+        out.push_back(std::byte{kMarkerInt | 2});
         put_be(out, static_cast<std::uint64_t>(static_cast<std::uint32_t>(value)), 4);
     }
     else
     {
-        out.push_back(std::byte{0x13});
+        out.push_back(std::byte{kMarkerInt | 3});
         put_be(out, static_cast<std::uint64_t>(value), 8);
     }
 }
@@ -688,12 +707,14 @@ void append_int(std::vector<std::byte> &out, std::int64_t value)
 /// Emits a length or count, inline for small values and as an int object otherwise.
 void append_count(std::vector<std::byte> &out, std::uint8_t marker, std::uint64_t count)
 {
-    if (count < 15)
+    // A count below the `kMarkerCountFollows` sentinel fits in the low nibble;
+    // the sentinel means the count follows as an int object.
+    if (count < kMarkerCountFollows)
     {
         out.push_back(static_cast<std::byte>(marker | static_cast<std::uint8_t>(count)));
         return;
     }
-    out.push_back(static_cast<std::byte>(marker | 0x0f));
+    out.push_back(static_cast<std::byte>(marker | kMarkerCountFollows));
     append_int(out, static_cast<std::int64_t>(count));
 }
 
@@ -722,20 +743,19 @@ void flatten(const Plist &value, std::vector<const Plist *> &objects, std::map<c
     }
     else if (value.type() == PlistType::Dictionary)
     {
-        for (const auto &[key, item] : *value.dictionary())
+        for (const auto &entry : *value.dictionary())
         {
-            if (!key_slots.contains(key))
+            if (!key_slots.contains(entry.first))
             {
-                auto key_object = std::make_unique<Plist>(key);
-                key_slots.emplace(key, objects.size());
+                auto key_object = std::make_unique<Plist>(entry.first);
+                key_slots.emplace(entry.first, objects.size());
                 flatten(*key_object, objects, slots, key_slots, owned);
                 owned.push_back(std::move(key_object));
             }
         }
-        for (const auto &[key, item] : *value.dictionary())
+        for (const auto &entry : *value.dictionary())
         {
-            (void)key;
-            flatten(item, objects, slots, key_slots, owned);
+            flatten(entry.second, objects, slots, key_slots, owned);
         }
     }
 }
@@ -747,10 +767,10 @@ void append_object(const Plist &value, const std::map<const Plist *, std::size_t
     switch (value.type())
     {
         case PlistType::Null:
-            out.push_back(std::byte{0x00});
+            out.push_back(std::byte{kMarkerNull});
             break;
         case PlistType::Boolean:
-            out.push_back(static_cast<std::byte>(value.boolean().value() ? 0x09 : 0x08));
+            out.push_back(static_cast<std::byte>(value.boolean().value() ? kMarkerTrue : kMarkerFalse));
             break;
         case PlistType::Integer:
             append_int(out, value.integer().value());
@@ -760,7 +780,8 @@ void append_object(const Plist &value, const std::map<const Plist *, std::size_t
             std::uint64_t bits = 0;
             const double real = value.real().value();
             std::memcpy(&bits, &real, sizeof(bits));
-            out.push_back(std::byte{0x23});
+            // A real is always 8 bytes, so the low nibble is the size exponent 3.
+            out.push_back(std::byte{kMarkerReal | 3});
             put_be(out, bits, 8);
             break;
         }
@@ -769,14 +790,15 @@ void append_object(const Plist &value, const std::map<const Plist *, std::size_t
             std::uint64_t bits = 0;
             const double real = static_cast<double>(value.date().value().seconds_since_2001);
             std::memcpy(&bits, &real, sizeof(bits));
-            out.push_back(std::byte{0x33});
+            // A date is a real of seconds since 2001, so it is 8 bytes too.
+            out.push_back(std::byte{kMarkerDate | 3});
             put_be(out, bits, 8);
             break;
         }
         case PlistType::String:
         {
             const std::string_view text = value.string().value();
-            append_count(out, 0x50, text.size());
+            append_count(out, kMarkerAscii, text.size());
             out.insert(out.end(), reinterpret_cast<const std::byte *>(text.data()),
                        reinterpret_cast<const std::byte *>(text.data() + text.size()));
             break;
@@ -784,69 +806,59 @@ void append_object(const Plist &value, const std::map<const Plist *, std::size_t
         case PlistType::Data:
         {
             const std::span<const std::byte> data = value.data().value();
-            append_count(out, 0x40, data.size());
+            append_count(out, kMarkerData, data.size());
             out.insert(out.end(), data.begin(), data.end());
             break;
         }
         case PlistType::Array:
         {
             const Plist::Array &items = *value.array();
-            append_count(out, 0xa0, items.size());
+            append_count(out, kMarkerArray, items.size());
+            // `flatten` placed every item in `slots`, so the slot is present.
             for (const Plist &item : items)
             {
-                const auto it = slots.find(&item);
-                if (it == slots.end())
-                {
-                }
-                put_be(out, it->second, ref_size);
+                put_be(out, slots.at(&item), ref_size);
             }
             break;
         }
         case PlistType::Dictionary:
         {
             const Plist::Dictionary &items = *value.dictionary();
-            append_count(out, 0xd0, items.size());
-            for (const auto &[key, item] : items)
+            append_count(out, kMarkerDictionary, items.size());
+            // A dictionary is its keys and then its values, each in key order, and
+            // `flatten` placed every one of them, so each slot is present.
+            for (const auto &entry : items)
             {
-                (void)item;
-                const auto it = key_slots.find(key);
-                if (it == key_slots.end())
-                {
-                }
-                put_be(out, it->second, ref_size);
+                put_be(out, key_slots.at(entry.first), ref_size);
             }
-            for (const auto &[key, item] : items)
+            for (const auto &entry : items)
             {
-                (void)key;
-                const auto it = slots.find(&item);
-                if (it == slots.end())
-                {
-                }
-                put_be(out, it->second, ref_size);
+                put_be(out, slots.at(&entry.second), ref_size);
             }
             break;
         }
         case PlistType::Uid:
         {
+            // The low nibble of a UID marker is the exponent of its byte count.
             const std::uint64_t index = value.uid().value();
             if (index <= 0xff)
             {
-                out.push_back(std::byte{0x80});
+                out.push_back(std::byte{kMarkerUid});
                 put_be(out, index, 1);
             }
             else if (index <= 0xffff)
             {
-                out.push_back(std::byte{0x81});
+                out.push_back(std::byte{kMarkerUid | 1});
                 put_be(out, index, 2);
             }
             else if (index <= 0xffffffffULL)
             {
-                out.push_back(std::byte{0x82});
+                out.push_back(std::byte{kMarkerUid | 2});
                 put_be(out, index, 4);
             }
             else
             {
-                out.push_back(std::byte{0x83});
+                out.push_back(std::byte{kMarkerUid | 3});
                 put_be(out, index, 8);
             }
             break;
@@ -1115,7 +1127,7 @@ std::vector<std::byte> Plist::to_binary() const
         put_be(out, offset, offset_size);
     }
 
-    for (int i = 0; i < 6; ++i)
+    for (std::size_t i = 0; i < kTrailerOffsetSizeIndex; ++i)
     {
         out.push_back(std::byte{0});
     }
@@ -1144,12 +1156,12 @@ Result<Plist> Plist::parse_xml(std::string_view xml)
 
 Result<Plist> Plist::parse_binary(std::span<const std::byte> bytes)
 {
-    if (bytes.size() < 8 + 32 || std::memcmp(bytes.data(), "bplist00", 8) != 0)
+    if (bytes.size() < 8 + kTrailerSize || std::memcmp(bytes.data(), "bplist00", 8) != 0)
     {
         return tl::unexpected(protocol_error("the binary plist header is missing"));
     }
 
-    const std::span<const std::byte> trailer = bytes.subspan(bytes.size() - 32);
+    const std::span<const std::byte> trailer = bytes.subspan(bytes.size() - kTrailerSize);
     auto read_be = [](std::span<const std::byte> source, std::size_t offset, std::size_t size) -> std::uint64_t
     {
         std::uint64_t value = 0;
@@ -1160,8 +1172,10 @@ Result<Plist> Plist::parse_binary(std::span<const std::byte> bytes)
         return value;
     };
 
-    const std::size_t offset_size = static_cast<std::size_t>(trailer[6]);
-    const std::size_t ref_size = static_cast<std::size_t>(trailer[7]);
+    const std::size_t offset_size = static_cast<std::size_t>(trailer[kTrailerOffsetSizeIndex]);
+    const std::size_t ref_size = static_cast<std::size_t>(trailer[kTrailerRefSizeIndex]);
+    // The last three fields are the object count, the top object, and the offset
+    // table's offset, each 8 bytes big-endian.
     const std::uint64_t object_count = read_be(trailer, 8, 8);
     const std::uint64_t top_object = read_be(trailer, 16, 8);
     const std::uint64_t table_offset = read_be(trailer, 24, 8);
@@ -1180,7 +1194,8 @@ Result<Plist> Plist::parse_binary(std::span<const std::byte> bytes)
     std::vector<std::optional<Plist>> cache(object_count);
     std::vector<bool> active(object_count, false);
 
-    // A recursive lambda needs its own type.
+    // A recursive member function needs a named type, because a lambda cannot
+    // refer to itself.
     struct Decoder
     {
         std::span<const std::byte> bytes;
@@ -1223,15 +1238,16 @@ Result<Plist> Plist::parse_binary(std::span<const std::byte> bytes)
             }
 
             const std::uint8_t marker = static_cast<std::uint8_t>(bytes[position++]);
-            if (marker == 0x08)
+            // The three singletons carry no count or size, so they are matched whole.
+            if (marker == kMarkerFalse)
             {
                 return Plist(false);
             }
-            if (marker == 0x09)
+            if (marker == kMarkerTrue)
             {
                 return Plist(true);
             }
-            if (marker == 0x00)
+            if (marker == kMarkerNull)
             {
                 return Plist();
             }
@@ -1251,23 +1267,28 @@ Result<Plist> Plist::parse_binary(std::span<const std::byte> bytes)
 
             auto read_count = [&]() -> std::uint64_t
             {
-                if (info != 0x0f)
+                if (info != kMarkerCountFollows)
                 {
                     return info;
                 }
+                // The count follows as an int object, whose low nibble is the
+                // base-2 exponent of its byte count.
                 const std::uint8_t int_marker = static_cast<std::uint8_t>(bytes[position++]);
                 return read_uint(std::size_t{1} << (int_marker & 0x0f));
             };
 
+            // The kind is the marker's high nibble, and each case reads the body.
             switch (kind)
             {
-                case 0x00:
+                case kMarkerNull:
                     return Plist();
-                case 0x10:
+                case kMarkerInt:
                 {
                     const std::size_t size = std::size_t{1} << info;
                     const std::uint64_t raw = read_uint(size);
                     std::int64_t value = 0;
+                    // A value whose high bit is set is negative, so sign-extend
+                    // it to the full 64-bit width.
                     if (size < 8 && (raw & (std::uint64_t{1} << (size * 8 - 1))) != 0)
                     {
                         value = static_cast<std::int64_t>(raw | (~std::uint64_t{0} << (size * 8)));
@@ -1278,7 +1299,7 @@ Result<Plist> Plist::parse_binary(std::span<const std::byte> bytes)
                     }
                     return Plist(value);
                 }
-                case 0x20:
+                case kMarkerReal:
                 {
                     const std::size_t size = std::size_t{1} << info;
                     const std::uint64_t raw = read_uint(size);
@@ -1294,45 +1315,45 @@ Result<Plist> Plist::parse_binary(std::span<const std::byte> bytes)
                     }
                     return Plist(value);
                 }
-                case 0x30:
+                case kMarkerDate:
                 {
                     const std::uint64_t raw = read_uint(8);
                     double value = 0;
                     std::memcpy(&value, &raw, sizeof(value));
                     return Plist::date(static_cast<std::int64_t>(value));
                 }
-                case 0x40:
+                case kMarkerData:
                 {
                     const std::size_t count = static_cast<std::size_t>(read_count());
                     std::vector<std::byte> data(bytes.begin() + static_cast<std::ptrdiff_t>(position),
                                                 bytes.begin() + static_cast<std::ptrdiff_t>(position + count));
                     return Plist(std::move(data));
                 }
-                case 0x50:
+                case kMarkerAscii:
                 {
                     const std::size_t count = static_cast<std::size_t>(read_count());
                     return Plist(std::string(reinterpret_cast<const char *>(bytes.data() + position), count));
                 }
-                case 0x60:
+                case kMarkerUtf16:
                 {
                     const std::size_t count = static_cast<std::size_t>(read_count());
                     std::string text;
                     text.reserve(count);
+                    // A UTF-16 object is big-endian pairs. This codec keeps only the
+                    // low byte of each pair, so a non-ASCII character is decoded
+                    // incorrectly; the plists the device sends here are ASCII.
                     for (std::size_t i = 0; i < count; ++i)
                     {
                         text.push_back(static_cast<char>(bytes[position + i * 2 + 1]));
                     }
                     return Plist(std::move(text));
                 }
-                case 0x80:
-                case 0x81:
-                case 0x82:
-                case 0x83:
+                case kMarkerUid:
                 {
                     const std::size_t size = std::size_t{1} << info;
                     return Plist::uid(read_uint(size));
                 }
-                case 0xa0:
+                case kMarkerArray:
                 {
                     const std::size_t count = static_cast<std::size_t>(read_count());
                     Plist::Array items;
@@ -1349,7 +1370,7 @@ Result<Plist> Plist::parse_binary(std::span<const std::byte> bytes)
                     }
                     return Plist::array(std::move(items));
                 }
-                case 0xd0:
+                case kMarkerDictionary:
                 {
                     const std::size_t count = static_cast<std::size_t>(read_count());
                     std::vector<std::uint64_t> keys(count);

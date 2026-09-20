@@ -26,7 +26,7 @@ constexpr std::string_view kProcessIdentifierSelector = "processIdentifierForBun
 constexpr std::string_view kSignalSelector = "sendSignal:toPid:";
 /// The path a launch names, which the device ignores.
 constexpr std::string_view kDevicePath = "/private/";
-/// `SIGKILL`, the only signal a close sends.
+/// `SIGKILL` (9), the only signal `ProcessControl::kill` sends.
 constexpr std::int64_t kSigkill = 9;
 
 Error protocol_error(std::string message)
@@ -88,6 +88,7 @@ Result<std::uint64_t> ProcessControl::launch(std::string_view bundle_id, std::sp
         list.push_back(protocol::Plist(argument));
     }
     protocol::Plist::Dictionary environment{{"NSUnbufferedIO", protocol::Plist("YES")}};
+    // The `options` keys the process-control service expects.
     protocol::Plist::Dictionary options{
         {"StartSuspendedKey", protocol::Plist(start_suspended ? std::int64_t{1} : std::int64_t{0})},
         {"KillExisting", protocol::Plist(kill_existing ? std::int64_t{1} : std::int64_t{0})},
