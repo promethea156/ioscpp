@@ -12,6 +12,9 @@
 // `IOSCPP_TEST_BUNDLE` name a disposable app, and the round trip replaces it
 // and loses its data.
 //
+// The tunnel step opens the iOS 17.4+ CoreDevice tunnel and checks the RSD
+// address, port, and MTU; it is skipped on an older device.
+//
 // The lifecycle step disconnects, re-discovers the device by serial, and
 // reconnects on a fresh transport. `IOSCPP_TEST_REPLUG` waits for a physical
 // unplug and replug before the reconnect, so the re-enumeration is exercised.
@@ -20,12 +23,14 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "ioscpp/afc.hpp"
@@ -44,6 +49,15 @@ bool check(bool condition, const char *what)
         std::cerr << "FAIL: " << what << "\n";
     }
     return condition;
+}
+
+/// Whether `version` (for example `18.7.8`) is at least `major.minor`.
+bool version_at_least(std::string_view version, int major, int minor)
+{
+    int parsed_major = 0;
+    int parsed_minor = 0;
+    std::sscanf(std::string(version).c_str(), "%d.%d", &parsed_major, &parsed_minor);
+    return parsed_major > major || (parsed_major == major && parsed_minor >= minor);
 }
 
 } // namespace
@@ -241,6 +255,32 @@ int main()
             }
             ok = check(uninstalled.has_value() && uninstalled->success, "the device refused the uninstall") && ok;
         }
+    }
+
+    // The CoreDevice tunnel needs iOS 17.4 or later, so the step is skipped on
+    // anything older. The handshake returns the RSD address, port, and MTU; the
+    // tunnel's link and RSD connection are later increments, so the endpoint is
+    // not reachable yet.
+    if (version_at_least(device->product_version(), 17, 4))
+    {
+        auto tunnel = device->tunnel();
+        ok = check(tunnel.has_value(), "the CoreDevice tunnel handshake failed") && ok;
+        if (!tunnel)
+        {
+            std::cerr << "tunnel: " << tunnel.error().message << "\n";
+        }
+        else
+        {
+            std::cout << "tunnel: address=" << tunnel->address << " port=" << tunnel->port << " mtu=" << tunnel->mtu
+                      << "\n";
+            ok = check(!tunnel->address.empty(), "the tunnel reported no RSD address") && ok;
+            ok = check(tunnel->port != 0, "the tunnel reported no RSD port") && ok;
+            ok = check(tunnel->mtu != 0, "the tunnel reported no MTU") && ok;
+        }
+    }
+    else
+    {
+        std::cout << "tunnel: skipped on iOS " << device->product_version() << " (needs 17.4+)\n";
     }
 
     // Lifecycle: close innermost first, then re-discover the device by serial

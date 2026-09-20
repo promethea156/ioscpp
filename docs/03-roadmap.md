@@ -32,7 +32,8 @@ turn. The temporary experiment knobs that did the ruling out are retired (issue 
 reads no experiment env vars. Slice 6's four AFC format corrections are in `04-blockers.md`.
 
 Slice 9's first increment, the `CDTunnel` frame codec and the raw-IPv6 re-framer, is done
-device-free over the mock (`docs/10-coredevice-tunnel.md`). The open work is ordered lowest first:
+device-free over the mock, and its second, the `CoreDeviceProxy` handshake on `Device`, is written
+and pending a 17.4+ device (`docs/10-coredevice-tunnel.md`). The open work is ordered lowest first:
 the rest of the iOS 17+ `RSD` tunnel (#8), then validate app install, uninstall, and control on a
 device (#6), the guided tour (#7), and DTX (#9).
 
