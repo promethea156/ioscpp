@@ -6,6 +6,7 @@
 #include <span>
 #include <string_view>
 
+#include "ioscpp/byte_stream.hpp"
 #include "ioscpp/error.hpp"
 #include "ioscpp/export.hpp"
 #include "ioscpp/transport.hpp"
@@ -31,7 +32,7 @@ namespace ioscpp
  * sees. A `TcpLink` is not thread-safe, so concurrent calls must be serialized by
  * the caller.
  */
-class IOSCPP_API TcpLink : public Transport
+class IOSCPP_API TcpLink : public Transport, public ByteStream
 {
 public:
     /**
@@ -54,6 +55,9 @@ public:
 
     /// Reads up to `buffer.size()` bytes from the connection, or 0 at its end.
     Result<std::size_t> read(std::span<std::byte> buffer) override;
+
+    /// Reads exactly `buffer.size()` bytes, looping over @ref read.
+    Status read_exact(std::span<std::byte> buffer) override;
 
     /// Writes the whole of `data` to the connection.
     Status write(std::span<const std::byte> data) override;

@@ -435,6 +435,25 @@ Result<std::size_t> TcpLink::read(std::span<std::byte> buffer)
     return impl_->read(buffer);
 }
 
+Status TcpLink::read_exact(std::span<std::byte> buffer)
+{
+    std::size_t offset = 0;
+    while (offset < buffer.size())
+    {
+        auto read = impl_->read(buffer.subspan(offset));
+        if (!read)
+        {
+            return tl::unexpected(read.error());
+        }
+        if (*read == 0)
+        {
+            return tl::unexpected(Error{ErrorCode::Protocol, "the connection ended mid-message"});
+        }
+        offset += *read;
+    }
+    return {};
+}
+
 Status TcpLink::write(std::span<const std::byte> data)
 {
     return impl_->write(data);

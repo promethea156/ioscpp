@@ -45,8 +45,14 @@ constexpr std::string_view kStagingDirectory = "/PublicStaging";
 class PlistService
 {
 public:
+    explicit PlistService(ByteStream &stream)
+        : stream_(&stream)
+    {
+    }
+
     explicit PlistService(Stream stream)
-        : stream_(std::move(stream))
+        : owned_(std::move(stream))
+        , stream_(&*owned_)
     {
     }
 
@@ -60,13 +66,13 @@ public:
         frame[3] = static_cast<std::byte>(frame.size() & 0xff);
         std::copy(reinterpret_cast<const std::byte *>(body.data()),
                   reinterpret_cast<const std::byte *>(body.data() + body.size()), frame.begin() + 4);
-        return stream_.write(frame);
+        return stream_->write(frame);
     }
 
     Result<protocol::Plist> receive()
     {
         std::array<std::byte, 4> length_bytes{};
-        if (Status status = stream_.read(length_bytes); !status)
+        if (Status status = stream_->read_exact(length_bytes); !status)
         {
             return tl::unexpected(status.error());
         }
@@ -78,7 +84,7 @@ public:
             return tl::unexpected(protocol_error("the service sent an empty plist"));
         }
         std::vector<std::byte> body(length);
-        if (Status status = stream_.read(body); !status)
+        if (Status status = stream_->read_exact(body); !status)
         {
             return tl::unexpected(status.error());
         }
@@ -86,7 +92,9 @@ public:
     }
 
 private:
-    Stream stream_;
+    /// The mux stream, when the service owns it. The RSD path borrows instead.
+    std::optional<Stream> owned_;
+    ByteStream *stream_ = nullptr;
 };
 
 Result<PlistService> open_service(Device &device, std::string_view name)
