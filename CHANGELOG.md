@@ -55,6 +55,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The CoreDevice tunnel plan now records that RemoteXPC runs over HTTP/2, so the last
+  increment is three (`protocol::RemoteXpc`, `protocol::Http2`, and `Rsd`) rather than one.
+- The tunnel's HTTP/2 layer now uses `nghttp2` (MIT), a private `FetchContent` dependency
+  built library-only and static behind a pimpl, in place of a hand-rolled HTTP/2 client.
 - The mbedTLS TLS debug callback is now behind `IOSCPP_TRACE`, so a normal run no
   longer prints the handshake.
 - The `app` process-control functions are documented as unvalidated and blocked on the
