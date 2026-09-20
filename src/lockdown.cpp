@@ -245,7 +245,7 @@ Status Lockdown::start_session(crypto::Pairing &pairing)
     return {};
 }
 
-Result<std::uint16_t> Lockdown::start_service(std::string_view name)
+Result<Service> Lockdown::start_service(std::string_view name)
 {
     protocol::Plist::Dictionary request{
         {"Request", protocol::Plist("StartService")},
@@ -263,7 +263,15 @@ Result<std::uint16_t> Lockdown::start_service(std::string_view name)
     {
         return tl::unexpected(protocol_error("the device did not send a service port"));
     }
-    return static_cast<std::uint16_t>(*port->integer());
+
+    Service service;
+    service.port = static_cast<std::uint16_t>(*port->integer());
+    if (const protocol::Plist *enable_ssl = answer->find("EnableServiceSSL");
+        enable_ssl != nullptr && enable_ssl->boolean().has_value())
+    {
+        service.enable_ssl = *enable_ssl->boolean();
+    }
+    return service;
 }
 
 } // namespace ioscpp

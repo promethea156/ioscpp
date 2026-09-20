@@ -60,6 +60,11 @@ host exchange one `CDTunnel` frame:
   `clientParameters.address` is the tunnel-local IPv6 address and `clientParameters.mtu` sizes the
   re-framer's buffer.
 
+The `StartService` answer sets `EnableServiceSSL`, so the service requires TLS before it exchanges
+any data: the stream is wrapped in a `TlsSession` with the pairing record, and the frame then goes
+over TLS. A plaintext frame makes the device reset the port with `sessionUpcall connection closed`
+(`docs/04-blockers.md`).
+
 After the frame the **same stream** is a raw byte stream of back-to-back IPv6 packets with no packet
 boundaries; the handshake bytes must be consumed exactly so the re-framer starts on a packet boundary.
 
@@ -161,8 +166,8 @@ Each increment is end to end and leaves the repository working:
 1. `protocol::Cdtunnel` and the raw-IPv6 re-framer, device-free over the mock. No device and no new
    dependency. **Done.**
 2. The `CoreDeviceProxy` handshake on `Device`, returning the RSD address and port, with a device test that
-   skips on a pre-17.4 device. **Written.** The device test is pending a 17.4+ device; the address and
-   port are not reachable until increment 3.
+   skips on a pre-17.4 device. **Done and proven on an iOS 18.7.8 device**: the handshake answers over TLS
+   and reports the RSD address, port, and MTU. The address and port are not reachable until increment 3.
 3. The userspace IPv6 + TCP link, device-free against the scripted peer, then reaching the RSD port on a device.
 4. `protocol::RemoteXpc`, `Rsd`, and `GetService`, with a device test that lists the RSD services and reaches
    one over the tunnel. This is Slice 9's done-when.

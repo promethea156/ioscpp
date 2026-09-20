@@ -15,6 +15,23 @@ namespace ioscpp
 {
 
 /**
+ * @brief A service the device started, and how to reach it.
+ *
+ * `enable_ssl` is the `EnableServiceSSL` the device puts in the `StartService`
+ * answer. When it is set the service requires TLS before it exchanges any data,
+ * which is what `com.apple.internal.devicecompute.CoreDeviceProxy` does; a caller
+ * that ignores the flag sends plaintext to a TLS service and the device resets the
+ * port.
+ */
+struct IOSCPP_API Service
+{
+    /// The port the device allocated for the service.
+    std::uint16_t port = 0;
+    /// Whether the service requires TLS before it answers.
+    bool enable_ssl = false;
+};
+
+/**
  * @brief A `lockdownd` client on the device's gatekeeper port.
  *
  * `lockdownd` is the service every other service is reached through: it owns the
@@ -68,13 +85,14 @@ public:
     Status start_session(crypto::Pairing &pairing);
 
     /**
-     * @brief Starts the service `name` and returns the port it was given.
+     * @brief Starts the service `name` and returns its port and SSL flag.
      *
      * The device allocates a port for the service, which the caller then connects a
-     * `Stream` to. A service the device does not know is an `ErrorCode::Device`
-     * error.
+     * `Stream` to, and sets @ref Service::enable_ssl when the service requires
+     * TLS before it answers. A service the device does not know is an
+     * `ErrorCode::Device` error.
      */
-    Result<std::uint16_t> start_service(std::string_view name);
+    Result<Service> start_service(std::string_view name);
 
     /// The underlying stream, for a caller that needs the raw channel.
     Stream &stream() noexcept;
