@@ -1,16 +1,13 @@
 #include "ioscpp/rsd.hpp"
 
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
 #include <map>
 #include <optional>
-#include <span>
 #include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
 
+#include "ioscpp/plist_service.hpp"
 #include "ioscpp/protocol/http2.hpp"
 #include "ioscpp/protocol/plist.hpp"
 #include "ioscpp/protocol/remotexpc.hpp"
@@ -28,46 +25,6 @@ Error protocol_error(std::string message)
 Error device_error(std::string message)
 {
     return Error{ErrorCode::Device, std::move(message)};
-}
-
-/// Appends `value` as a 32-bit big-endian word.
-void append_u32_be(std::vector<std::byte> &out, std::uint32_t value)
-{
-    out.push_back(static_cast<std::byte>((value >> 24) & 0xff));
-    out.push_back(static_cast<std::byte>((value >> 16) & 0xff));
-    out.push_back(static_cast<std::byte>((value >> 8) & 0xff));
-    out.push_back(static_cast<std::byte>(value & 0xff));
-}
-
-/// Writes `plist` to `link` with the 4-byte big-endian length prefix the RSD speaks.
-Status write_plist(TcpLink &link, const protocol::Plist &plist)
-{
-    const std::string xml = plist.to_xml();
-    std::vector<std::byte> frame;
-    append_u32_be(frame, static_cast<std::uint32_t>(xml.size()));
-    const auto *bytes = reinterpret_cast<const std::byte *>(xml.data());
-    frame.insert(frame.end(), bytes, bytes + xml.size());
-    return link.write(frame);
-}
-
-/// Reads one length-prefixed plist from `link`.
-Result<protocol::Plist> read_plist(TcpLink &link)
-{
-    std::byte header[4];
-    if (auto status = link.read(header); !status)
-    {
-        return tl::unexpected(status.error());
-    }
-    const std::uint32_t length = (static_cast<std::uint32_t>(std::to_integer<std::uint8_t>(header[0])) << 24) |
-                                 (static_cast<std::uint32_t>(std::to_integer<std::uint8_t>(header[1])) << 16) |
-                                 (static_cast<std::uint32_t>(std::to_integer<std::uint8_t>(header[2])) << 8) |
-                                 static_cast<std::uint32_t>(std::to_integer<std::uint8_t>(header[3]));
-    std::vector<std::byte> body(length);
-    if (auto status = link.read(body); !status)
-    {
-        return tl::unexpected(status.error());
-    }
-    return protocol::Plist::parse(body);
 }
 
 /// The device handshake the RSD answers `Properties` and `Services` to.
@@ -123,8 +80,8 @@ struct Rsd::Impl
 
     /// Runs the RemoteXPC connection setup and the device handshake.
     Status handshake(const RsdUuid &uuid);
-    /// Runs a service's `RSDCheckin` over `link`.
-    Status checkin(TcpLink &link);
+    /// Runs a service's `RSDCheckin` over `service_link`.
+    Status checkin(TcpLink &service_link);
 };
 
 Status Rsd::Impl::handshake(const RsdUuid &uuid)
@@ -203,18 +160,20 @@ Status Rsd::Impl::handshake(const RsdUuid &uuid)
     }
 }
 
-Status Rsd::Impl::checkin(TcpLink &link)
+Status Rsd::Impl::checkin(TcpLink &service_link)
 {
+    PlistService service(service_link);
+
     protocol::Plist::Dictionary request;
     request.emplace("Label", protocol::Plist("ioscpp"));
     request.emplace("ProtocolVersion", protocol::Plist("2"));
     request.emplace("Request", protocol::Plist("RSDCheckin"));
-    if (auto status = write_plist(link, protocol::Plist::dictionary(std::move(request))); !status)
+    if (auto status = service.send(protocol::Plist::dictionary(std::move(request))); !status)
     {
         return status;
     }
 
-    auto checkin = read_plist(link);
+    auto checkin = service.receive();
     if (!checkin)
     {
         return tl::unexpected(checkin.error());
@@ -225,7 +184,7 @@ Status Rsd::Impl::checkin(TcpLink &link)
         return tl::unexpected(protocol_error("the service's check-in answer is not an RSDCheckin"));
     }
 
-    auto start = read_plist(link);
+    auto start = service.receive();
     if (!start)
     {
         return tl::unexpected(start.error());

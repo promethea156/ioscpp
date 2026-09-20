@@ -70,7 +70,7 @@ struct Lockdown::Impl
         {
             if (!tls.has_value())
             {
-                return stream.read(buffer.subspan(offset));
+                return stream.read_exact(buffer.subspan(offset));
             }
             auto read = tls->read(buffer.subspan(offset));
             if (!read)

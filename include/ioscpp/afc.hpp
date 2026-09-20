@@ -9,6 +9,7 @@
 #include <string_view>
 #include <vector>
 
+#include "ioscpp/byte_stream.hpp"
 #include "ioscpp/error.hpp"
 #include "ioscpp/export.hpp"
 #include "ioscpp/stream.hpp"
@@ -95,7 +96,15 @@ struct IOSCPP_API FileStat
 class IOSCPP_API Afc
 {
 public:
-    /// Opens an `AFC` client over `stream`, which must be a started `com.apple.afc` service.
+    /**
+     * @brief Opens an `AFC` client over `stream`, which the caller keeps alive.
+     *
+     * `stream` must be a started `com.apple.afc` service or, over the RSD
+     * tunnel, its `com.apple.afc.shim.remote` counterpart.
+     */
+    static Result<Afc> start(ByteStream &stream);
+
+    /// Opens an `AFC` client over `stream`, which the client owns.
     static Result<Afc> start(Stream stream);
 
     ~Afc();
@@ -136,6 +145,7 @@ public:
     Status rename(std::string_view from, std::string_view to);
 
 private:
+    explicit Afc(ByteStream &stream);
     explicit Afc(Stream stream);
 
     /// Opens a file and returns its handle, for `pull` and `push`.

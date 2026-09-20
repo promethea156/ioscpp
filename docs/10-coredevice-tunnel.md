@@ -26,8 +26,9 @@ and port, and the tunnel carries the device's IPv6 packets as data. On iOS 17.4 
 the same tunnel is reached over the Wi-Fi **RemotePairing** route instead, which is out of scope.
 
 The mux-link `installation_proxy` accepts a connection but does not answer on iOS 17+
-(`docs/04-blockers.md`), so app install, uninstall, and control, and every CoreDevice feature,
-are blocked on this tunnel.
+(`docs/04-blockers.md`), so app install and uninstall use the RSD `AFC` and installer shims on
+this tunnel (Slice 7), and app control and every CoreDevice feature wait on the `DTX` codec
+(Slice 10).
 
 ## The four layers
 
@@ -142,7 +143,10 @@ counterpart of the mux, and it has three layers of its own:
   answer carries `Properties` and `Services`, the service dictionary that lists the `com.apple.dt.*` services and
   their ports. A service is then started by opening a connection to its port and exchanging the `RSDCheckin`
   plist (a `Label`, `ProtocolVersion` 2, and the `Request`), which answers with `RSDCheckin` and then a
-  `StartService` message the host ignores.
+  `StartService` message the host ignores. A `com.apple.dt.*` service is a RemoteXPC one, while the `AFC`
+  and installer shims (`com.apple.afc.shim.remote` and
+  `com.apple.mobile.installation_proxy.shim.remote`) are lockdown-style: after the same `RSDCheckin` they
+  speak the length-prefixed plists `lockdownd` does.
 
 The exact HTTP/2 framing, RemoteXPC header, and `xpc` codec are pinned against pymobiledevice3's
 `remote/remotexpc.py`, `remote/xpc_message.py`, and `remote/remote_service_discovery.py`, and go-ios's
@@ -166,6 +170,12 @@ plist codec (a type word, then a length-prefixed value, with an aligned string),
   against a scripted peer.
 - `Rsd`: the device handshake, the service dictionary, `start_service` with its `RSDCheckin`, and a
   `TcpLink` to a named service.
+- `ByteStream`: the byte-level seam a service codec rides, with `Stream` (the mux link) and `TcpLink` (the
+  tunnel) as its implementations, so `AFC` and `PlistService` run over either link unchanged.
+- `PlistService`: the length-prefixed plist service (`lockdownd` framing), so the RSD checkin, the installer,
+  and process control share one framing.
+- `install(Rsd&, ipa)` and `uninstall(Rsd&, bundle_id)`: stage the IPA in `/PublicStaging` over the RSD `AFC`
+  shim, then install it over the RSD installer shim.
 - `Device::tunnel()`: starts `CoreDeviceProxy`, runs the handshake, and returns a `Tunnel` with
   `client_address`, `address`, `port`, and `mtu`. The `Tunnel` is a `Transport`, so `TcpLink` reads its
   packets directly, and the RSD connection follows. `Device::disconnect` tears it down innermost first (see
@@ -181,8 +191,11 @@ plist codec (a type word, then a length-prefixed value, with an aligned string),
 - The device test is opt-in and **skips with code 77 on a device older than iOS 17.4**, because
   `CoreDeviceProxy` does not exist before then. On 17.4+ it lists the RSD services and reaches one over
   the tunnel.
-- A device test that installs over the tunnel, replacing the mux-link `installation_proxy` path, is Slice 7
-  ([#6](https://github.com/promethea156/ioscpp/issues/6)).
+- The device test's opt-in round trip stages and installs an IPA over the RSD `AFC` shim and
+  uninstalls an app over the RSD installer shim (Slice 7,
+  [#6](https://github.com/promethea156/ioscpp/issues/6)). An unsigned IPA is refused with
+  `ApplicationVerificationFailed`, so a full install success needs a development-signed IPA
+  (`docs/04-blockers.md`).
 
 ## Build integration
 
@@ -213,6 +226,10 @@ Each increment is end to end and leaves the repository working:
    `TcpLink` to a named service, with a device test that lists the RSD services and reaches one over the
    tunnel. This is Slice 9's done-when. **Done and proven on an iOS 18.7.8 device**: the handshake lists 59
    services and a service is reached.
+7. App install and uninstall over the RSD shims, with the device test's opt-in round trip. **Done and
+   device-verified** (Slice 7) on an iOS 18.7.8 device: the IPA is staged over the `AFC` shim, installed
+   over the installer shim, and the bundle is uninstalled. An unsigned IPA is refused with
+   `ApplicationVerificationFailed`, which is a device-side policy answer (`docs/04-blockers.md`).
 
 Increments 4 to 6 were one increment in the first plan; the references show that RemoteXPC runs over
 HTTP/2, so it is three, each end to end.
@@ -227,6 +244,9 @@ HTTP/2, so it is three, each end to end.
   connection.
 - **A CoreDevice service speaks `DTX`, not a plist** (`docs/04-blockers.md`). That codec is Slice 10
   ([#9](https://github.com/promethea156/ioscpp/issues/9)).
+- **The plist length prefix is the plist size alone** (`docs/04-blockers.md`). Writing the size plus the
+  prefix makes the device read past the message and reset the connection; the shared `PlistService` writes the
+  size alone.
 - **The requested MTU differs between the references** (go-ios `1280`, pymobiledevice3 `16000`). The answer's
   `clientParameters.mtu` is what the re-framer uses, so the request is pinned against a reference and a device.
 

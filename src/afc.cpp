@@ -144,12 +144,20 @@ void parse_tokens(std::span<const std::byte> data, Handler handler)
 
 struct Afc::Impl
 {
-    explicit Impl(Stream value)
-        : stream(std::move(value))
+    explicit Impl(ByteStream &value)
+        : stream(&value)
     {
     }
 
-    Stream stream;
+    explicit Impl(Stream value)
+        : owned(std::move(value))
+        , stream(&*owned)
+    {
+    }
+
+    /// The mux stream, when the client owns it. The RSD path borrows instead.
+    std::optional<Stream> owned;
+    ByteStream *stream = nullptr;
     std::uint64_t packet_num = 0;
 
     Status send(std::uint64_t operation, std::span<const std::byte> extra, std::span<const std::byte> payload)
@@ -163,13 +171,13 @@ struct Afc::Impl
         std::copy(extra.begin(), extra.end(), packet.begin() + static_cast<std::ptrdiff_t>(kHeaderSize));
         std::copy(payload.begin(), payload.end(),
                   packet.begin() + static_cast<std::ptrdiff_t>(kHeaderSize + extra.size()));
-        return stream.write(packet);
+        return stream->write(packet);
     }
 
     Result<Packet> receive()
     {
         std::array<std::byte, kHeaderSize> header{};
-        if (Status status = stream.read(header); !status)
+        if (Status status = stream->read_exact(header); !status)
         {
             return tl::unexpected(status.error());
         }
@@ -193,7 +201,7 @@ struct Afc::Impl
         Packet packet;
         packet.operation = get_le64(header, 32);
         packet.data.resize(entire_length - kHeaderSize);
-        if (Status status = stream.read(packet.data); !status)
+        if (Status status = stream->read_exact(packet.data); !status)
         {
             return tl::unexpected(status.error());
         }
@@ -239,6 +247,11 @@ struct Afc::Impl
     }
 };
 
+Afc::Afc(ByteStream &stream)
+    : impl_(std::make_unique<Impl>(stream))
+{
+}
+
 Afc::Afc(Stream stream)
     : impl_(std::make_unique<Impl>(std::move(stream)))
 {
@@ -247,6 +260,11 @@ Afc::Afc(Stream stream)
 Afc::~Afc() = default;
 Afc::Afc(Afc &&) noexcept = default;
 Afc &Afc::operator=(Afc &&) noexcept = default;
+
+Result<Afc> Afc::start(ByteStream &stream)
+{
+    return Afc(stream);
+}
 
 Result<Afc> Afc::start(Stream stream)
 {

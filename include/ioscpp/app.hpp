@@ -8,6 +8,7 @@
 #include "ioscpp/device.hpp"
 #include "ioscpp/error.hpp"
 #include "ioscpp/export.hpp"
+#include "ioscpp/rsd.hpp"
 
 namespace ioscpp
 {
@@ -48,13 +49,31 @@ struct IOSCPP_API PackageResult : CommandResult
  *
  * @warning The install replaces an existing copy of the same bundle and loses its data.
  *
- * @note Not yet validated on a device: on iOS 17+ the mux-link `installation_proxy` accepts
- * the connection but does not answer, so this is blocked on the `RSD` tunnel.
+ * @note This is the pre-17.4 path: on iOS 17+ the mux-link `installation_proxy`
+ * accepts the connection but does not answer (`docs/04-blockers.md`), so the RSD
+ * overload below is the one to use there.
  */
 Result<PackageResult> IOSCPP_API install(Device &device, const std::filesystem::path &ipa);
 
-/// Uninstalls `bundle_id` from the device.
+/// Uninstalls `bundle_id` from the device over the mux link.
 Result<PackageResult> IOSCPP_API uninstall(Device &device, std::string_view bundle_id);
+
+/**
+ * @brief Installs `ipa` on the device over the RSD tunnel.
+ *
+ * On iOS 17.4 and later the installer is not on the mux link but on the RSD
+ * `com.apple.mobile.installation_proxy.shim.remote` service, so the IPA is
+ * uploaded into `/PublicStaging` over the RSD `AFC` shim and installed from
+ * there with the installer shim (`docs/10-coredevice-tunnel.md`). An install the
+ * device refuses is a normal outcome, so it is `success == false` with the reason,
+ * not an `Error`.
+ *
+ * @warning The install replaces an existing copy of the same bundle and loses its data.
+ */
+Result<PackageResult> IOSCPP_API install(Rsd &rsd, const std::filesystem::path &ipa);
+
+/// Uninstalls `bundle_id` from the device over the RSD tunnel.
+Result<PackageResult> IOSCPP_API uninstall(Rsd &rsd, std::string_view bundle_id);
 
 /**
  * @brief Launches `bundle_id`.

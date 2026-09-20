@@ -16,9 +16,10 @@ code 77 when no matching device is attached. Slice 5 is proven too: the pairing 
 record is saved and reused, `StartSession` wraps `lockdownd` in TLS, and the device reports its
 `ProductType` and `ProductVersion` through `GetValue`. Slice 6 is proven: the device test lists the
 media root, stats it and a missing path, and round-trips a 200 KiB file through `/PublicStaging` with
-the bytes compared. Slice 7's install and uninstall over the mux-link `installation_proxy`, and its
-process control, both turned out to need the iOS 17+ `RSD` tunnel, so Slice 7 is blocked on Slice 9 and
-Slice 8 onward stays open until a real device passes it.
+the bytes compared. Slice 7's install and uninstall over the mux-link `installation_proxy`
+turned out to need the iOS 17+ `RSD` tunnel, so they were blocked on Slice 9; with the
+tunnel done, they now ride the RSD `AFC` and `installation_proxy` shims and are
+device-exercised, and process control moves to Slice 10's `DTX`.
 
 ### Current work
 
@@ -37,10 +38,10 @@ on an iOS 18.7.8 device; its third, the userspace IPv6 + TCP link, is done devic
 scripted peer and reaches the RSD port on the device; its fourth, the `protocol::RemoteXpc` codec, is
 done device-free; its fifth, the `protocol::Http2` layer, is done device-free against a scripted
 peer; and its sixth, the `Rsd` connection, is done and proven on an iOS 18.7.8 device, which
-lists the RSD services and reaches one (`docs/10-coredevice-tunnel.md`). The open work is
-ordered lowest first:
-the rest of the iOS 17+ `RSD` tunnel (#8), then validate app install, uninstall, and control on a
-device (#6), the guided tour (#7), and DTX (#9).
+lists the RSD services and reaches one (`docs/10-coredevice-tunnel.md`). Slice 7's install and
+uninstall over the RSD shims are done and device-exercised; its process control moves to `DTX`
+(Slice 10). The open work is ordered lowest first:
+validate a successful install with a development-signed IPA (#6), the guided tour (#7), and DTX (#9).
 
 - [x] Slice 0: the project layout, the `Result<T>` error model, the `Transport` interface,
   the mock transport, and the build.
@@ -50,7 +51,8 @@ device (#6), the guided tour (#7), and DTX (#9).
 - [x] Slice 4: the USB transport.
 - [x] Slice 5: pairing and `lockdownd`.
 - [x] Slice 6: `AFC` file listing and transfer.
-- [ ] Slice 7: app install, uninstall, and control over the `RSD` tunnel (next).
+- [x] Slice 7: app install and uninstall over the `RSD` shims; process control moves to
+  `DTX` (Slice 10).
 - [ ] Slice 8: the guided tour and the device integration test.
 - [x] Slice 9: the iOS 17+ `RSD` tunnel, so app install/uninstall and the CoreDevice
   services are reachable.
@@ -126,17 +128,23 @@ frame is an `ErrorCode::Protocol` error.
 
 **Done when:** the tour lists a directory and round-trips a file.
 
-## Slice 7: App install, uninstall, and control
+## Slice 7: App install and uninstall over the `RSD` tunnel
 
-- `app.hpp`: `install` and `uninstall` over `installation_proxy`, and `launch`, `close`, and
-  `is_running` over process control.
+- `app.hpp`: `install(Rsd&, ipa)` and `uninstall(Rsd&, bundle_id)`, which stage the IPA in
+  `/PublicStaging` over the RSD `com.apple.afc.shim.remote` service and then install it over
+  the RSD `com.apple.mobile.installation_proxy.shim.remote` service.
+- `ByteStream` and `PlistService`, so the `AFC` client and the plist service ride the mux
+  link and the RSD tunnel unchanged.
+- The pre-17.4 `install(Device&)` and `uninstall(Device&)` over the mux-link
+  `installation_proxy` stay as the fallback.
 
-**Blocked on Slice 9.** On iOS 17+ the mux-link `installation_proxy` accepts a connection but does not
-answer, and process control is not a plist service at all: both need the `RSD` tunnel
-(`docs/04-blockers.md`). The staging, install, and control code is written but stays unvalidated until
-the tunnel exists.
+**Done and device-verified.** The device test's opt-in round trip (`IOSCPP_TEST_IPA` and
+`IOSCPP_TEST_BUNDLE`) stages a development-signed IPA over the `AFC` shim, installs it over the
+installer shim, and uninstalls the bundle, on an iOS 18.7.8 device. An unsigned package is answered
+with `ApplicationVerificationFailed`, so a full install needs a development-signed IPA.
 
-**Done when:** the tour installs, launches, checks, and closes an app.
+**Done when:** the tour installs, uninstalls, and controls an app. Process control moves to
+Slice 10, because it is not a plist service but `DTX`.
 
 ## Slice 8: The guided tour and the device integration test
 
@@ -199,6 +207,8 @@ rather than the `lockdownd` plists. `dvt` and `fetch-symbols` are the first two.
 
 - `protocol::Dtx`, the `DTX` message codec.
 - `dvt` and `fetch-symbols` over the RSD `Stream` from Slice 9.
+- `launch`, `close`, and `is_running` from Slice 7, which process control's `DTX`
+  service carries.
 
 **Done when:** the tour lists the DVT services and runs one of them.
 

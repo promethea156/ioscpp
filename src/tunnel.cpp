@@ -45,7 +45,7 @@ struct Tunnel::Impl
         if (!tls.has_value())
         {
             // A stream read is exact, so a success fills the buffer.
-            if (Status status = stream.read(buffer); !status)
+            if (Status status = stream.read_exact(buffer); !status)
             {
                 return tl::unexpected(status.error());
             }
