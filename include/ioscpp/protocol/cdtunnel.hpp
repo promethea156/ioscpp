@@ -16,6 +16,9 @@ namespace ioscpp::protocol
 /// The 8-byte ASCII magic every CoreDevice tunnel frame starts with.
 inline constexpr std::string_view kCdtunnelMagic = "CDTunnel";
 
+/// The size of a `CDTunnel` frame's header: the magic and the 16-bit length.
+inline constexpr std::size_t kCdtunnelHeaderSize = 8 + 2;
+
 /// The MTU the host requests in the handshake, the IPv6 minimum (go-ios).
 inline constexpr std::uint16_t kCdtunnelDefaultMtu = 1280;
 
@@ -57,6 +60,15 @@ struct IOSCPP_API CdtunnelResponse
 
 /// Encodes a `CDTunnel` frame: the magic, a 16-bit big-endian body length, the body.
 IOSCPP_API std::vector<std::byte> cdtunnel_encode(std::string_view body);
+
+/**
+ * @brief Reads a `CDTunnel` frame's header, returning its body length.
+ *
+ * The header is read first and the body length then read, because the tunnel's
+ * stream is boundary-less and a body length is not known before the header. A bad
+ * magic is an `ErrorCode::Protocol` error.
+ */
+IOSCPP_API Result<std::uint16_t> cdtunnel_header_length(std::span<const std::byte, kCdtunnelHeaderSize> header);
 
 /**
  * @brief Decodes a `CDTunnel` frame body.

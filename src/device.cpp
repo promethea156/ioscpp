@@ -1,17 +1,20 @@
 #include "ioscpp/device.hpp"
 
+#include <array>
 #include <cstdio>
 #include <cstdlib>
 #include <memory>
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 #include "ioscpp/afc.hpp"
 #include "ioscpp/connection.hpp"
 #include "ioscpp/crypto/pairing.hpp"
 #include "ioscpp/error.hpp"
 #include "ioscpp/lockdown.hpp"
+#include "ioscpp/protocol/cdtunnel.hpp"
 #include "ioscpp/protocol/plist.hpp"
 #include "ioscpp/protocol/usbmux.hpp"
 #include "ioscpp/stream.hpp"
@@ -23,6 +26,9 @@ namespace
 
 /// The service name of the device's media file service.
 constexpr std::string_view kAfcService = "com.apple.afc";
+
+/// The lockdown service that hands out the CoreDevice tunnel, on iOS 17.4+.
+constexpr std::string_view kCoreDeviceProxyService = "com.apple.internal.devicecompute.CoreDeviceProxy";
 
 } // namespace
 
@@ -189,6 +195,51 @@ Result<Afc> Device::open_afc()
         return tl::unexpected(stream.error());
     }
     return Afc::start(std::move(*stream));
+}
+
+Result<Tunnel> Device::tunnel()
+{
+    auto stream = start_service(kCoreDeviceProxyService);
+    if (!stream)
+    {
+        return tl::unexpected(stream.error());
+    }
+
+    const protocol::CdtunnelRequest request;
+    const std::vector<std::byte> frame = protocol::cdtunnel_encode(request.to_json());
+    if (Status status = stream->write(frame); !status)
+    {
+        return tl::unexpected(status.error());
+    }
+
+    // The tunnel's stream has no packet boundaries, so the header is read first
+    // and its length then decides how much of the body to read.
+    std::array<std::byte, protocol::kCdtunnelHeaderSize> header{};
+    if (Status status = stream->read(header); !status)
+    {
+        return tl::unexpected(status.error());
+    }
+    auto length = protocol::cdtunnel_header_length(header);
+    if (!length)
+    {
+        return tl::unexpected(length.error());
+    }
+
+    std::vector<std::byte> body(*length);
+    if (Status status = stream->read(body); !status)
+    {
+        return tl::unexpected(status.error());
+    }
+
+    auto response =
+        protocol::CdtunnelResponse::parse(std::string(reinterpret_cast<const char *>(body.data()), body.size()));
+    if (!response)
+    {
+        return tl::unexpected(response.error());
+    }
+
+    return Tunnel{std::move(*stream), std::move(response->server_address), response->server_rsd_port,
+                  response->client_mtu};
 }
 
 } // namespace ioscpp

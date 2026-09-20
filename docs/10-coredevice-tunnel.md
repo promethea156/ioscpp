@@ -161,7 +161,8 @@ Each increment is end to end and leaves the repository working:
 1. `protocol::Cdtunnel` and the raw-IPv6 re-framer, device-free over the mock. No device and no new
    dependency. **Done.**
 2. The `CoreDeviceProxy` handshake on `Device`, returning the RSD address and port, with a device test that
-   skips on a pre-17.4 device.
+   skips on a pre-17.4 device. **Written.** The device test is pending a 17.4+ device; the address and
+   port are not reachable until increment 3.
 3. The userspace IPv6 + TCP link, device-free against the scripted peer, then reaching the RSD port on a device.
 4. `protocol::RemoteXpc`, `Rsd`, and `GetService`, with a device test that lists the RSD services and reaches
    one over the tunnel. This is Slice 9's done-when.

@@ -26,6 +26,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the tunnel's boundary-less byte stream into whole packets, tested device-free over the mock.
 - `docs/00-start-here.md`, a plain-language tour of the project with a glossary, and a
   plain-language introduction to the CoreDevice tunnel plan.
+- `Device::tunnel`, the iOS 17.4+ `CoreDeviceProxy` handshake, returning the RSD address,
+  port, and MTU, with `protocol::Cdtunnel`'s header-length helper; the device test opens
+  the tunnel and is skipped on an older device.
 
 ### Fixed
 

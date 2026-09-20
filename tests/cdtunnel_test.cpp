@@ -3,6 +3,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cstddef>
 #include <cstring>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -23,6 +24,22 @@ TEST_CASE("a CDTunnel frame round-trips its body", "[cdtunnel]")
     auto decoded = cdtunnel_decode(frame);
     REQUIRE(decoded.has_value());
     CHECK(*decoded == body);
+}
+
+TEST_CASE("a CDTunnel header reports its body length", "[cdtunnel]")
+{
+    const std::vector<std::byte> frame = cdtunnel_encode("hello");
+    auto length =
+        cdtunnel_header_length(std::span<const std::byte, kCdtunnelHeaderSize>(frame.data(), kCdtunnelHeaderSize));
+    REQUIRE(length.has_value());
+    CHECK(*length == 5);
+
+    std::vector<std::byte> bad(frame.begin(), frame.begin() + static_cast<std::ptrdiff_t>(kCdtunnelHeaderSize));
+    bad[0] = std::byte{'X'};
+    auto rejected =
+        cdtunnel_header_length(std::span<const std::byte, kCdtunnelHeaderSize>(bad.data(), kCdtunnelHeaderSize));
+    REQUIRE_FALSE(rejected.has_value());
+    CHECK(rejected.error().code == ErrorCode::Protocol);
 }
 
 TEST_CASE("a bad CDTunnel magic is a protocol error", "[cdtunnel]")
