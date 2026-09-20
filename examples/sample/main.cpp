@@ -31,7 +31,7 @@ int main()
     header.protocol = static_cast<std::uint32_t>(MuxProtocol::Version);
     header.length = static_cast<std::uint32_t>(kMuxHeaderSizeV1 + VersionHeader::kSize);
 
-    const std::array<std::byte, kMuxHeaderSize> header_bytes = header.encode(0);
+    const std::array<std::byte, kMuxHeaderSize> header_bytes = header.encode(1);
     std::vector<std::byte> answer(header_bytes.begin(), header_bytes.begin() + kMuxHeaderSizeV1);
     const auto version_bytes = version.encode();
     answer.insert(answer.end(), version_bytes.begin(), version_bytes.end());

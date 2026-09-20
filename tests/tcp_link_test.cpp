@@ -121,9 +121,6 @@ public:
         refuse_ = true;
     }
 
-    static constexpr std::size_t kIpv6HeaderSize = 40;
-    static constexpr std::size_t kTcpHeaderSize = 20;
-
     void reply(std::uint8_t flags, const Ipv6Header &request_ipv6, const TcpHeader &request_tcp, std::uint32_t seq,
                std::uint32_t ack, std::span<const std::byte> payload)
     {

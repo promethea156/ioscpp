@@ -84,7 +84,7 @@ struct IOSCPP_API FileStat
  * `AFC` (Apple File Conduit) is the file service. It is reached by asking
  * `lockdownd` to start `com.apple.afc`, and it carries binary `CFA6LPAA` packets
  * rather than plists. The packet layout and every operation are in
- * [`docs/06-afc-protocol.md`](../docs/06-afc-protocol.md).
+ * `docs/06-afc-protocol.md`.
  *
  * Paths are relative to the service root and are sent as UTF-8 with a terminating
  * NUL. A request the device rejects is an `ErrorCode::Device` error carrying the
@@ -119,9 +119,11 @@ public:
     /// set unless it also appends the entry's `stat` values.
     Result<std::vector<DirEntry>> list(std::string_view path);
 
-    /// Stats `path`, following symbolic links.
+    /// Stats `path`; a symbolic link is reported as a link (`S_IFLNK`), not
+    /// followed.
     ///
-    /// A missing path is an empty `optional`, not an error.
+    /// Any `AFC` device error, which in practice means the path does not exist,
+    /// is an empty `optional`, not a `Result` error.
     Result<std::optional<FileStat>> stat(std::string_view path);
 
     /**

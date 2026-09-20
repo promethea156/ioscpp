@@ -30,8 +30,8 @@ enum class JsonType
  *
  * The CoreDevice tunnel handshake is JSON rather than a plist, so this is the
  * codec that frame is built on. It is deliberately small: the tunnel's handshake
- * is the only JSON in the library, and it carries objects, strings, and numbers
- * alone.
+ * is the only JSON in the library, and its payload uses objects, strings, and
+ * numbers alone, though the codec handles every kind below.
  *
  * The value is a variant over the six JSON kinds, and the accessors return an
  * empty `optional` (or a null pointer) when the held kind does not match rather

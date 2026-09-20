@@ -37,7 +37,8 @@ class IOSCPP_API DtxChannel
 public:
     DtxChannel() = default;
 
-    /// The channel code the device was given, which every message carries.
+    /// The channel code assigned when the channel was opened; every message
+    /// carries it.
     std::int32_t code() const noexcept;
     /// The service identifier the channel was opened for.
     const std::string &identifier() const noexcept;
@@ -68,9 +69,9 @@ private:
  *
  * A `dvt` service does not exchange plists: it exchanges DTX messages over a byte
  * stream (`docs/04-blockers.md`). The @ref protocol::Dtx codec frames one message,
- * and this reads and writes those frames, assigns the identifier a request and its
- * reply share, acks a message that expects a reply, and routes a reply to the caller
- * that awaits it.
+ * and this reads and writes those frames, assigns the identifier shared by a request
+ * and its reply, acks a message that expects a reply, and routes a reply to the
+ * caller that awaits it.
  *
  * The first message the device sends is the `_notifyOfPublishedCapabilities:`
  * handshake on the global channel; @ref receive acks it, and @ref request_channel then
@@ -101,7 +102,7 @@ public:
     /// Opens `identifier` on a fresh channel and returns it.
     Result<DtxChannel> request_channel(std::string_view identifier);
 
-    /// Whether a message that arrived while awaiting a reply is waiting.
+    /// Whether a message received while awaiting a reply is queued.
     bool has_pending() const noexcept;
 
     /// The next message that arrived while awaiting a reply.

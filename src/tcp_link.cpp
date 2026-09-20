@@ -117,7 +117,7 @@ Result<std::array<std::byte, 16>> parse_ipv6(std::string_view text)
         address[index++] = static_cast<std::byte>((group >> 8) & 0xff);
         address[index++] = static_cast<std::byte>(group & 0xff);
     }
-    index = 16 - right_groups.size() * 2;
+    index = address.size() - right_groups.size() * sizeof(std::uint16_t);
     for (const std::uint16_t group : right_groups)
     {
         address[index++] = static_cast<std::byte>((group >> 8) & 0xff);
@@ -182,8 +182,7 @@ struct Segment
 struct TcpLink::Impl
 {
     Impl(Transport &value, std::string_view client, std::uint16_t max_transfer)
-        : tunnel(&value)
-        , framer(value)
+        : framer(value)
         , mtu(max_transfer)
     {
         auto parsed = parse_ipv6(client);
@@ -196,7 +195,6 @@ struct TcpLink::Impl
         source_port = next_source_port++;
     }
 
-    Transport *tunnel;
     protocol::Ipv6Framer framer;
     std::uint16_t mtu;
     std::size_t mss;
@@ -249,6 +247,7 @@ struct TcpLink::Impl
             return status;
         }
 
+        // A SYN or a FIN consumes one sequence number even with no payload.
         send_seq += static_cast<std::uint32_t>(payload.size()) +
                     (((flags & protocol::TcpSyn) != 0 || (flags & protocol::TcpFin) != 0) ? 1 : 0);
         return {};

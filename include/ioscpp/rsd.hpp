@@ -28,8 +28,8 @@ using RsdUuid = std::array<std::byte, 16>;
  *
  * The device keeps one RSD connection per tunnel and re-attaches the tunnel when the
  * UUID changes, so every connection to one tunnel, across runs and processes, must
- * present the same UUID. Deriving it from the host id makes it stable, which is
- * what `default_handshake_uuid` does from `generate_host_id`.
+ * present the same UUID. `rsd_uuid` derives it by hashing the host id with FNV-1a,
+ * which is stable across runs and processes.
  */
 RsdUuid IOSCPP_API rsd_uuid(std::string_view host_id);
 
@@ -37,9 +37,9 @@ RsdUuid IOSCPP_API rsd_uuid(std::string_view host_id);
  * @brief A service the RSD advertises, and how it is reached.
  *
  * The device handshake's `Services` dictionary lists every service by name and
- * gives each a `Port` and a `Properties` dictionary. `UsesRemoteXPC` selects how
- * the service is started: a RemoteXPC service is a second RemoteXPC connection,
- * while every other service is a lockdown-style `RSDCheckin` connection.
+ * gives each a `Port` and a `Properties` dictionary. A `.shim.remote` service is a
+ * lockdown service shimmed over the RSD, so `start_service` runs its `RSDCheckin`;
+ * a native service speaks its own protocol on the plain connection.
  */
 struct IOSCPP_API RsdService
 {
@@ -89,8 +89,9 @@ public:
     /**
      * @brief Starts the service `name` and returns a stream to its port.
      *
-     * Opens a fresh connection to the service's port over the tunnel and runs its
-     * `RSDCheckin`, then returns the connection for the service's own protocol.
+     * Opens a fresh connection to the service's port over the tunnel. A
+     * `.shim.remote` service then runs its `RSDCheckin` before the connection is
+     * returned for the service's own protocol; a native service skips it.
      * A service the device does not advertise is an `ErrorCode::Device` error.
      */
     Result<TcpLink> start_service(std::string_view name);

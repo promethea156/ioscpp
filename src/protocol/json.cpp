@@ -134,19 +134,18 @@ struct Parser
             case 'f':
             case 'n':
             {
-                const bool is_true = peek() == 't';
-                const bool is_false = peek() == 'f';
-                const std::string_view literal = is_true ? "true" : (is_false ? "false" : "null");
+                const char first = peek();
+                const std::string_view literal = first == 't' ? "true" : (first == 'f' ? "false" : "null");
                 if (text.substr(position, literal.size()) != literal)
                 {
                     return tl::unexpected(protocol_error("a JSON literal is malformed"));
                 }
                 position += literal.size();
-                if (is_true)
+                if (first == 't')
                 {
                     return Json(true);
                 }
-                if (is_false)
+                if (first == 'f')
                 {
                     return Json(false);
                 }
@@ -219,8 +218,10 @@ struct Parser
                         return tl::unexpected(high.error());
                     }
                     std::uint32_t code_point = *high;
-                    // A high surrogate is only valid when a low surrogate follows, so the
-                    // pair is combined into one code point rather than encoded alone.
+                    // A high surrogate is combined with a following low surrogate into
+                    // one code point. A lone high surrogate is passed through
+                    // unchanged, which encodes as invalid UTF-8.
+                    // A following low surrogate is `\uXXXX`, six characters.
                     if (code_point >= 0xd800 && code_point <= 0xdbff && position + 6 <= text.size() &&
                         text[position] == '\\' && text[position + 1] == 'u')
                     {
@@ -419,13 +420,14 @@ void serialize_string(std::string_view value, std::string &out)
 
 void serialize_number(double value, std::string &out)
 {
-    // An integral value is written without a fraction, so `1280` round-trips as
-    // `1280` and not `1280.0`, which some JSON readers would read as a real.
+    // A value with no fraction is written as an integer, so `1280` round-trips as
+    // `1280` and not `1280.0`, matching the original text.
     if (std::isfinite(value) && value == std::floor(value) && std::abs(value) < 1e15)
     {
         out += std::to_string(static_cast<std::int64_t>(value));
         return;
     }
+    // JSON has no NaN or Infinity, so a non-finite number is written as `null`.
     if (!std::isfinite(value))
     {
         out += "null";

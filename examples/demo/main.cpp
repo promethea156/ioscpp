@@ -98,13 +98,14 @@ int main(int argc, char **argv)
         }
     }
 
-    // 4. Push a file into /PublicStaging, stat it, and pull it back.
+    // 4. Push a file into /PublicStaging, stat it, and pull it back (AFC).
     step(4, "push a file, stat it, and pull it back");
     const std::filesystem::path directory = std::filesystem::temp_directory_path();
     const std::filesystem::path local = directory / "ioscpp_demo.txt";
     const std::filesystem::path back = directory / "ioscpp_demo.back";
     const std::string remote = "/PublicStaging/ioscpp_demo.txt";
     {
+        // 200 KiB of 0x5a, big enough to span several AFC chunks.
         const std::vector<std::byte> payload(200 * 1024, std::byte{0x5a});
         std::ofstream out(local, std::ios::binary | std::ios::trunc);
         out.write(reinterpret_cast<const char *>(payload.data()), static_cast<std::streamsize>(payload.size()));
@@ -135,6 +136,7 @@ int main(int argc, char **argv)
         return 0;
     }
     std::cout << "tunnel: " << tunnel->address() << ":" << tunnel->port() << " mtu " << tunnel->mtu() << "\n";
+    // The RSD handshake is keyed by the host UUID in the pairing record.
     auto rsd = Rsd::connect(*tunnel, rsd_uuid(pairing->host_id()));
     if (!rsd)
     {
@@ -145,7 +147,8 @@ int main(int argc, char **argv)
 
     // 6. Install the app over the RSD shims: the IPA is staged in
     // /PublicStaging over the AFC shim and then installed over the installer
-    // shim. A refused install is a normal outcome with the reason, not an error.
+    // shim. The library reports a refused install as `success == false` with the
+    // reason rather than a `Result` error; this demo treats it as fatal.
     step(6, "install the app over the RSD shims");
     auto installed = install(*rsd, ipa);
     if (!installed)
@@ -186,7 +189,7 @@ int main(int argc, char **argv)
     }
 
     // 8. Uninstall the app over the RSD installer shim.
-    step(8, "uninstall the app over the RSD shims");
+    step(8, "uninstall the app over the RSD shim");
     auto uninstalled = uninstall(*rsd, bundle_id);
     if (!uninstalled)
     {

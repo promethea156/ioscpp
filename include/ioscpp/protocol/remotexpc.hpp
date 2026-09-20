@@ -69,9 +69,10 @@ struct XpcDate
  * RemoteXPC does not use property lists: a message's body is an `xpc` object, so it needs its
  * own codec. The value is a variant over the eleven kinds the CoreDevice services use, and the
  * accessors return an empty `optional` (or a null pointer) when the held kind does not match
- * rather than converting. Every field is little-endian, a string is NUL-terminated, and every string,
- * data blob, array, and dictionary is padded to a 4-byte boundary, so the codec mirrors the plist
- * codec's shape: a type word, then a length-prefixed value.
+ * rather than converting. Every field is little-endian and a string is NUL-terminated. A string,
+ * data blob, and dictionary key are padded to a 4-byte boundary; an array and dictionary end
+ * aligned by construction, because every value they contain is already a multiple of four. The codec
+ * mirrors the plist codec's shape: a type word, then a length-prefixed value.
  *
  * `Int64` and `Uint64` are distinct kinds, because the RSD handshake carries signed and unsigned
  * values that must not be conflated. A dictionary keeps its keys sorted, so a serialized dictionary is
@@ -152,7 +153,8 @@ public:
     /// The value for `key` when this is a dictionary, or nullptr.
     const Xpc *find(std::string_view key) const noexcept;
 
-    /// Encodes the object, without a wrapper, a payload magic, or a type word for itself.
+    /// Encodes the object body: its type word and value, without the RemoteXPC
+    /// wrapper or payload magic.
     std::vector<std::byte> to_bytes() const;
 
     /// Decodes one object, which must consume `bytes` exactly.

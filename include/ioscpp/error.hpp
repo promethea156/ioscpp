@@ -17,9 +17,9 @@ namespace ioscpp
  */
 enum class ErrorCode
 {
-    /// The caller passed something the library cannot use: a path with no room for a
-    /// terminator, a local file that is not a regular file, or a service name the
-    /// device does not know.
+    /// The caller passed something the library cannot use: a malformed device
+    /// selector or endpoint, a local file that is not a regular file, or a payload
+    /// that does not fit the link.
     InvalidArgument,
     /// The link to the device failed: libusb reported an error, no matching device
     /// was found, or a transfer was short.

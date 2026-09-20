@@ -17,6 +17,7 @@ void put_u16(std::span<std::byte> bytes, std::size_t offset, std::uint16_t value
     bytes[offset + 1] = static_cast<std::byte>(value & 0xff);
 }
 
+/// Writes `value` into `bytes` at `offset`, big-endian.
 void put_u32(std::span<std::byte> bytes, std::size_t offset, std::uint32_t value) noexcept
 {
     bytes[offset + 0] = static_cast<std::byte>((value >> 24) & 0xff);
@@ -25,12 +26,14 @@ void put_u32(std::span<std::byte> bytes, std::size_t offset, std::uint32_t value
     bytes[offset + 3] = static_cast<std::byte>(value & 0xff);
 }
 
+/// Reads a big-endian 16-bit field at `offset`.
 std::uint16_t get_u16(std::span<const std::byte> bytes, std::size_t offset) noexcept
 {
     return static_cast<std::uint16_t>((static_cast<std::uint16_t>(bytes[offset + 0]) << 8) |
                                       static_cast<std::uint16_t>(bytes[offset + 1]));
 }
 
+/// Reads a big-endian 32-bit field at `offset`.
 std::uint32_t get_u32(std::span<const std::byte> bytes, std::size_t offset) noexcept
 {
     return (static_cast<std::uint32_t>(bytes[offset + 0]) << 24) |
@@ -99,7 +102,7 @@ std::array<std::byte, kTcpHeaderSize> TcpHeader::encode() const noexcept
     put_u32(bytes, 4, sequence);
     put_u32(bytes, 8, acknowledgement);
     // The data offset is the high nibble and the reserved bits the low nibble.
-    bytes[12] = static_cast<std::byte>(static_cast<std::uint8_t>(data_offset << 4));
+    bytes[12] = static_cast<std::byte>(data_offset << 4);
     bytes[13] = static_cast<std::byte>(flags);
     put_u16(bytes, 14, window);
     put_u16(bytes, 16, checksum);
@@ -114,7 +117,7 @@ TcpHeader TcpHeader::decode(std::span<const std::byte, kTcpHeaderSize> bytes) no
     header.destination_port = get_u16(bytes, 2);
     header.sequence = get_u32(bytes, 4);
     header.acknowledgement = get_u32(bytes, 8);
-    header.data_offset = static_cast<std::uint8_t>(static_cast<std::uint8_t>(bytes[12]) >> 4);
+    header.data_offset = static_cast<std::uint8_t>(bytes[12] >> 4);
     header.flags = static_cast<std::uint8_t>(bytes[13]);
     header.window = get_u16(bytes, 14);
     header.checksum = get_u16(bytes, 16);

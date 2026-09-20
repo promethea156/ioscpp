@@ -39,8 +39,9 @@ struct IOSCPP_API Service
  * `StartService`. It listens on port 62078 and speaks length-prefixed plists.
  *
  * `start` opens a plaintext client over a stream to that port. `start_session` performs
- * the `StartSession` exchange and then wraps every later message in TLS, using the session
- * key from the pairing record; `request` is the plaintext and TLS path in one call.
+ * the `StartSession` exchange and then, when the device asks for it, wraps every later
+ * message in TLS using the host certificate and key from the pairing record; `request` is
+ * the plaintext and TLS path in one call.
  *
  * A `Lockdown` is not thread-safe. It shares its stream with the TLS session, so
  * concurrent calls must be serialized by the caller.
@@ -64,9 +65,9 @@ public:
     /**
      * @brief Sends `request` and returns the device's answer.
      *
-     * This is the one place a plist is framed, written, read back, and unframed, so
-     * every higher call is built on it. A device error is an `ErrorCode::Device`
-     * error carrying the reason.
+     * This is the one place in `Lockdown` a plist is framed, written, read back,
+     * and unframed, so every higher call is built on it. A device error is an
+     * `ErrorCode::Device` error carrying the reason.
      */
     Result<protocol::Plist> request(protocol::Plist request);
 

@@ -81,8 +81,8 @@ std::vector<std::byte> cdtunnel_encode(std::string_view body)
 {
     std::vector<std::byte> frame(kCdtunnelHeaderSize + body.size());
     std::memcpy(frame.data(), kCdtunnelMagic.data(), kCdtunnelMagic.size());
-    frame[kCdtunnelMagic.size()] = static_cast<std::byte>((body.size() >> 8) & 0xff);
-    frame[kCdtunnelMagic.size() + 1] = static_cast<std::byte>(body.size() & 0xff);
+    frame[kCdtunnelHeaderSize - 2] = static_cast<std::byte>((body.size() >> 8) & 0xff);
+    frame[kCdtunnelHeaderSize - 1] = static_cast<std::byte>(body.size() & 0xff);
     std::memcpy(frame.data() + kCdtunnelHeaderSize, body.data(), body.size());
     return frame;
 }
@@ -93,8 +93,8 @@ Result<std::uint16_t> cdtunnel_header_length(std::span<const std::byte, kCdtunne
     {
         return tl::unexpected(protocol_error("the tunnel frame has a bad magic"));
     }
-    return static_cast<std::uint16_t>((static_cast<unsigned>(header[kCdtunnelMagic.size()]) << 8) |
-                                      static_cast<unsigned>(header[kCdtunnelMagic.size() + 1]));
+    return static_cast<std::uint16_t>((static_cast<unsigned>(header[kCdtunnelHeaderSize - 2]) << 8) |
+                                      static_cast<unsigned>(header[kCdtunnelHeaderSize - 1]));
 }
 
 Result<std::string> cdtunnel_decode(std::span<const std::byte> frame)
