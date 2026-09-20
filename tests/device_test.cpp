@@ -344,6 +344,33 @@ int main()
                             {
                                 std::cout << "install: installed " << bundle << "\n";
 
+                                // Process control rides the RSD
+                                // `dtservicehub` over DTX: launch the app,
+                                // prove it runs, and kill it by pid.
+                                auto launched = ioscpp::launch(*rsd, bundle);
+                                if (!launched)
+                                {
+                                    ok = check(false, "launching over the RSD failed") && ok;
+                                    std::cerr << "launch: " << launched.error().message << "\n";
+                                }
+                                else
+                                {
+                                    std::cout << "launch: launched pid " << *launched << "\n";
+                                    auto running = ioscpp::is_running(*rsd, bundle);
+                                    ok =
+                                        check(running.has_value() && *running, "the launched app is not running") && ok;
+
+                                    if (auto closed = ioscpp::close(*rsd, *launched); !closed)
+                                    {
+                                        ok = check(false, "closing over the RSD failed") && ok;
+                                        std::cerr << "close: " << closed.error().message << "\n";
+                                    }
+                                    else
+                                    {
+                                        std::cout << "launch: closed pid " << *launched << "\n";
+                                    }
+                                }
+
                                 auto uninstalled = ioscpp::uninstall(*rsd, bundle);
                                 if (!uninstalled)
                                 {

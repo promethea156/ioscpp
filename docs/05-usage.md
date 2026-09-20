@@ -129,19 +129,22 @@ ioscpp::uninstall(*rsd, "com.example.app").value();
 
 ## Launch, check, and close an app
 
-These are written but not yet validated on a device: they used a plist service that does not
-exist, and the real service is `DTX`, which is not built yet (Slice 10,
-`docs/04-blockers.md`).
+On iOS 17.4 and later, `launch(Rsd&, bundle_id)` opens the RSD
+`com.apple.instruments.dtservicehub` service and launches the app over its `DTX`
+process-control channel, returning the process id. `is_running(Rsd&, bundle_id)` resolves
+the bundle id to a process id, and `close(Rsd&, pid)` kills that process. The pre-17.4
+`launch(Device&, bundle_id)`, `is_running(Device&, bundle_id)`, and `close(Device&, pid)`
+over the mux-link `com.apple.instruments.remoteserver` stay as the fallback.
 
 ```cpp
-ioscpp::launch(device, "com.example.app").value();
+auto pid = ioscpp::launch(*rsd, "com.example.app").value();
 
-if (ioscpp::is_running(device, "com.example.app").value())
+if (ioscpp::is_running(*rsd, "com.example.app").value())
 {
     std::cout << "running\n";
 }
 
-ioscpp::close(device, "com.example.app").value();
+ioscpp::close(*rsd, pid).value();
 ```
 
 ## Query device info

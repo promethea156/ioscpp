@@ -76,25 +76,37 @@ Result<PackageResult> IOSCPP_API install(Rsd &rsd, const std::filesystem::path &
 Result<PackageResult> IOSCPP_API uninstall(Rsd &rsd, std::string_view bundle_id);
 
 /**
- * @brief Launches `bundle_id`.
+ * @brief Launches `bundle_id` over the mux link and returns its process id.
  *
- * Uses the process-control service. An app that cannot be started is
- * `success == false` with the reason, not an `Error`.
+ * The process-control service is not a plist one: it is a `DTX` channel on
+ * `com.apple.instruments.remoteserver` (`docs/04-blockers.md`). A launch the
+ * device refuses is an `ErrorCode::Device` error.
  *
- * @note Not yet validated on a device: the real process-control service is `DTX`, not a
- * plist one, so this is blocked on the `DTX` codec (Slice 10).
+ * @note This is the pre-17 path. On iOS 17+ the service moved to the RSD
+ * `dtservicehub`, so the overload below is the one to use there.
  */
-Result<CommandResult> IOSCPP_API launch(Device &device, std::string_view bundle_id);
+Result<std::uint64_t> IOSCPP_API launch(Device &device, std::string_view bundle_id);
 
-/// Force-stops `bundle_id` and removes its process.
-Status IOSCPP_API close(Device &device, std::string_view bundle_id);
+/// Kills the process `pid` over the mux link with `SIGKILL`.
+Status IOSCPP_API close(Device &device, std::uint64_t pid);
+
+/// Whether `bundle_id` is running, over the mux link.
+Result<bool> IOSCPP_API is_running(Device &device, std::string_view bundle_id);
 
 /**
- * @brief Whether `bundle_id` is running.
+ * @brief Launches `bundle_id` over the RSD tunnel and returns its process id.
  *
- * Asks the process-control service for the process list. An app that is not running
- * is a definite `false`, not an error.
+ * On iOS 17.4 and later the process-control service is not on the mux link but
+ * on the RSD `com.apple.instruments.dtservicehub` service, so the launch rides
+ * the tunnel and the DTX channel (`docs/10-coredevice-tunnel.md`). A launch the
+ * device refuses is an `ErrorCode::Device` error.
  */
-Result<bool> IOSCPP_API is_running(Device &device, std::string_view bundle_id);
+Result<std::uint64_t> IOSCPP_API launch(Rsd &rsd, std::string_view bundle_id);
+
+/// Kills the process `pid` over the RSD tunnel with `SIGKILL`.
+Status IOSCPP_API close(Rsd &rsd, std::uint64_t pid);
+
+/// Whether `bundle_id` is running, over the RSD tunnel.
+Result<bool> IOSCPP_API is_running(Rsd &rsd, std::string_view bundle_id);
 
 } // namespace ioscpp

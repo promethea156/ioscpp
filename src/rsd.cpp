@@ -27,6 +27,9 @@ Error device_error(std::string message)
     return Error{ErrorCode::Device, std::move(message)};
 }
 
+/// The suffix a lockdown service shimmed over the RSD carries.
+constexpr std::string_view kShimSuffix = ".shim.remote";
+
 /// The device handshake the RSD answers `Properties` and `Services` to.
 protocol::Xpc device_handshake(const RsdUuid &uuid)
 {
@@ -271,9 +274,18 @@ Result<TcpLink> Rsd::start_service(std::string_view name)
     {
         return tl::unexpected(status.error());
     }
-    if (auto status = impl_->checkin(*link); !status)
+    // A `.shim.remote` service is a lockdown service shimmed over the RSD, so it
+    // needs the `RSDCheckin` handshake. A native service like
+    // `com.apple.instruments.dtservicehub` speaks its own protocol on the plain
+    // connection and resets it when it is checked in to.
+    const bool is_shim =
+        name.size() >= kShimSuffix.size() && name.substr(name.size() - kShimSuffix.size()) == kShimSuffix;
+    if (is_shim)
     {
-        return tl::unexpected(status.error());
+        if (auto status = impl_->checkin(*link); !status)
+        {
+            return tl::unexpected(status.error());
+        }
     }
     return std::move(*link);
 }

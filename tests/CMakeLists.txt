@@ -18,6 +18,7 @@ add_executable(ioscpp_tests
   keyed_archive_test.cpp
   plist_service_test.cpp
   plist_test.cpp
+  process_control_test.cpp
   remotexpc_test.cpp
   session_test.cpp
   stream_test.cpp

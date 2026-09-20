@@ -10,7 +10,7 @@ protocol assumptions explicit while they are still small enough to get right.
 
 ## Status
 
-Slices 0 to 7 and Slice 9 are done; Slice 8 is the open one. Slice 4 is proven on a device: `ioscpp_device_tests` walks the
+Slices 0 to 7 and Slices 9 and 10 are done; Slice 8 is the open one. Slice 4 is proven on a device: `ioscpp_device_tests` walks the
 descriptors, claims the mux interface, connects, and reads the device's identity, and it skips with
 code 77 when no matching device is attached. Slice 5 is proven too: the pairing exchange completes, the
 record is saved and reused, `StartSession` wraps `lockdownd` in TLS, and the device reports its
@@ -19,15 +19,21 @@ media root, stats it and a missing path, and round-trips a 200 KiB file through 
 the bytes compared. Slice 7's install and uninstall over the mux-link `installation_proxy`
 turned out to need the iOS 17+ `RSD` tunnel, so they were blocked on Slice 9; with the
 tunnel done, they now ride the RSD `AFC` and `installation_proxy` shims and are
-device-exercised, and process control moves to Slice 10's `DTX`.
+device-exercised, and process control rides the RSD `DTX` channel (Slice 10), which is
+also device-exercised.
 
 ### Current work
 
-Slices 0 to 9 are done, so the next work is the guided tour (Slice 8, #7): `examples/demo`
-and `tests/device_test.cpp` walk every implemented feature against one device, including a
-replug between steps, and the demo's install moves from the mux link to the RSD shims. After
-that is `DTX` (Slice 10, #9), the `dvt` and `fetch-symbols` services and the
-`launch`/`close`/`is_running` process control that is the last piece of Slice 7 (#6).
+Slices 0 to 7, 9, and 10 are done, so the next work is the guided tour (Slice 8, #7):
+`examples/demo` and `tests/device_test.cpp` walk every implemented feature against one device,
+including a replug between steps, and the demo's install and process control move from the mux link
+to the RSD shims.
+
+Slice 10, `DTX` and the `dvt` services, is complete: `protocol::Dtx` and
+`protocol::KeyedArchive`, the `DtxConnection`/`DtxChannel` layer, and the `launch`/`close`/
+`is_running` process control over the RSD `com.apple.instruments.dtservicehub` service, which
+launches, finds, and kills an app on an iOS 18.7.8 device. That closes Slice 7's process control,
+the last piece of #6.
 
 Slice 9, the iOS 17+ `RSD` tunnel, is complete: the `CDTunnel` frame codec and the raw-IPv6
 re-framer, the `CoreDeviceProxy` handshake on `Device`, the userspace IPv6 + TCP link, the
@@ -51,11 +57,12 @@ are in `04-blockers.md`.
 - [x] Slice 4: the USB transport.
 - [x] Slice 5: pairing and `lockdownd`.
 - [x] Slice 6: `AFC` file listing and transfer.
-- [x] Slice 7: app install and uninstall over the `RSD` shims; process control moves to
-  `DTX` (Slice 10).
+- [x] Slice 7: app install, uninstall, and process control over the `RSD` shims.
 - [ ] Slice 8: the guided tour and the device integration test.
 - [x] Slice 9: the iOS 17+ `RSD` tunnel, so app install/uninstall and the CoreDevice
   services are reachable.
+- [x] Slice 10: `DTX` and the `dvt` process-control service, so app install, uninstall,
+  launch, close, and `is_running` are all reachable.
 
 ## Slice 0: Layout, error model, and transport
 
@@ -133,6 +140,8 @@ frame is an `ErrorCode::Protocol` error.
 - `app.hpp`: `install(Rsd&, ipa)` and `uninstall(Rsd&, bundle_id)`, which stage the IPA in
   `/PublicStaging` over the RSD `com.apple.afc.shim.remote` service and then install it over
   the RSD `com.apple.mobile.installation_proxy.shim.remote` service.
+- `app.hpp`: `launch(Rsd&, bundle_id)`, `close(Rsd&, pid)`, and `is_running(Rsd&, bundle_id)`,
+  which ride the RSD `com.apple.instruments.dtservicehub` service over `DTX` (Slice 10).
 - `ByteStream` and `PlistService`, so the `AFC` client and the plist service ride the mux
   link and the RSD tunnel unchanged.
 - The pre-17.4 `install(Device&)` and `uninstall(Device&)` over the mux-link
@@ -140,11 +149,11 @@ frame is an `ErrorCode::Protocol` error.
 
 **Done and device-verified.** The device test's opt-in round trip (`IOSCPP_TEST_IPA` and
 `IOSCPP_TEST_BUNDLE`) stages a development-signed IPA over the `AFC` shim, installs it over the
-installer shim, and uninstalls the bundle, on an iOS 18.7.8 device. An unsigned package is answered
-with `ApplicationVerificationFailed`, so a full install needs a development-signed IPA.
+installer shim, launches it, finds it running, kills it, and uninstalls the bundle, on an iOS 18.7.8
+device. An unsigned package is answered with `ApplicationVerificationFailed`, so a full install needs a
+development-signed IPA.
 
-**Done when:** the tour installs, uninstalls, and controls an app. Process control moves to
-Slice 10, because it is not a plist service but `DTX`.
+**Done when:** the tour installs, uninstalls, and controls an app. The demo step is Slice 8.
 
 ## Slice 8: The guided tour and the device integration test
 
@@ -203,14 +212,21 @@ the tunnel.
 ## Slice 10: CoreDevice and `DTX` developer services
 
 The services Slice 9 opens are the CoreDevice ones (`com.apple.dvt.*`), which speak `DTX`
-rather than the `lockdownd` plists. `dvt` and `fetch-symbols` are the first two.
+rather than the `lockdownd` plists. `processcontrol` is the first.
 
 - `protocol::Dtx`, the `DTX` message codec.
-- `dvt` and `fetch-symbols` over the RSD `Stream` from Slice 9.
+- `protocol::KeyedArchive`, the `NSKeyedArchive` a `DTX` argument rides in, with the
+  `Uid` kind it refers to its objects with.
+- `DtxConnection` and `DtxChannel`, the request/reply and channel layer over a `ByteStream`.
 - `launch`, `close`, and `is_running` from Slice 7, which process control's `DTX`
-  service carries.
+  service over the RSD `dtservicehub` carries.
 
-**Done when:** the tour lists the DVT services and runs one of them.
+**Done and device-verified.** The device test's opt-in round trip launches an installed app over
+the RSD `com.apple.instruments.dtservicehub` service, finds it running by its bundle id, and kills
+it, on an iOS 18.7.8 device. `dvt`'s other channels (`deviceinfo`, `fetch-symbols`) are not
+needed by process control and are left for later.
+
+**Done when:** the tour launches, checks, and closes an app over `DTX`.
 
 ## Non-goals (for now)
 
