@@ -1,5 +1,16 @@
 # The iOS 17+ CoreDevice tunnel
 
+## In plain terms
+
+On iOS 17 and later the phone's app installer and developer tools sit behind a
+**private tunnel**, so the library asks the phone for a tunnel and the phone answers
+with an address, a port, and a size limit. The connection then becomes a pipe of
+**network packets**, which the library re-frames into whole packets and carries over a
+small network stack of its own, with no helper program and no special permission.
+Reaching a service through that tunnel is what unblocks app install, app uninstall,
+and app control. The plain-language tour is in [`00-start-here.md`](00-start-here.md);
+the rest of this document is the same plan in technical terms.
+
 This is the plan for Slice 9 ([#8](https://github.com/promethea156/ioscpp/issues/8), the
 plan itself tracked as [#23](https://github.com/promethea156/ioscpp/issues/23)). It records the
 layers, the wire formats, the API surface, the testing plan, and the one real decision: the
@@ -148,7 +159,7 @@ so they belong to the core and not to `ioscpp-usb`.
 Each increment is end to end and leaves the repository working:
 
 1. `protocol::Cdtunnel` and the raw-IPv6 re-framer, device-free over the mock. No device and no new
-   dependency.
+   dependency. **Done.**
 2. The `CoreDeviceProxy` handshake on `Device`, returning the RSD address and port, with a device test that
    skips on a pre-17.4 device.
 3. The userspace IPv6 + TCP link, device-free against the scripted peer, then reaching the RSD port on a device.

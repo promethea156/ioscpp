@@ -149,6 +149,7 @@ cmake/                  CMake package configuration
 
 ## Where to go next
 
+- [`docs/00-start-here.md`](docs/00-start-here.md) — a plain-language tour of the project, with no prior knowledge assumed.
 - [`examples/demo/main.cpp`](examples/demo/main.cpp) — the guided tour, step by step in its comments.
 - [`docs/05-usage.md`](docs/05-usage.md) — copy-pasteable snippets for one feature at a time.
 - [`docs/06-afc-protocol.md`](docs/06-afc-protocol.md) — how `AFC` and file transfer work, byte by byte.
@@ -156,6 +157,7 @@ cmake/                  CMake package configuration
 
 ## Design documents
 
+- [`docs/00-start-here.md`](docs/00-start-here.md) — a plain-language tour of the project, and a glossary of the terms it uses
 - [`docs/01-objective.md`](docs/01-objective.md) — objective, technical requirements, versioning, and commit conventions
 - [`docs/02-references.md`](docs/02-references.md) — reference material on the iOS device protocols
 - [`docs/03-roadmap.md`](docs/03-roadmap.md) — vertical-slice implementation roadmap
@@ -165,6 +167,7 @@ cmake/                  CMake package configuration
 - [`docs/07-error-model.md`](docs/07-error-model.md) — why nothing throws, and what `Result<T>` carries instead
 - [`docs/08-assumptions.md`](docs/08-assumptions.md) — what the implementation assumes but has not yet proven on a device
 - [`docs/09-platform-setup.md`](docs/09-platform-setup.md) — what to install and grant per platform to build and reach a device
+- [`docs/10-coredevice-tunnel.md`](docs/10-coredevice-tunnel.md) — the iOS 17+ CoreDevice tunnel plan: the layers, the wire formats, and the testing plan
 
 ## Contributing
 

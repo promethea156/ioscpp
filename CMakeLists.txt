@@ -74,6 +74,9 @@ add_library(ioscpp
   src/crypto/pairing.cpp
   src/device.cpp
   src/lockdown.cpp
+  src/protocol/cdtunnel.cpp
+  src/protocol/ipv6.cpp
+  src/protocol/json.cpp
   src/protocol/plist.cpp
   src/protocol/usbmux.cpp
   src/session.cpp
