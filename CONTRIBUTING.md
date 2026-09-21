@@ -32,20 +32,26 @@ the device test too (see [The device test](#the-device-test)).
 If the build or a test fails, a report with the exact compiler, CMake version, OS, and
 output is already a contribution — [open a bug](https://github.com/promethea156/ioscpp/issues/new?template=bug_report.yml).
 
-### Pick up a roadmap item
+### Pick up an open issue
 
-[`docs/03-roadmap.md`](docs/03-roadmap.md) is the plan. The remaining slices each have an
-issue, and most of them are blocked on one thing: **a run against a real device**. The iOS 17+ `RSD`
-tunnel (Slice 9) is done, so app install and uninstall now run over its shims; the remaining work is
-the guided tour and `DTX`, and the device runs that report what happens. Items labelled
-[`good first issue`](https://github.com/promethea156/ioscpp/labels/good%20first%20issue)
+[`docs/03-roadmap.md`](docs/03-roadmap.md) is the plan, and every slice in it is done: the
+library connects, pairs, reads identity and files, installs and controls apps, and the guided tour
+walks it all once against a real device. What is left is the
+[non-goals](docs/03-roadmap.md#non-goals-for-now) and proving the library on more than Windows.
+The open issues fall into three groups:
+
+- **Verification**, which needs hardware: a device run on Linux or macOS, the pre-17.4
+  mux-link fallback, and driving two devices at once. A red report is as useful as a green
+  one, and none of it needs new code.
+- **Robustness and CI**: fuzzing the wire codecs, bounding the device test with a timeout,
+  and hardening the build and CI (sanitizers, the no-USB configuration, the installed package).
+- **Features** beyond the current scope: app container access over `house_arrest`, a
+  kernel-routable tunnel, and the Wi-Fi route for iOS 17.0–17.3.1.
+
+Items labelled [`good first issue`](https://github.com/promethea156/ioscpp/labels/good%20first%20issue)
 need little context; those labelled
 [`help wanted`](https://github.com/promethea156/ioscpp/labels/help%20wanted) are broader.
-Reasonable starting points today:
-
-- **Build the guided tour and the device integration test** ([#7](https://github.com/promethea156/ioscpp/issues/7)) — walk every implemented feature against one device.
-- **Build `DTX` and the `dvt` services** ([#9](https://github.com/promethea156/ioscpp/issues/9)) — the last layer, and it unblocks app process control.
-- **Validate app install, uninstall, and control** ([#6](https://github.com/promethea156/ioscpp/issues/6)) — install and uninstall are proven; process control needs `DTX`.
+[Browse the open issues](https://github.com/promethea156/ioscpp/issues) and pick one.
 
 If an issue looks stale or already done, say so in it rather than guessing.
 
