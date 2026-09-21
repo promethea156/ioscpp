@@ -27,23 +27,38 @@ ioscpp_fuzz_http2.vcxproj    -> ...\ioscpp_fuzz_http2.exe
 ## Run the standalone driver
 
 ```
-build-fuzz\fuzz\Release\ioscpp_fuzz_plist.exe -runs=20000
+build-fuzz\fuzz\Release\ioscpp_fuzz_plist.exe -runs=200000
 ```
 
-Each harness fed 20000 deterministic pseudo-random inputs and returned 0:
+Each harness fed 200000 deterministic pseudo-random inputs and returned 0:
 
 ```
-ioscpp_fuzz_plist    -> exit 0 : ran 20000 inputs
-ioscpp_fuzz_xpc      -> exit 0 : ran 20000 inputs
-ioscpp_fuzz_dtx      -> exit 0 : ran 20000 inputs
-ioscpp_fuzz_cdtunnel -> exit 0 : ran 20000 inputs
-ioscpp_fuzz_ipv6     -> exit 0 : ran 20000 inputs
-ioscpp_fuzz_afc      -> exit 0 : ran 20000 inputs
-ioscpp_fuzz_http2    -> exit 0 : ran 20000 inputs
+ioscpp_fuzz_plist    -> exit 0 : ran 200000 inputs
+ioscpp_fuzz_xpc      -> exit 0 : ran 200000 inputs
+ioscpp_fuzz_dtx      -> exit 0 : ran 200000 inputs
+ioscpp_fuzz_cdtunnel -> exit 0 : ran 200000 inputs
+ioscpp_fuzz_ipv6     -> exit 0 : ran 200000 inputs
+ioscpp_fuzz_afc      -> exit 0 : ran 200000 inputs
+ioscpp_fuzz_http2    -> exit 0 : ran 200000 inputs
 ```
 
 The fuzzers call the same `parse`/`decode` entry points the device-free tests exercise, and
 those tests pass, so the parsers are reached rather than skipped.
+
+## Findings
+
+The first libFuzzer run in CI (`.github/workflows/ci.yml`, the `fuzz` job) found two crashes, both
+an unbounded allocation from a crafted length. Both are fixed, and each crashing input is pinned as a
+regression case:
+
+- `ioscpp_fuzz_xpc` aborted with an ASan out-of-memory on an array whose element count claimed far
+  more elements than the bytes that remain, so `decode_object` reserved for the count before it was
+  bounded. `src/protocol/remotexpc.cpp` now rejects a count larger than the bytes that remain, and
+  `tests/remotexpc_test.cpp` pins the crashing input.
+- `ioscpp_fuzz_plist` aborted on a binary plist whose trailer object count, multiplied by the offset
+  size, overflowed the table-bounds check and then drove a huge allocation. The bound in
+  `src/protocol/plist.cpp` is now formed as a division, and the object-level reads and count-based
+  allocations are bounds-checked; `tests/plist_test.cpp` pins the crafted trailer.
 
 ## Guards
 
@@ -62,14 +77,14 @@ CMake Error at fuzz/CMakeLists.txt:27 (message):
 
 ## Formatting and the device-free suite
 
-The new sources are formatted, and the suite is unchanged:
+The sources are formatted and the suite passes, including the two regression cases:
 
 ```
 === format-check ===
   Checking ioscpp formatting with clang-format      (no violations)
 
 === ctest (device-free) ===
-100% tests passed, 0 tests failed out of 97
+100% tests passed, 0 tests failed out of 99
 ```
 
 ## Limits
