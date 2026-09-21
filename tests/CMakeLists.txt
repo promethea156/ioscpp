@@ -62,4 +62,25 @@ if(IOSCPP_BUILD_USB)
   # that blocks on a human (the trust prompt, or `IOSCPP_TEST_REPLUG`) does not,
   # so CTest kills the test rather than letting it hang the suite.
   set_tests_properties(device PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 900)
+
+  # The multi-device test drives every attached device at once, so it is a
+  # separate test that skips with code 77 when fewer than two are attached. Its
+  # name has no `device` substring, so `-E "^device$"` still excludes only the
+  # single-device test.
+  add_executable(ioscpp_multi_device_tests multi_device_test.cpp)
+  target_link_libraries(ioscpp_multi_device_tests
+    PRIVATE ioscpp::usb
+  )
+
+  if(WIN32)
+    add_custom_command(TARGET ioscpp_multi_device_tests POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E copy_if_different
+              $<TARGET_RUNTIME_DLLS:ioscpp_multi_device_tests>
+              $<TARGET_FILE_DIR:ioscpp_multi_device_tests>
+      COMMAND_EXPAND_LISTS
+    )
+  endif()
+
+  add_test(NAME multi COMMAND ioscpp_multi_device_tests)
+  set_tests_properties(multi PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 900)
 endif()
