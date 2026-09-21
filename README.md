@@ -64,9 +64,9 @@ both devices driven at once; **17.5.1 is the oldest iOS version tested so far**.
 - **Apps**: install and uninstall an app over the RSD `AFC` and `installation_proxy` shims on iOS 17.4+, or the mux link below; launch it, check whether it is running, and close it.
 - **App files**: list, `stat`, pull, and push inside one installed app's own container over `house_arrest`, on the mux link or the iOS 17.4+ RSD shim.
 
-Connect, Info, Files, app install/uninstall, and app process control are proven on a
-device. App container access is implemented and device-free tested, but not yet run on a
-device. Process control rides the RSD `com.apple.instruments.dtservicehub` service over
+Connect, Info, Files, app install/uninstall, app process control, and app container
+access are proven on a device; the container vends over the RSD shim on iOS 17.4+. Process
+control rides the RSD `com.apple.instruments.dtservicehub` service over
 `DTX`, Slice 10 in [`docs/03-roadmap.md`](docs/03-roadmap.md). Several devices are
 independent, so a program can drive every attached device at once, one thread per device;
 [`examples/multi`](examples/multi/main.cpp) does exactly that.

@@ -209,9 +209,11 @@ RSD shim `com.apple.mobile.house_arrest.shim.remote`; `libimobiledevice`'s
 `house_arrest_send_command` sends the same command. Neither passes the bundle id in
 `StartService`, so the vend command is the reference behavior, not the issue's `ApplicationID`.
 
-**Status.** The client and the device-free test are done. The device step is opt-in with
-`IOSCPP_TEST_IPA`/`IOSCPP_TEST_BUNDLE`, tries the RSD shim first and the mux link as the
-fallback, and is not yet run on a device.
+**Status.** Proven on a device. The device test's opt-in round trip installed a
+development-signed IPA on an iOS 18.7.8 device and the container vended over the RSD shim
+(`container: vended over the RSD shim`); it listed the container and round-tripped a file in its
+`Documents`. The mux-link fallback was not reached, because the RSD shim answered first, so whether
+`com.apple.mobile.house_arrest` still answers on the mux link on 17.4+ is not settled.
 
 **Proof.** A device of iOS 17.4 or later lists an installed app's `Documents` and round-trips a
 file in it (`tests/device_test.cpp`).

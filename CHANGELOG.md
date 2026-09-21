@@ -13,8 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `com.apple.mobile.house_arrest` over the mux link or, on iOS 17.4+, its
   `com.apple.mobile.house_arrest.shim.remote` RSD shim, sends the
   `VendContainer`/`VendDocuments` command with the bundle id, and returns the `Afc`
-  session rooted at the container. Tested device-free over the mock; the device step is
-  pending a hardware run.
+  session rooted at the container. Tested device-free over the mock, and device-verified
+  on iOS 18.7.8, where the container vended over the RSD shim.
 
 ### Fixed
 
