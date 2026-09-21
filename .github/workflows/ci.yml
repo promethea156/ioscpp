@@ -44,6 +44,33 @@ jobs:
       - name: Test
         run: ctest --test-dir build --output-on-failure -C Release
 
+  # The codecs parse bytes that come from a device, and malformed input must
+  # return an error rather than crash, so the device-free suite runs under ASan
+  # and UBSan with recovery disabled, and the first finding fails the job. The USB
+  # backend is off: it cannot be exercised without a device, and instrumenting its
+  # third-party dependency would only add noise.
+  sanitizers:
+    name: ASan+UBSan
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: >
+          cmake -S . -B build
+          -DCMAKE_BUILD_TYPE=Debug
+          -DIOSCPP_BUILD_TESTS=ON
+          -DIOSCPP_BUILD_EXAMPLES=ON
+          -DIOSCPP_BUILD_USB=OFF
+          -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer -g"
+
+      - name: Build
+        run: cmake --build build --config Debug
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure -C Debug
+
   # `IOSCPP_BUILD_USB=OFF` is the documented way for a consumer to build the core
   # with no USB dependency and supply its own `Transport`, so it is built and tested
   # on its own to keep the configuration from rotting.
