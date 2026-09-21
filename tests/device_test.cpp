@@ -12,7 +12,9 @@
 // `IOSCPP_TEST_BUNDLE` name a disposable app, and the round trip replaces it
 // and loses its data. The IPA must be development-signed with the device in its
 // provisioning profile; an unsigned IPA is refused with
-// `ApplicationVerificationFailed`.
+// `ApplicationVerificationFailed`. With it installed, the round trip also lists
+// the app's own container over `house_arrest` and round-trips a file in its
+// `Documents`, then uninstalls the bundle.
 //
 // The tunnel step opens the iOS 17.4+ CoreDevice tunnel, checks the RSD address,
 // port, and MTU, opens a userspace TCP link to the RSD port, connects the RSD,
@@ -41,6 +43,7 @@
 #include "ioscpp/afc.hpp"
 #include "ioscpp/app.hpp"
 #include "ioscpp/crypto/pairing.hpp"
+#include "ioscpp/house_arrest.hpp"
 #include "ioscpp/rsd.hpp"
 #include "ioscpp/tcp_link.hpp"
 #include "ioscpp/usb/usb_transport.hpp"
@@ -356,6 +359,79 @@ int main()
                             else
                             {
                                 std::cout << "install: installed " << bundle << "\n";
+
+                                // The app's own container, over `house_arrest`. On
+                                // iOS 17.4+ the service rides the RSD shim; the
+                                // mux-link service is the fallback, and the mux
+                                // carries one service at a time, so the media-root
+                                // AFC is closed before a mux service is started.
+                                std::optional<ioscpp::HouseArrest> container;
+                                auto over_rsd = ioscpp::HouseArrest::start(*rsd, bundle);
+                                if (over_rsd)
+                                {
+                                    std::cout << "container: vended over the RSD shim\n";
+                                    container = std::move(*over_rsd);
+                                }
+                                else
+                                {
+                                    afc.reset();
+                                    auto over_mux = ioscpp::HouseArrest::start(*device, bundle);
+                                    if (over_mux)
+                                    {
+                                        std::cout << "container: vended over the mux link\n";
+                                        container = std::move(*over_mux);
+                                    }
+                                    else
+                                    {
+                                        ok = check(false, "opening the app container failed") && ok;
+                                        std::cerr << "container: rsd: " << over_rsd.error().message << "\n";
+                                        std::cerr << "container: mux: " << over_mux.error().message << "\n";
+                                    }
+                                }
+
+                                if (container)
+                                {
+                                    auto entries = container->afc().list("/");
+                                    ok = check(entries.has_value() && !entries->empty(),
+                                               "the app container listed no entry") &&
+                                         ok;
+
+                                    const std::string in_container = "/Documents/ioscpp_device_test.bin";
+                                    ioscpp::Status container_pushed = container->afc().push(local, in_container);
+                                    ok = check(container_pushed.has_value(), "pushing into the app container failed") &&
+                                         ok;
+                                    if (container_pushed)
+                                    {
+                                        auto info = container->afc().stat(in_container);
+                                        ok =
+                                            check(info.has_value() && info->has_value() &&
+                                                      (*info)->size == payload.size(),
+                                                  "the file in the app container did not stat back at its full size") &&
+                                            ok;
+                                    }
+
+                                    ioscpp::Status container_pulled = container->afc().pull(in_container, back);
+                                    ok = check(container_pulled.has_value(), "pulling from the app container failed") &&
+                                         ok;
+                                    if (container_pulled)
+                                    {
+                                        std::vector<std::byte> container_bytes(payload.size());
+                                        std::ifstream in(back, std::ios::binary);
+                                        in.read(reinterpret_cast<char *>(container_bytes.data()),
+                                                static_cast<std::streamsize>(container_bytes.size()));
+                                        ok = check(container_bytes == payload,
+                                                   "the container round trip did not match the pushed bytes") &&
+                                             ok;
+                                    }
+
+                                    ioscpp::Status container_removed = container->afc().remove(in_container);
+                                    ok = check(container_removed.has_value(),
+                                               "removing from the app container failed") &&
+                                         ok;
+
+                                    container->close();
+                                    container.reset();
+                                }
 
                                 // Process control rides the RSD
                                 // `dtservicehub` over DTX: launch the app,

@@ -75,6 +75,7 @@ add_library(ioscpp
   src/crypto/pairing.cpp
   src/device.cpp
   src/dtx_connection.cpp
+  src/house_arrest.cpp
   src/lockdown.cpp
   src/plist_service.cpp
   src/process_control.cpp
