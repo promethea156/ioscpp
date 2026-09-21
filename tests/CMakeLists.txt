@@ -58,5 +58,8 @@ if(IOSCPP_BUILD_USB)
   endif()
 
   add_test(NAME device COMMAND ioscpp_device_tests)
-  set_tests_properties(device PROPERTIES SKIP_RETURN_CODE 77)
+  # A stalled service fails within the transport's transfer budget, but a step
+  # that blocks on a human (the trust prompt, or `IOSCPP_TEST_REPLUG`) does not,
+  # so CTest kills the test rather than letting it hang the suite.
+  set_tests_properties(device PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 900)
 endif()

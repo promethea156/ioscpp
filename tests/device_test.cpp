@@ -67,6 +67,19 @@ bool version_at_least(std::string_view version, int major, int minor)
     return parsed_major > major || (parsed_major == major && parsed_minor >= minor);
 }
 
+/// The per-transfer timeout, so a silent bulk transfer gives up quickly and the
+/// read retries instead of blocking on it.
+constexpr unsigned int kTransferTimeoutMs = 5000;
+
+/// The transfer budget while pairing, so a read waits long enough for the trust
+/// prompt to be tapped.
+constexpr unsigned int kPairingTransferBudgetMs = 120000;
+
+/// The transfer budget once paired. The budget is the total a read waits across
+/// retries, so a service that never answers fails with a `Transport` error within
+/// it instead of hanging the suite.
+constexpr unsigned int kServiceTransferBudgetMs = 60000;
+
 } // namespace
 
 int main()
@@ -111,7 +124,11 @@ int main()
 
     std::cout << "device: " << selected.serial << "\n";
 
-    auto opened = ioscpp::usb::UsbTransport::open(selected);
+    // The transport's transfer timeout and budget bound every read the services
+    // below make, because they all read this one transport, so a step the device
+    // never answers fails with a `Transport` error instead of hanging the suite.
+    // The pairing budget is the long one, so the trust prompt can be answered.
+    auto opened = ioscpp::usb::UsbTransport::open(selected, kTransferTimeoutMs, kPairingTransferBudgetMs);
     if (!opened)
     {
         std::cerr << "open: " << opened.error().message << "\n";
@@ -141,6 +158,11 @@ int main()
         return 1;
     }
     std::optional<ioscpp::Device> device = std::move(*connected);
+
+    // The device is paired now, so the long pairing budget is lowered: every
+    // service step below reads the same transport, so one that never answers
+    // fails within the shorter budget rather than hanging the suite.
+    transport->set_transfer_budget(kServiceTransferBudgetMs);
 
     std::cout << "udid: " << device->udid() << "\n";
     std::cout << "product: " << device->product_type() << " " << device->product_version() << "\n";
@@ -425,7 +447,9 @@ int main()
     }
     ok = check(present, "the device did not reappear by serial") && ok;
 
-    auto reopened = ioscpp::usb::UsbTransport::open(selected);
+    // The saved pairing is reused, so no trust prompt is waited for and the
+    // shorter service budget bounds the reconnect from the start.
+    auto reopened = ioscpp::usb::UsbTransport::open(selected, kTransferTimeoutMs, kServiceTransferBudgetMs);
     ok = check(reopened.has_value(), "reopening the device failed") && ok;
     if (reopened)
     {
