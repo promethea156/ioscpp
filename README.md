@@ -155,9 +155,10 @@ The fastest way to learn the library is to run [`examples/demo/main.cpp`](exampl
 5. opens the CoreDevice tunnel and the RSD connection, reporting how many services it lists;
 6. installs an app from an IPA, replacing an existing copy;
 7. launches it, checks it is running, and closes it;
-8. uninstalls it.
+8. pushes a file into the app's own container over `house_arrest`, stats it, and pulls it back;
+9. uninstalls it.
 
-Steps 5-8 need iOS 17.4 or later, because the installer and the developer tools moved behind the tunnel there.
+Steps 5-9 need iOS 17.4 or later, because the installer and the developer tools moved behind the tunnel there.
 
 To run it, you need a device with **a trusted host** (tap *Trust* on the device when asked) and an IPA to install. The install replaces that bundle, so it loses the bundle's data.
 
@@ -167,7 +168,7 @@ build/examples/Release/ioscpp_demo_example <bundle-id> <app.ipa>
 
 The binary is under `build/examples/Release/` for a multi-config generator (Visual Studio, Xcode) and `build/examples/` for a single-config one (Makefiles, Ninja).
 
-It uses the first attached device. When it finishes, open the source and read it next to the output: each `step(...)` in the source is one of the eight steps above.
+It uses the first attached device. When it finishes, open the source and read it next to the output: each `step(...)` in the source is one of the nine steps above.
 
 ## Run it against every device
 
