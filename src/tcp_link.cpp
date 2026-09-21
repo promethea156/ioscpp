@@ -223,7 +223,13 @@ struct TcpLink::Impl
         std::vector<std::byte> segment(protocol::kTcpHeaderSize + payload.size());
         const auto tcp_bytes = tcp.encode();
         std::memcpy(segment.data(), tcp_bytes.data(), protocol::kTcpHeaderSize);
-        std::memcpy(segment.data() + protocol::kTcpHeaderSize, payload.data(), payload.size());
+        // A SYN, an ACK, or a FIN carries no payload, and an empty span's data
+        // may be null, which `memcpy` is not allowed to receive even with a
+        // zero length, so the copy is skipped.
+        if (!payload.empty())
+        {
+            std::memcpy(segment.data() + protocol::kTcpHeaderSize, payload.data(), payload.size());
+        }
 
         // The device's TCP verifies the checksum, so it is computed over the
         // IPv6 pseudo-header and the segment, and written at the header offset.
