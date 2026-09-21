@@ -132,6 +132,65 @@ jobs:
       - name: Test
         run: ctest --test-dir build --output-on-failure -C Release
 
+  # The codecs parse bytes that come from a device, and malformed input must
+  # return an error rather than crash, so every codec harness runs under
+  # libFuzzer with ASan and UBSan for a short budget. libFuzzer ships with
+  # upstream Clang, so the job uses Clang rather than the default GCC.
+  fuzz:
+    name: fuzz (libFuzzer)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: >
+          cmake -S . -B build
+          -DCMAKE_C_COMPILER=clang
+          -DCMAKE_CXX_COMPILER=clang++
+          -DIOSCPP_BUILD_TESTS=OFF
+          -DIOSCPP_BUILD_EXAMPLES=OFF
+          -DIOSCPP_BUILD_FUZZERS=ON
+          -DIOSCPP_USE_LIBFUZZER=ON
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Fuzz
+        run: |
+          for fuzzer in build/fuzz/ioscpp_fuzz_*; do
+            echo "== $fuzzer =="
+            "$fuzzer" -max_total_time=30 -rss_limit_mb=2048 -print_final_stats=1
+          done
+
+  # A compiler without libFuzzer (MSVC, or an AppleClang without it) uses the
+  # in-repo standalone driver instead, so that path is built and run too, to keep
+  # it from rotting.
+  fuzz-standalone:
+    name: fuzz (standalone)
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: >
+          cmake -S . -B build
+          -DIOSCPP_BUILD_TESTS=OFF
+          -DIOSCPP_BUILD_EXAMPLES=OFF
+          -DIOSCPP_BUILD_FUZZERS=ON
+          -DIOSCPP_USE_LIBFUZZER=OFF
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Fuzz
+        run: |
+          Get-ChildItem build/fuzz/Release/ioscpp_fuzz_*.exe | ForEach-Object {
+            Write-Host "== $_ =="
+            & $_.FullName -runs=2000
+          }
+
   release:
     name: release
     # Only on a tag, and only after the matrix has built and tested it on every

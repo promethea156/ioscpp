@@ -85,6 +85,24 @@ ctest --test-dir build --output-on-failure -C Release
 
 The `--config Release` flag is used by multi-config generators (Visual Studio, Xcode) and ignored by single-config generators (Makefiles, Ninja). The tests that need a device skip themselves when none is attached, so the build and the suite pass on any machine.
 
+### Fuzz the codecs
+
+The codecs parse bytes that come from a device, and malformed input must return an error rather than crash. Every codec has a harness under `fuzz/`, built one of two ways. With upstream Clang, build them against libFuzzer and run one for a short budget:
+
+```
+cmake -S . -B build -DIOSCPP_BUILD_FUZZERS=ON -DIOSCPP_USE_LIBFUZZER=ON
+cmake --build build --config Release
+build/fuzz/ioscpp_fuzz_plist -max_total_time=30
+```
+
+Without libFuzzer (MSVC, or an AppleClang without it), the same harnesses build against an in-repo driver that feeds a deterministic pseudo-random stream, so they still run:
+
+```
+cmake -S . -B build -DIOSCPP_BUILD_FUZZERS=ON -DIOSCPP_USE_LIBFUZZER=OFF
+cmake --build build --config Release
+build/fuzz/Release/ioscpp_fuzz_plist.exe -runs=20000
+```
+
 <details>
 <summary><b>Linux</b> — untested</summary>
 
@@ -171,7 +189,8 @@ include/ioscpp/testing/  The in-memory transport used by the tests
 src/                    Library sources, mirroring the public headers
 tests/                  Catch2 unit tests and the device integration test
 examples/               Runnable examples: the guided tour in demo/ and the parallel tour in multi/
-tools/                  Developer scripts (device lister, transfer benchmark)
+fuzz/                   One libFuzzer harness per wire codec, plus a standalone driver
+tools/                  Developer scripts and reports (device lister, transfer benchmark, fuzz report)
 docs/                   Design documents and Doxygen configuration
 cmake/                  CMake package configuration
 ```

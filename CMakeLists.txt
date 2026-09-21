@@ -20,6 +20,7 @@ option(IOSCPP_BUILD_TESTS "Build ioscpp tests" ${IOSCPP_IS_TOP_LEVEL})
 option(IOSCPP_BUILD_EXAMPLES "Build ioscpp examples" ${IOSCPP_IS_TOP_LEVEL})
 option(IOSCPP_BUILD_DOCS "Build ioscpp documentation" OFF)
 option(IOSCPP_BUILD_USB "Build the ioscpp USB backend (libusb)" ${IOSCPP_IS_TOP_LEVEL})
+option(IOSCPP_BUILD_FUZZERS "Build the ioscpp codec fuzzers" OFF)
 option(IOSCPP_INSTALL "Generate ioscpp install rules" ${IOSCPP_IS_TOP_LEVEL})
 
 set(CMAKE_CXX_STANDARD 20)
@@ -145,6 +146,10 @@ endif()
 
 if(IOSCPP_BUILD_EXAMPLES)
   add_subdirectory(examples)
+endif()
+
+if(IOSCPP_BUILD_FUZZERS)
+  add_subdirectory(fuzz)
 endif()
 
 if(IOSCPP_BUILD_DOCS)
