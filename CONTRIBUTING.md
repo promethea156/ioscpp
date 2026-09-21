@@ -110,6 +110,11 @@ over the RSD `AFC` shim, installs it over the `installation_proxy` shim, and uni
 uninstalls and reinstalls the bundle and loses its data, so only set those variables for an app you have
 agreed to replace.
 
+`ioscpp_multi_device_tests` (CTest test `multi`) is the separate multi-device test. It drives every
+attached device at once, one thread per device, and asserts each completes a connect and an AFC round
+trip in the same run; it skips with code 77 when fewer than two devices are attached. `IOSCPP_TEST_SERIAL`
+still selects one device, so setting it narrows the multi-device test to one and it skips.
+
 A device that has not been trusted by this host shows the *Trust This Computer?* prompt, and the pairing
 exchange blocks until it is answered, so run the device test from an interactive terminal.
 
