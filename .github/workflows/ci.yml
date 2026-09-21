@@ -44,6 +44,29 @@ jobs:
       - name: Test
         run: ctest --test-dir build --output-on-failure -C Release
 
+  # `IOSCPP_BUILD_USB=OFF` is the documented way for a consumer to build the core
+  # with no USB dependency and supply its own `Transport`, so it is built and tested
+  # on its own to keep the configuration from rotting.
+  build-no-usb:
+    name: core (USB off)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: >
+          cmake -S . -B build
+          -DIOSCPP_BUILD_TESTS=ON
+          -DIOSCPP_BUILD_EXAMPLES=ON
+          -DIOSCPP_BUILD_USB=OFF
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure -C Release
+
   release:
     name: release
     # Only on a tag, and only after the matrix has built and tested it on every
