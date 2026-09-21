@@ -44,6 +44,44 @@ jobs:
       - name: Test
         run: ctest --test-dir build --output-on-failure -C Release
 
+  # The install rules, the export set, and `ioscppConfig.cmake` are only valid if
+  # a downstream `find_package(ioscpp)` consumer builds against them, so the build
+  # is installed and a tiny consumer is configured, built, and run against it.
+  package:
+    name: package (find_package)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: >
+          cmake -S . -B build
+          -DIOSCPP_BUILD_TESTS=OFF
+          -DIOSCPP_BUILD_EXAMPLES=OFF
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Install
+        run: cmake --install build --config Release --prefix "${GITHUB_WORKSPACE}/install"
+
+      - name: Configure the consumer
+        run: >
+          cmake -S tests/package -B consumer
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_PREFIX_PATH="${GITHUB_WORKSPACE}/install"
+
+      - name: Build the consumer
+        run: cmake --build consumer --config Release
+
+      # The USB backend links libusb, which is a shared library here, so the
+      # loader has to find it in the install tree.
+      - name: Run the consumer
+        env:
+          LD_LIBRARY_PATH: ${{ github.workspace }}/install/lib
+        run: ./consumer/ioscpp_package_consumer
+
   # The codecs parse bytes that come from a device, and malformed input must
   # return an error rather than crash, so the device-free suite runs under ASan
   # and UBSan with recovery disabled, and the first finding fails the job. The USB
