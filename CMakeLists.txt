@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.24)
 # here and the `-<pre-release>` suffix lives in the tag and the changelog.
 project(
   ioscpp
-  VERSION 2.1.0
+  VERSION 2.2.0
   DESCRIPTION "A simplified, dependency-free iOS device client library in C++"
   HOMEPAGE_URL "https://github.com/promethea156/ioscpp"
   LANGUAGES CXX
@@ -77,6 +77,7 @@ add_library(ioscpp
   src/dtx_connection.cpp
   src/house_arrest.cpp
   src/lockdown.cpp
+  src/log.cpp
   src/plist_service.cpp
   src/process_control.cpp
   src/protocol/cdtunnel.cpp

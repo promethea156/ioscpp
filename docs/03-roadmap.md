@@ -28,6 +28,18 @@ All slices 0 to 10 are done, so the roadmap is complete for the current scope. T
 that is left is the [non-goals](#non-goals-for-now): the privileged `tunneld` and `utun`
 interface, the device-initiated AV/HID paths, WebDriverAgent, and iOS 17.0–17.3.1 over Wi-Fi.
 
+### Beyond the slices
+
+A few helpers are tracked as issues rather than slices, because each is a small addition
+on top of the finished layers:
+
+- `ioscpp::connect_with_retry`, which owns the re-discover, open, and connect loop for a
+  dropped link (#93, done).
+- A process-wide logger, so a caller can follow what the library is doing (#91, done).
+- `Transport::wait_readable`, so one thread can drive several devices (#92).
+- The device's `diagnostics_relay` power requests, so a caller can turn the screen off,
+  restart, and shut down (#89), and whether the screen can be turned back on (#90).
+
 Slice 8, the guided tour, is complete: `examples/demo` walks connect, identity, AFC
 list/push/stat/pull, the `CoreDevice` tunnel, the RSD connection, install, launch, the
 running check, close, the app container over `house_arrest`, and uninstall against one
@@ -182,7 +194,8 @@ Discovery) tunnel to the device. On a device of 17.4 or later, `lockdownd` expos
 `com.apple.internal.devicecompute.CoreDeviceProxy` service, whose `CDTunnel`-framed JSON
 handshake returns the tunnel interface's address, MTU, and RSD port and then carries the
 tunnel's IPv6 packets as data. On 17.0–17.3.1 the same tunnel is reached over the Wi-Fi
-**RemotePairing** route instead.
+**RemotePairing** route instead, which is a non-goal and more than a route swap
+([`10-coredevice-tunnel.md`](10-coredevice-tunnel.md#the-wi-fi-remotepairing-route-ios-1701731)).
 
 The tunnel is what app install, uninstall, and control, and every later CoreDevice feature, need,
 so it is the next work after the `lockdownd` and AFC work that runs over the plain mux, and it is
@@ -239,4 +252,8 @@ control and are left for later.
   the first target, because it needs no root and no extra driver.
 - The device-initiated AV/HID paths, and WebDriverAgent.
 - iOS 17.0–17.3.1 over Wi-Fi, which needs the RemotePairing route rather than
-  `CoreDeviceProxy`.
+  `CoreDeviceProxy`. This is more than a route swap: it needs Bonjour discovery, a second
+  pairing record, a pair-verify handshake, an encrypted control channel, and a QUIC transport
+  mbedTLS cannot provide, and it cannot be verified without a 17.0–17.3.1 device. The layers
+  and the two blockers are in [`10-coredevice-tunnel.md`](10-coredevice-tunnel.md#the-wi-fi-remotepairing-route-ios-1701731)
+  (issue #73).

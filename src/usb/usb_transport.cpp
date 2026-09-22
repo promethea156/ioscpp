@@ -16,6 +16,8 @@
 #include <utility>
 #include <vector>
 
+#include "ioscpp/log.hpp"
+
 namespace ioscpp::usb
 {
 namespace
@@ -352,6 +354,7 @@ struct UsbTransport::Impl
             {
                 return rc;
             }
+            log(LogLevel::Warning, "the USB transfer timed out; retrying");
         }
     }
 
@@ -488,6 +491,7 @@ Result<UsbTransport> UsbTransport::open(DeviceId id, unsigned int transfer_timeo
     libusb_clear_halt(transport.impl_->handle, transport.impl_->endpoint_in);
     libusb_clear_halt(transport.impl_->handle, transport.impl_->endpoint_out);
 
+    log(LogLevel::Info, "opened USB device " + transport.impl_->serial);
     return transport;
 }
 

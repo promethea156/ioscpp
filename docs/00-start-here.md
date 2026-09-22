@@ -43,7 +43,8 @@ The library can already do all of the everyday work:
 - pair with it once, and remember the pairing;
 - read the phone's model, iOS version, and unique id;
 - list a folder, check a path, and copy a file to or from the phone;
-- start a service by name and talk to it.
+- start a service by name and talk to it;
+- follow what it is doing in a log, if asked to.
 
 The app install and uninstall code is written too; on a newer iPhone it needs the
 tunnel described in the next section, which the library now has.
@@ -127,7 +128,9 @@ running, reads and writes inside the app's own folder, closes it, and removes it
 Verified on a real iPhone running iOS 18.7.8.
 
 What is left is not on the roadmap yet: the privileged helper, the keyboard and screen
-paths, and the older Wi-Fi route (the non-goals).
+paths, and the older Wi-Fi route (the non-goals). The older Wi-Fi route turned out to be
+bigger than it looked — it needs its own separate pairing step, and a kind of connection
+the library cannot make today — so it stays a non-goal for now.
 
 ## The words this project uses
 

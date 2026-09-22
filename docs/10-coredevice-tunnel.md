@@ -14,7 +14,8 @@ the rest of this document is the same plan in technical terms.
 This is the plan for Slice 9 ([#8](https://github.com/promethea156/ioscpp/issues/8), the
 plan itself tracked as [#23](https://github.com/promethea156/ioscpp/issues/23)). It records the
 layers, the wire formats, the API surface, the testing plan, and the one real decision: the
-userspace TCP/IP stack. It is written before any of it is implemented.
+userspace TCP/IP stack. It was written before any of it was implemented, and is kept as the
+record of the plan; the slices below are now done.
 
 ## Why the tunnel exists
 
@@ -23,11 +24,12 @@ iOS 17 moved the developer services off `lockdownd` and onto **CoreDevice** over
 `CoreDeviceProxy` handshake that hands out an IPv6 **RSD** (Remote Service Discovery) address
 and port, and the tunnel carries the device's IPv6 packets as data. On iOS 17.4 and later
 `lockdownd` exposes `com.apple.internal.devicecompute.CoreDeviceProxy` for this; on 17.0–17.3.1
-the same tunnel is reached over the Wi-Fi **RemotePairing** route instead, which is out of scope.
+the same tunnel is reached over the Wi-Fi **RemotePairing** route instead, which is out of scope
+([below](#the-wi-fi-remotepairing-route-ios-1701731)).
 
 The mux-link `installation_proxy` accepts a connection but does not answer on iOS 17+
 (`docs/04-blockers.md`), so app install and uninstall use the RSD `AFC` and installer shims on
-this tunnel (Slice 7), and app control and every CoreDevice feature wait on the `DTX` codec
+this tunnel (Slice 7), and app control and every CoreDevice feature run over the `DTX` codec
 (Slice 10).
 
 ## The four layers
@@ -154,6 +156,44 @@ The exact HTTP/2 framing, RemoteXPC header, and `xpc` codec are pinned against p
 plist codec (a type word, then a length-prefixed value, with an aligned string), so `protocol::Json` and
 `protocol::Plist` are the models it follows.
 
+## The Wi-Fi RemotePairing route (iOS 17.0–17.3.1)
+
+iOS 17.0–17.3.1 has no `CoreDeviceProxy`: those versions reach the same tunnel only
+over the Wi-Fi **RemotePairing** route (issue #73). Only the layers above the `CDTunnel`
+handshake are reused; everything below it is new.
+
+In order, from the device to `CDTunnel`:
+
+1. **Bonjour discovery.** The device advertises `_remotepairing._tcp`, and each answer is
+   matched to a pair record by an `authTag` derived from the record's 16-byte `altIRK`, so
+   only a device this host has paired with is contacted.
+2. **A separate pairing record.** RemotePairing keeps its own record (an Ed25519 key pair,
+   `remote_unlock_host_key`, `peer_alt_irk`), in a different store from the USB
+   `lockdownd` record that `crypto::Pairing` holds. A record that predates `altIRK` is
+   rejected, so a host paired only over USB has to pair again over RemotePairing (SRP, and the
+   *Trust* prompt).
+3. **The RemotePairing handshake.** `RemotePairingProtocol` runs pair-verify with X25519 +
+   Ed25519 + HKDF-SHA512 + ChaCha20Poly1305, carried in XPC-style messages
+   (`message.plain._0`, `originatedBy`, `sequenceNumber`), then derives `ClientEncrypt-main`
+   and `ServerEncrypt-main` keys for an encrypted control channel.
+4. **A listener and the transport.** An encrypted `createListener` request returns a port, and
+   the tunnel then runs over **QUIC on pre-18.2** or **TLS-PSK TCP on 18.2+**
+   (`remote/common.py`: `TunnelProtocol.DEFAULT`, and the code raises `iOS 18.2+ removed
+   QUIC protocol support`).
+5. **Then** `protocol::Cdtunnel`, `protocol::Ipv6Framer`, `TcpLink`, and `Rsd` are reused
+   unchanged.
+
+Two blockers keep this a non-goal. First, iOS 17.0–17.3.1 is pre-18.2, so its transport is
+QUIC, which this repository cannot reach: mbedTLS 3.6.2 ships no QUIC, so QUIC means a new
+dependency (ngtcp2/quiche/msquic) and a TLS 1.3 handshake with datagram-frame handling. The
+TLS-PSK TCP path mbedTLS can do is the 18.2+ route, not the one 17.0–17.3.1 needs. Second,
+verification needs a device on iOS 17.0–17.3.1, and the devices on hand are iOS 17.5.1 and 18.7.8,
+both already on `CoreDeviceProxy`.
+
+Reference: pymobiledevice3 `remote/tunnel_service.py` (`RemotePairingProtocol`,
+`RemotePairingTunnelService`, `RemotePairingQuicTunnel`, `RemotePairingTcpTunnel`,
+`get_remote_pairing_tunnel_services`) and `remote/common.py` (`TunnelProtocol`).
+
 ## API surface
 
 - `protocol::Cdtunnel`: encode and decode a `CDTunnel` frame, and the handshake request and response
@@ -237,7 +277,9 @@ HTTP/2, so it is three, each end to end.
 ## Risks and blockers
 
 - **The device must be 17.4 or later.** The device test skips on anything older, and 17.0–17.3.1 needs the
-  Wi-Fi RemotePairing route, which is a non-goal for now.
+  Wi-Fi RemotePairing route, which is a non-goal for now: it is not a route swap but a second pairing record,
+  a pair-verify handshake, an encrypted control channel, and a QUIC transport mbedTLS cannot provide
+  ([above](#the-wi-fi-remotepairing-route-ios-1701731), issue #73).
 - **The RSD address is IPv6 and route-less** (`docs/04-blockers.md`). It is not reachable from the host's routing
   table, so every packet goes over the tunnel by hand and never through the host stack.
 - **The RemoteXPC flags word must be exact** (`docs/04-blockers.md`). A wrong value makes the device drop the

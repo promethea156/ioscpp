@@ -5,8 +5,6 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
-#include <cstdio>
-#include <cstdlib>
 #include <span>
 #include <string>
 #include <thread>
@@ -15,6 +13,7 @@
 
 #include "ioscpp/connection.hpp"
 #include "ioscpp/error.hpp"
+#include "ioscpp/log.hpp"
 #include "ioscpp/protocol/usbmux.hpp"
 #include "ioscpp/transport.hpp"
 
@@ -90,24 +89,23 @@ std::string reset_text(std::span<const std::byte> payload)
     return text;
 }
 
-/// Prints a received TCP frame when `IOSCPP_TRACE` is set.
+/// Logs a TCP frame, without its payload, when `Debug` is enabled. The reset
+/// reason is payload-derived, so it is logged only at `Trace`.
 void trace_tcp(const char *where, const protocol::TcpHeader &tcp, std::span<const std::byte> payload)
 {
-    if (std::getenv("IOSCPP_TRACE") == nullptr)
+    if (!is_logging(LogLevel::Debug))
     {
         return;
     }
-    std::fprintf(stderr, "[%s] sport=%u dport=%u seq=%u ack=%u flags=0x%02x win=%u len=%zu", where, tcp.source_port,
-                 tcp.destination_port, tcp.sequence, tcp.acknowledgement, tcp.flags, tcp.window, payload.size());
-    if ((tcp.flags & protocol::TcpRst) != 0)
+    std::string message = std::string("[") + where + "] sport=" + std::to_string(tcp.source_port) +
+                          " dport=" + std::to_string(tcp.destination_port) + " seq=" + std::to_string(tcp.sequence) +
+                          " ack=" + std::to_string(tcp.acknowledgement) + " flags=0x" + std::to_string(tcp.flags) +
+                          " win=" + std::to_string(tcp.window) + " len=" + std::to_string(payload.size());
+    if ((tcp.flags & protocol::TcpRst) != 0 && is_logging(LogLevel::Trace))
     {
-        std::fprintf(stderr, " reason=\"%s\" hex=", reset_text(payload).c_str());
-        for (const std::byte byte : payload)
-        {
-            std::fprintf(stderr, "%02x", static_cast<unsigned>(byte));
-        }
+        message += " reason=\"" + reset_text(payload) + "\"";
     }
-    std::fprintf(stderr, "\n");
+    log(LogLevel::Debug, message);
 }
 
 constexpr std::uint32_t kConnect = 2;
@@ -166,12 +164,14 @@ Result<Stream> Stream::open(std::shared_ptr<Connection> connection, std::uint16_
         }
         if (get_le32(answer, 4) != kResult || get_le32(answer, 12) != kResultOk)
         {
+            log(LogLevel::Error, "usbmuxd refused the port " + std::to_string(port));
             return tl::unexpected(Error{ErrorCode::Device, "usbmuxd refused the port"});
         }
 
         Stream stream(connection, 0, port);
         stream.usbmuxd_ = true;
         stream.owned_transport_ = std::move(*transport);
+        log(LogLevel::Info, "opened stream local_port=0 remote_port=" + std::to_string(port) + " over usbmuxd");
         return stream;
     }
 
@@ -215,6 +215,8 @@ Result<Stream> Stream::open(std::shared_ptr<Connection> connection, std::uint16_
         {
             const std::string reason =
                 reset_text(std::span<const std::byte>(frame->payload).subspan(protocol::kTcpHeaderSize));
+            log(LogLevel::Error,
+                "the device refused the port " + std::to_string(port) + (reason.empty() ? "" : ": " + reason));
             return tl::unexpected(Error{ErrorCode::Device, reason.empty() ? "the device refused the port"
                                                                           : "the device refused the port: " + reason});
         }
@@ -242,6 +244,8 @@ Result<Stream> Stream::open(std::shared_ptr<Connection> connection, std::uint16_
         // after it answers the SYN, so a short pause keeps the first data frame
         // from racing the session's creation.
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        log(LogLevel::Info,
+            "opened stream local_port=" + std::to_string(local_port) + " remote_port=" + std::to_string(port));
         return stream;
     }
 }
@@ -300,6 +304,8 @@ void Stream::close_now() noexcept
         return;
     }
     closed_ = true;
+    log(LogLevel::Info,
+        "closed stream local_port=" + std::to_string(local_port_) + " remote_port=" + std::to_string(remote_port_));
 
     if (usbmuxd_)
     {
