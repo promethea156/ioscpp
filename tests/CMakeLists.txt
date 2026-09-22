@@ -10,6 +10,7 @@ FetchContent_MakeAvailable(Catch2)
 add_executable(ioscpp_tests
   afc_test.cpp
   cdtunnel_test.cpp
+  connect_test.cpp
   dtx_connection_test.cpp
   dtx_test.cpp
   house_arrest_test.cpp

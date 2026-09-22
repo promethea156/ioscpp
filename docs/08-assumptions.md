@@ -135,12 +135,14 @@ re-enumerates and its USB address changes.
 
 **Status.** Implemented. The choice is the caller-owned transport: `Device::connect` keeps taking a
 `Transport&`, `Device` stays tied to that one transport, and a reconnect is `disconnect`, destroy the
-`Device`, re-discover by serial, open a fresh transport, and `connect` again. `Transport::reopen` still
-means "a fresh `usbmuxd` socket per port" and is not the reconnect.
+`Device`, re-discover by serial, open a fresh transport, and `connect` again. `ioscpp::connect_with_retry`
+owns that loop with a bounded exponential backoff, so a caller no longer hand-rolls it. `Transport::reopen`
+still means "a fresh `usbmuxd` socket per port" and is not the reconnect.
 
-**Proof.** `tests/device_test.cpp` disconnects, re-discovers the device by serial, and reconnects on a
-fresh transport; with `IOSCPP_TEST_REPLUG=1` it waits for a physical unplug and replug first, so the
-re-enumeration and the new USB address are exercised.
+**Proof.** `tests/device_test.cpp` disconnects and reconnects through `connect_with_retry`, which
+re-discovers the device by serial and opens a fresh transport; with `IOSCPP_TEST_REPLUG=1` it waits for a
+physical unplug and replug first, so the re-enumeration and the new USB address are exercised.
+`tests/connect_test.cpp` covers the retry policy device-free over a fake transport and connect.
 
 ### `disconnect` is idempotent and ordered
 

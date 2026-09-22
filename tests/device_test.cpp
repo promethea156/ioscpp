@@ -508,37 +508,39 @@ int main()
         std::cin.get();
     }
 
-    auto again = ioscpp::usb::UsbTransport::list();
-    ok = check(again.has_value(), "re-listing the devices failed") && ok;
-    bool present = false;
-    if (again)
+    // The saved pairing is reused, so no trust prompt is waited for and the
+    // shorter service budget bounds the reconnect from the start. The helper
+    // re-discovers the device by serial, opens a fresh transport, and connects,
+    // retrying the whole open and connect so a re-enumeration is recovered
+    // without the loop being hand-rolled here.
+    const auto open = [&selected]() -> ioscpp::Result<ioscpp::usb::UsbTransport>
     {
+        auto again = ioscpp::usb::UsbTransport::list();
+        if (!again)
+        {
+            return tl::unexpected(again.error());
+        }
         for (const ioscpp::usb::DeviceId &id : *again)
         {
             if (id.serial == selected.serial)
             {
-                present = true;
+                return ioscpp::usb::UsbTransport::open(id, kTransferTimeoutMs, kServiceTransferBudgetMs);
             }
         }
-    }
-    ok = check(present, "the device did not reappear by serial") && ok;
-
-    // The saved pairing is reused, so no trust prompt is waited for and the
-    // shorter service budget bounds the reconnect from the start.
-    auto reopened = ioscpp::usb::UsbTransport::open(selected, kTransferTimeoutMs, kServiceTransferBudgetMs);
-    ok = check(reopened.has_value(), "reopening the device failed") && ok;
-    if (reopened)
+        return tl::unexpected(ioscpp::Error{ioscpp::ErrorCode::Transport, "the device did not reappear by serial"});
+    };
+    const auto connect = [&pairing](ioscpp::usb::UsbTransport &t) -> ioscpp::Result<ioscpp::Device>
     {
-        transport = std::move(*reopened);
-        auto reconnected = ioscpp::Device::connect(*transport, *pairing);
-        ok = check(reconnected.has_value(), "reconnect failed") && ok;
-        if (reconnected)
-        {
-            device = std::move(*reconnected);
-            ok = check(!device->udid().empty(), "the reconnected device reported no udid") && ok;
-            std::cout << "reconnected: " << device->product_type() << " " << device->product_version() << "\n";
-            device->disconnect();
-        }
+        return ioscpp::Device::connect(t, *pairing);
+    };
+    auto reconnected = ioscpp::connect_with_retry(open, connect, transport);
+    ok = check(reconnected.has_value(), "reconnect failed") && ok;
+    if (reconnected)
+    {
+        device = std::move(*reconnected);
+        ok = check(!device->udid().empty(), "the reconnected device reported no udid") && ok;
+        std::cout << "reconnected: " << device->product_type() << " " << device->product_version() << "\n";
+        device->disconnect();
     }
 
     std::filesystem::remove(local);

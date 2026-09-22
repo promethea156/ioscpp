@@ -1,9 +1,14 @@
 #pragma once
 
+#include <algorithm>
+#include <chrono>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
+#include <thread>
+#include <type_traits>
 
 #include "ioscpp/afc.hpp"
 #include "ioscpp/crypto/pairing.hpp"
@@ -101,5 +106,67 @@ private:
     struct Impl;
     std::unique_ptr<Impl> impl_;
 };
+
+/**
+ * @brief Connects, retrying the whole open and connect with a bounded
+ * exponential backoff.
+ *
+ * A device can reset the mux link, or be unplugged and replugged, so it
+ * re-enumerates with a new USB address and the old transport is stale. `open`
+ * re-discovers the device and opens a fresh transport, and `connect` performs the
+ * handshake on it; both are retried together, because a device that re-enumerates
+ * invalidates the transport handle. `transport` is where the opened transport lives
+ * and is emplaced before each connect, so the returned value borrows it and the
+ * transport must outlive it; on a failed connect it is reset again.
+ *
+ * `open` is a callable returning `Result<TransportT>`, for example
+ * `[] { return usb::UsbTransport::open(id); }`. `connect` is a callable taking
+ * `TransportT &` and returning the value to keep, for example
+ * `[](usb::UsbTransport &t) { return Device::connect(t, pairing); }`.
+ *
+ * The delay before the second attempt is `backoff` and doubles for each later
+ * attempt, so the wait is bounded by `attempts` and the total stays finite. This is
+ * also how a dropped link is recovered: close the device, then call this again,
+ * which replaces the transport in `transport` and repeats the handshake.
+ *
+ * @return the connected result, or the last error once every attempt failed.
+ */
+template <typename TransportT, typename Open, typename Connect>
+auto connect_with_retry(Open open, Connect connect, std::optional<TransportT> &transport, int attempts = 5,
+                        std::chrono::milliseconds backoff = std::chrono::milliseconds{250})
+    -> std::invoke_result_t<Connect, TransportT &>
+{
+    std::invoke_result_t<Connect, TransportT &> result =
+        tl::unexpected(Error{ErrorCode::Transport, "the transport was not opened"});
+    for (int attempt = 0; attempt < attempts; ++attempt)
+    {
+        if (attempt > 0)
+        {
+            // A bounded doubling, so the wait grows but cannot overflow.
+            const int shift = std::min(attempt - 1, 20);
+            std::this_thread::sleep_for(backoff * (1 << shift));
+        }
+
+        auto opened = open();
+        if (!opened)
+        {
+            result = tl::unexpected(opened.error());
+            continue;
+        }
+        // The result keeps a reference to the transport, so the transport is
+        // emplaced before `connect` and never moved once it holds a device.
+        transport.emplace(std::move(*opened));
+
+        auto connected = connect(*transport);
+        if (!connected)
+        {
+            transport.reset();
+            result = tl::unexpected(connected.error());
+            continue;
+        }
+        return connected;
+    }
+    return result;
+}
 
 } // namespace ioscpp
