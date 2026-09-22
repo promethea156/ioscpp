@@ -266,6 +266,30 @@ shim answers a status, and `uninstall(Rsd&)` removes an app over the installer s
 
 **Proof.** A device of iOS 17.4 or later installs a development-signed app over the RSD shims.
 
+## Device power and input
+
+### iOS exposes a sleep request but no wake or input channel
+
+**Assumption.** `com.apple.mobile.diagnostics_relay` exposes `Sleep`, `Restart`, and `Shutdown` as
+plist requests, but no `Wake`, and a paired host has no general input-injection channel. So a host can
+turn the screen off but has no documented way to turn it back on.
+
+**Why we believe it.** This is where iOS differs from Android. `adb shell input keyevent
+KEYCODE_SLEEP` / `KEYCODE_WAKEUP` works because adb runs a **shell on the device** that injects input
+events, so sleep and wake are just two key events. iOS gives a paired host no shell and no input
+service: `lockdownd` exposes a fixed service set, and `com.apple.mobile.diagnostics_relay`'s power
+requests are `Sleep`, `Restart`, and `Shutdown`, with no `Wake` (libimobiledevice's `idevicediagnostics`
+and pymobiledevice3's `diagnostics` expose the same three and no wake). The nearest analogue,
+WebDriverAgent's `/wda/lock` and `/wda/unlock`, is a developer/XCTest app and a non-goal
+([`01-objective.md`](01-objective.md#non-goals-for-now)).
+
+**Status.** Not implemented. There is no diagnostics client. `Sleep` (screen off), `Restart`, and
+`Shutdown` are planned in #89, and whether the screen can be turned back on is the spike in #90.
+
+**Proof.** #90 settles it: either a mechanism turns the screen back on against a real device, or the
+finding is recorded in [`04-blockers.md`](04-blockers.md) so #89 can say the screen-off direction has
+no counterpart.
+
 ## Test fidelity
 
 ### The mock transport models the device
