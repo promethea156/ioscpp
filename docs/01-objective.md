@@ -82,7 +82,9 @@ The repository keeps four long-lived branches, so a change is always made somewh
 what it is for:
 
 - `main` is stable. Every commit on it is a release or a change about to be tagged, and a tag
-  is only made here. Nothing lands on `main` without passing the whole CI matrix.
+  is only made here. A branch ruleset requires a pull request and the `format`, `ubuntu-latest`,
+  `windows-latest`, and `macos-latest` checks, so nothing lands on `main` without passing the whole
+  CI matrix.
 - `development` is the integration branch. Feature work merges here first, and it is where the
   slices in [`03-roadmap.md`](03-roadmap.md) are built.
 - `release_candidate` is the stabilization branch. It is cut from `development` when a release
@@ -104,6 +106,8 @@ How a branch is merged depends on whether it is long-lived, because a squash giv
   back to both) **MUST** be a **merge commit**, not a squash. A squash leaves the source branch
   holding commits that the target does not have, so the two diverge, the next pull request shows
   commits that are already released, and a conflict is guaranteed on the next touch of a shared file.
+  The merge into `main` is opened as a pull request, because `main` is protected, and the pull request
+  is merged with a merge commit.
 - If a long-lived branch is nonetheless squash-merged, the target **MUST** be merged back into the
   source immediately afterwards, so the source regains the target's history and the divergence is closed.
 
@@ -112,12 +116,14 @@ back-merge.
 
 ## Releasing
 
-A release is a tag, and the tag is the release: nothing is published that CI has not built and tested on every platform first. The release is prepared on `release_candidate`, merged to `main`, and tagged on `main`.
+A release is a tag, and the tag is the release: nothing is published that CI has not built and tested on every platform first. The release is prepared on `release_candidate`, merged to `main` through a pull request, and tagged on `main`.
 
-1. Bump `project(VERSION)` in `CMakeLists.txt`.
-2. Add the release's section to [`CHANGELOG.md`](../CHANGELOG.md), newest first.
-3. Commit with `chore(release): <version>`.
-4. Tag it `v<version>` and push the tag. The tag runs the whole CI matrix (`.github/workflows/ci.yml`), and the `release` job then publishes the tag's changelog section as the GitHub release.
+1. Merge `development` into `release_candidate` (a merge commit).
+2. Bump `project(VERSION)` in `CMakeLists.txt`.
+3. Add the release's section to [`CHANGELOG.md`](../CHANGELOG.md), newest first.
+4. Commit with `chore(release): <version>`.
+5. Open a pull request from `release_candidate` into `main`; the required checks pass, then it is merged with a merge commit, because `main` is protected.
+6. Tag `v<version>` on `main` and push the tag. The tag runs the whole CI matrix (`.github/workflows/ci.yml`), and the `release` job then publishes the tag's changelog section as the GitHub release.
 
 A release is only tagged once the tests pass on all three platforms, and a breaking change is only released on a **MAJOR** bump, so a tag's version and the changelog section it publishes never disagree.
 
