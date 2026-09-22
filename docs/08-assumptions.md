@@ -195,6 +195,29 @@ its bundle id, and kills it by pid.
 
 **Proof.** The demo installs, launches, checks, and closes an app on a device.
 
+### `house_arrest` vends an app's container over `AFC`
+
+**Assumption.** `com.apple.mobile.house_arrest` is started like any other service, and the
+bundle id then travels in a `VendContainer` (whole container) or `VendDocuments` (`Documents`
+subtree) command; the device answers with the container vended over the same `AFC` protocol. On
+iOS 17.4 and later the RSD tunnel carries the same service as
+`com.apple.mobile.house_arrest.shim.remote`.
+
+**Why we believe it.** pymobiledevice3's `HouseArrestService` sends
+`{"Command": "VendContainer", "Identifier": bundle_id}` after starting the service and names the
+RSD shim `com.apple.mobile.house_arrest.shim.remote`; `libimobiledevice`'s
+`house_arrest_send_command` sends the same command. Neither passes the bundle id in
+`StartService`, so the vend command is the reference behavior, not the issue's `ApplicationID`.
+
+**Status.** Proven on a device. The device test's opt-in round trip installed a
+development-signed IPA on an iOS 18.7.8 device and the container vended over the RSD shim
+(`container: vended over the RSD shim`); it listed the container and round-tripped a file in its
+`Documents`. The mux-link fallback was not reached, because the RSD shim answered first, so whether
+`com.apple.mobile.house_arrest` still answers on the mux link on 17.4+ is not settled.
+
+**Proof.** A device of iOS 17.4 or later lists an installed app's `Documents` and round-trips a
+file in it (`tests/device_test.cpp`).
+
 ## iOS 17+ CoreDevice
 
 ### The RSD tunnel is reachable in userspace, with no daemon or TUN

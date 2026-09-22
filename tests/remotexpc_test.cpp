@@ -195,6 +195,36 @@ TEST_CASE("a truncated xpc object is a protocol error", "[remotexpc]")
     CHECK(parsed.error().code == ErrorCode::Protocol);
 }
 
+TEST_CASE("an xpc array count larger than its bytes is a protocol error", "[remotexpc]")
+{
+    // The fuzzer's crashing input: an array whose element count claims far more
+    // elements than the bytes that remain. Reserving for the count used to abort
+    // with an allocation failure instead of returning an error.
+    const std::vector<std::byte> bytes = hex_bytes(
+        "00e00000"
+        "00430100"
+        "433c3c3c"
+        "3c3c3c3c"
+        "3c3c3c3c"
+        "3c3c3c3c"
+        "3c3c3c3c"
+        "3c3c3c3c"
+        "3c3c3c3c"
+        "3c3c3c3c"
+        "3c3c3c3c"
+        "3c3c3c3c"
+        "3c3c41b9"
+        "bc010000"
+        "00000000"
+        "00000044"
+        "bcbcbcb8"
+        "0000");
+
+    auto parsed = Xpc::parse(bytes);
+    REQUIRE_FALSE(parsed.has_value());
+    CHECK(parsed.error().code == ErrorCode::Protocol);
+}
+
 TEST_CASE("an xpc accessor does not convert between kinds", "[remotexpc]")
 {
     const Xpc value = Xpc::uint64(1280);

@@ -74,9 +74,12 @@ Read: [`include/ioscpp/afc.hpp`](include/ioscpp/afc.hpp),
 `installation_proxy` installs and removes apps over the plist framing, so it reuses
 Module 3 and Module 5; on iOS 17.4+ both ride the `RSD` tunnel's `AFC` and installer
 shims. Process control launches and closes them over a `DTX` service rather than a plist
-one, which `protocol::Dtx` and `DtxConnection` carry.
+one, which `protocol::Dtx` and `DtxConnection` carry. `house_arrest` vends one app's own
+container over the same `AFC` protocol, so the file operations from Module 6 act inside
+the app.
 
 Read: [`include/ioscpp/app.hpp`](include/ioscpp/app.hpp),
+[`include/ioscpp/house_arrest.hpp`](include/ioscpp/house_arrest.hpp),
 [`include/ioscpp/process_control.hpp`](include/ioscpp/process_control.hpp).
 
 ## Module 8: Putting it together

@@ -5,7 +5,26 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.1.0] - 2026-09-22
+
+### Added
+
+- `HouseArrest`, `AFC` access to one installed app's own container: it starts
+  `com.apple.mobile.house_arrest` over the mux link or, on iOS 17.4+, its
+  `com.apple.mobile.house_arrest.shim.remote` RSD shim, sends the
+  `VendContainer`/`VendDocuments` command with the bundle id, and returns the `Afc`
+  session rooted at the container. Tested device-free over the mock, and device-verified
+  on iOS 18.7.8, where the container vended over the RSD shim.
+
+### Fixed
+
+- The `RemoteXPC` array decoder no longer reserves from an element count that
+  exceeds the bytes that remain; a crafted count was an out-of-memory abort instead
+  of an `ErrorCode::Protocol` error (`src/protocol/remotexpc.cpp`).
+- The binary plist decoder bounds its object reads and count-based allocations, and
+  forms the trailer's table bound as a division so a crafted object count cannot
+  overflow it; a crafted trailer was an out-of-memory abort instead of an
+  `ErrorCode::Protocol` error (`src/protocol/plist.cpp`).
 
 ## [2.0.0] - 2026-09-20
 
@@ -185,7 +204,8 @@ identity; `AFC` and the app functions ship unvalidated on hardware.
 - `usb::UsbTransport` trims the serial descriptor's trailing NUL padding, so the
   pairing record is written as `<serial>.plist` and is found again on the next run.
 
-[Unreleased]: https://github.com/promethea156/ioscpp/compare/v2.0.0...HEAD
+[Unreleased]: https://github.com/promethea156/ioscpp/compare/v2.1.0...HEAD
+[2.1.0]: https://github.com/promethea156/ioscpp/releases/tag/v2.1.0
 [2.0.0]: https://github.com/promethea156/ioscpp/releases/tag/v2.0.0
 [1.0.0]: https://github.com/promethea156/ioscpp/releases/tag/v1.0.0
 [0.1.0-rc.1]: https://github.com/promethea156/ioscpp/releases/tag/v0.1.0-rc.1

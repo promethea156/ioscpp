@@ -30,8 +30,9 @@ interface, the device-initiated AV/HID paths, WebDriverAgent, and iOS 17.0–17.
 
 Slice 8, the guided tour, is complete: `examples/demo` walks connect, identity, AFC
 list/push/stat/pull, the `CoreDevice` tunnel, the RSD connection, install, launch, the
-running check, close, and uninstall against one iOS 18.7.8 device, and `tests/device_test.cpp`
-covers the same steps plus a replug between them.
+running check, close, the app container over `house_arrest`, and uninstall against one
+iOS 18.7.8 device, and `tests/device_test.cpp` covers the same steps plus a replug
+between them.
 
 Slice 9, the iOS 17+ `RSD` tunnel, is complete: the `CDTunnel` frame codec and the raw-IPv6
 re-framer, the `CoreDeviceProxy` handshake on `Device`, the userspace IPv6 + TCP link, the
@@ -163,7 +164,8 @@ development-signed IPA.
 
 **Done and device-verified.** `ioscpp_demo_example` walks connect, identity, AFC
 list/push/stat/pull, the `CoreDevice` tunnel, the RSD connection, install, launch, the running
-check, close, and uninstall against one iOS 18.7.8 device. The demo's app steps need iOS 17.4 or
+check, close, the app container over `house_arrest`, and uninstall against one iOS 18.7.8
+device. The demo's app steps need iOS 17.4 or
 later, because the installer and the developer tools moved behind the tunnel there.
 
 **Done when:** the demo and the device test pass against a real device, including a replug

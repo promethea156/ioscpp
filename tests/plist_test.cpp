@@ -3,7 +3,10 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cstddef>
 #include <string>
+#include <string_view>
 #include <vector>
+
+#include "ioscpp/error.hpp"
 
 using ioscpp::protocol::Plist;
 
@@ -14,6 +17,25 @@ std::vector<std::byte> bytes(std::string_view text)
 {
     return std::vector<std::byte>(reinterpret_cast<const std::byte *>(text.data()),
                                   reinterpret_cast<const std::byte *>(text.data() + text.size()));
+}
+
+/// Decodes a hex string into a byte vector, two characters per byte.
+std::vector<std::byte> hex_bytes(std::string_view hex)
+{
+    std::vector<std::byte> out;
+    for (std::size_t i = 0; i + 1 < hex.size(); i += 2)
+    {
+        const auto digit = [](char c) -> unsigned
+        {
+            if (c >= '0' && c <= '9')
+            {
+                return static_cast<unsigned>(c - '0');
+            }
+            return static_cast<unsigned>(c - 'a' + 10);
+        };
+        out.push_back(static_cast<std::byte>((digit(hex[i]) << 4) | digit(hex[i + 1])));
+    }
+    return out;
 }
 
 } // namespace
@@ -83,6 +105,26 @@ TEST_CASE("a malformed XML plist is a protocol error", "[plist]")
     CHECK_FALSE(Plist::parse_xml("<plist><dict>").has_value());
     CHECK_FALSE(Plist::parse_xml("not xml at all").has_value());
     CHECK_FALSE(Plist::parse(bytes("bplist00")).has_value());
+}
+
+TEST_CASE("a binary plist with a crafted trailer is a protocol error", "[plist]")
+{
+    // The fuzzer's crashing input: a trailer whose object count, multiplied by
+    // the offset size, overflowed the table-bounds check and then drove a huge
+    // allocation. The bound is now formed as a division, so the trailer is
+    // rejected.
+    const std::vector<std::byte> binary = hex_bytes(
+        "62706c6973743030"   // the header
+        "000000000000"       // the trailer's unused bytes
+        "10"                 // the offset size
+        "01"                 // the reference size
+        "1000000000000000"   // the object count
+        "0000000000000000"   // the top object
+        "0000000000000000"); // the offset table's offset
+
+    auto parsed = Plist::parse_binary(binary);
+    REQUIRE_FALSE(parsed.has_value());
+    CHECK(parsed.error().code == ioscpp::ErrorCode::Protocol);
 }
 
 TEST_CASE("a date is formatted as ISO 8601", "[plist]")

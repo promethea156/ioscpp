@@ -32,20 +32,26 @@ the device test too (see [The device test](#the-device-test)).
 If the build or a test fails, a report with the exact compiler, CMake version, OS, and
 output is already a contribution — [open a bug](https://github.com/promethea156/ioscpp/issues/new?template=bug_report.yml).
 
-### Pick up a roadmap item
+### Pick up an open issue
 
-[`docs/03-roadmap.md`](docs/03-roadmap.md) is the plan. The remaining slices each have an
-issue, and most of them are blocked on one thing: **a run against a real device**. The iOS 17+ `RSD`
-tunnel (Slice 9) is done, so app install and uninstall now run over its shims; the remaining work is
-the guided tour and `DTX`, and the device runs that report what happens. Items labelled
-[`good first issue`](https://github.com/promethea156/ioscpp/labels/good%20first%20issue)
+[`docs/03-roadmap.md`](docs/03-roadmap.md) is the plan, and every slice in it is done: the
+library connects, pairs, reads identity and files, installs and controls apps, and the guided tour
+walks it all once against a real device. What is left is the
+[non-goals](docs/03-roadmap.md#non-goals-for-now) and proving the library on more than Windows.
+The open issues fall into three groups:
+
+- **Verification**, which needs hardware: a device run on Linux or macOS, the pre-17.4
+  mux-link fallback, and driving two devices at once. A red report is as useful as a green
+  one, and none of it needs new code.
+- **Robustness and CI**: fuzzing the wire codecs, bounding the device test with a timeout,
+  and hardening the build and CI (sanitizers, the no-USB configuration, the installed package).
+- **Features** beyond the current scope: a kernel-routable tunnel and the Wi-Fi
+  route for iOS 17.0–17.3.1.
+
+Items labelled [`good first issue`](https://github.com/promethea156/ioscpp/labels/good%20first%20issue)
 need little context; those labelled
 [`help wanted`](https://github.com/promethea156/ioscpp/labels/help%20wanted) are broader.
-Reasonable starting points today:
-
-- **Build the guided tour and the device integration test** ([#7](https://github.com/promethea156/ioscpp/issues/7)) — walk every implemented feature against one device.
-- **Build `DTX` and the `dvt` services** ([#9](https://github.com/promethea156/ioscpp/issues/9)) — the last layer, and it unblocks app process control.
-- **Validate app install, uninstall, and control** ([#6](https://github.com/promethea156/ioscpp/issues/6)) — install and uninstall are proven; process control needs `DTX`.
+[Browse the open issues](https://github.com/promethea156/ioscpp/issues) and pick one.
 
 If an issue looks stale or already done, say so in it rather than guessing.
 
@@ -100,9 +106,15 @@ skip) when no matching device is attached, so it never fails a machine without o
 otherwise. Today it connects, reads the device's identity, exercises AFC listing, stat, and a push/pull round
 trip, opens the RSD tunnel, and lists the RSD services. The opt-in install and uninstall round trip runs
 only when `IOSCPP_TEST_IPA` and `IOSCPP_TEST_BUNDLE` name a development-signed app: it stages the IPA
-over the RSD `AFC` shim, installs it over the `installation_proxy` shim, and uninstalls the bundle. It
+over the RSD `AFC` shim, installs it over the `installation_proxy` shim, vends the app's container over
+`house_arrest`, launches the app, checks it is running, closes it, and uninstalls the bundle. It
 uninstalls and reinstalls the bundle and loses its data, so only set those variables for an app you have
 agreed to replace.
+
+`ioscpp_multi_device_tests` (CTest test `multi`) is the separate multi-device test. It drives every
+attached device at once, one thread per device, and asserts each completes a connect and an AFC round
+trip in the same run; it skips with code 77 when fewer than two devices are attached. `IOSCPP_TEST_SERIAL`
+still selects one device, so setting it narrows the multi-device test to one and it skips.
 
 A device that has not been trusted by this host shows the *Trust This Computer?* prompt, and the pairing
 exchange blocks until it is answered, so run the device test from an interactive terminal.

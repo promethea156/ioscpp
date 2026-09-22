@@ -62,9 +62,11 @@ both devices driven at once; **17.5.1 is the oldest iOS version tested so far**.
 - **Info**: query the device's model, iOS version, and unique id.
 - **Files**: list a directory, `stat` a path, and pull or push a file over `AFC`.
 - **Apps**: install and uninstall an app over the RSD `AFC` and `installation_proxy` shims on iOS 17.4+, or the mux link below; launch it, check whether it is running, and close it.
+- **App files**: list, `stat`, pull, and push inside one installed app's own container over `house_arrest`, on the mux link or the iOS 17.4+ RSD shim.
 
-Connect, Info, Files, app install/uninstall, and app process control are proven on a
-device. Process control rides the RSD `com.apple.instruments.dtservicehub` service over
+Connect, Info, Files, app install/uninstall, app process control, and app container
+access are proven on a device; the container vends over the RSD shim on iOS 17.4+. Process
+control rides the RSD `com.apple.instruments.dtservicehub` service over
 `DTX`, Slice 10 in [`docs/03-roadmap.md`](docs/03-roadmap.md). Several devices are
 independent, so a program can drive every attached device at once, one thread per device;
 [`examples/multi`](examples/multi/main.cpp) does exactly that.
@@ -84,6 +86,24 @@ ctest --test-dir build --output-on-failure -C Release
 ```
 
 The `--config Release` flag is used by multi-config generators (Visual Studio, Xcode) and ignored by single-config generators (Makefiles, Ninja). The tests that need a device skip themselves when none is attached, so the build and the suite pass on any machine.
+
+### Fuzz the codecs
+
+The codecs parse bytes that come from a device, and malformed input must return an error rather than crash. Every codec has a harness under `fuzz/`, built one of two ways. With upstream Clang, build them against libFuzzer and run one for a short budget:
+
+```
+cmake -S . -B build -DIOSCPP_BUILD_FUZZERS=ON -DIOSCPP_USE_LIBFUZZER=ON
+cmake --build build --config Release
+build/fuzz/ioscpp_fuzz_plist -max_total_time=30
+```
+
+Without libFuzzer (MSVC, or an AppleClang without it), the same harnesses build against an in-repo driver that feeds a deterministic pseudo-random stream, so they still run:
+
+```
+cmake -S . -B build -DIOSCPP_BUILD_FUZZERS=ON -DIOSCPP_USE_LIBFUZZER=OFF
+cmake --build build --config Release
+build/fuzz/Release/ioscpp_fuzz_plist.exe -runs=20000
+```
 
 <details>
 <summary><b>Linux</b> — untested</summary>
@@ -135,9 +155,10 @@ The fastest way to learn the library is to run [`examples/demo/main.cpp`](exampl
 5. opens the CoreDevice tunnel and the RSD connection, reporting how many services it lists;
 6. installs an app from an IPA, replacing an existing copy;
 7. launches it, checks it is running, and closes it;
-8. uninstalls it.
+8. pushes a file into the app's own container over `house_arrest`, stats it, and pulls it back;
+9. uninstalls it.
 
-Steps 5-8 need iOS 17.4 or later, because the installer and the developer tools moved behind the tunnel there.
+Steps 5-9 need iOS 17.4 or later, because the installer and the developer tools moved behind the tunnel there.
 
 To run it, you need a device with **a trusted host** (tap *Trust* on the device when asked) and an IPA to install. The install replaces that bundle, so it loses the bundle's data.
 
@@ -147,7 +168,7 @@ build/examples/Release/ioscpp_demo_example <bundle-id> <app.ipa>
 
 The binary is under `build/examples/Release/` for a multi-config generator (Visual Studio, Xcode) and `build/examples/` for a single-config one (Makefiles, Ninja).
 
-It uses the first attached device. When it finishes, open the source and read it next to the output: each `step(...)` in the source is one of the eight steps above.
+It uses the first attached device. When it finishes, open the source and read it next to the output: each `step(...)` in the source is one of the nine steps above.
 
 ## Run it against every device
 
@@ -163,7 +184,7 @@ Every device needs the host setup in [`docs/09-platform-setup.md`](docs/09-platf
 
 ```
 include/ioscpp/         Public headers (transport, protocol, session, stream,
-                         device, lockdown, afc, app, rsd)
+                         device, lockdown, afc, house_arrest, app, rsd)
 include/ioscpp/crypto/   The pairing record, backed by mbedTLS
 include/ioscpp/tcp/       The TCP transport, over the platform's sockets
 include/ioscpp/usb/       The USB transport, backed by libusb
@@ -171,7 +192,8 @@ include/ioscpp/testing/  The in-memory transport used by the tests
 src/                    Library sources, mirroring the public headers
 tests/                  Catch2 unit tests and the device integration test
 examples/               Runnable examples: the guided tour in demo/ and the parallel tour in multi/
-tools/                  Developer scripts (device lister, transfer benchmark)
+fuzz/                   One libFuzzer harness per wire codec, plus a standalone driver
+tools/                  Developer scripts and reports (device lister, transfer benchmark, fuzz report)
 docs/                   Design documents and Doxygen configuration
 cmake/                  CMake package configuration
 ```

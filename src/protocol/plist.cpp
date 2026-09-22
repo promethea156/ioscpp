@@ -1179,8 +1179,10 @@ Result<Plist> Plist::parse_binary(std::span<const std::byte> bytes)
     const std::uint64_t object_count = read_be(trailer, 8, 8);
     const std::uint64_t top_object = read_be(trailer, 16, 8);
     const std::uint64_t table_offset = read_be(trailer, 24, 8);
-    if (offset_size == 0 || ref_size == 0 || object_count == 0 ||
-        table_offset + object_count * offset_size > bytes.size())
+    // The bound is formed as a division, so a crafted `object_count` cannot
+    // overflow the product and slip a huge allocation past the check.
+    if (offset_size == 0 || ref_size == 0 || object_count == 0 || table_offset > bytes.size() ||
+        object_count > (bytes.size() - static_cast<std::size_t>(table_offset)) / offset_size)
     {
         return tl::unexpected(protocol_error("the binary plist trailer is malformed"));
     }
@@ -1254,8 +1256,17 @@ Result<Plist> Plist::parse_binary(std::span<const std::byte> bytes)
             const std::uint8_t kind = marker & 0xf0;
             const std::uint8_t info = marker & 0x0f;
 
-            auto read_uint = [&](std::size_t size) -> std::uint64_t
+            auto has = [&](std::size_t count)
             {
+                return count <= bytes.size() - position;
+            };
+
+            auto read_uint = [&](std::size_t size) -> Result<std::uint64_t>
+            {
+                if (!has(size))
+                {
+                    return tl::unexpected(protocol_error("a binary plist object is truncated"));
+                }
                 std::uint64_t value = 0;
                 for (std::size_t i = 0; i < size; ++i)
                 {
@@ -1265,14 +1276,18 @@ Result<Plist> Plist::parse_binary(std::span<const std::byte> bytes)
                 return value;
             };
 
-            auto read_count = [&]() -> std::uint64_t
+            auto read_count = [&]() -> Result<std::uint64_t>
             {
                 if (info != kMarkerCountFollows)
                 {
-                    return info;
+                    return static_cast<std::uint64_t>(info);
                 }
                 // The count follows as an int object, whose low nibble is the
                 // base-2 exponent of its byte count.
+                if (!has(1))
+                {
+                    return tl::unexpected(protocol_error("a binary plist object is truncated"));
+                }
                 const std::uint8_t int_marker = static_cast<std::uint8_t>(bytes[position++]);
                 return read_uint(std::size_t{1} << (int_marker & 0x0f));
             };
@@ -1285,83 +1300,146 @@ Result<Plist> Plist::parse_binary(std::span<const std::byte> bytes)
                 case kMarkerInt:
                 {
                     const std::size_t size = std::size_t{1} << info;
-                    const std::uint64_t raw = read_uint(size);
+                    auto raw = read_uint(size);
+                    if (!raw)
+                    {
+                        return tl::unexpected(raw.error());
+                    }
                     std::int64_t value = 0;
                     // A value whose high bit is set is negative, so sign-extend
                     // it to the full 64-bit width.
-                    if (size < 8 && (raw & (std::uint64_t{1} << (size * 8 - 1))) != 0)
+                    if (size < 8 && (*raw & (std::uint64_t{1} << (size * 8 - 1))) != 0)
                     {
-                        value = static_cast<std::int64_t>(raw | (~std::uint64_t{0} << (size * 8)));
+                        value = static_cast<std::int64_t>(*raw | (~std::uint64_t{0} << (size * 8)));
                     }
                     else
                     {
-                        value = static_cast<std::int64_t>(raw);
+                        value = static_cast<std::int64_t>(*raw);
                     }
                     return Plist(value);
                 }
                 case kMarkerReal:
                 {
                     const std::size_t size = std::size_t{1} << info;
-                    const std::uint64_t raw = read_uint(size);
+                    auto raw = read_uint(size);
+                    if (!raw)
+                    {
+                        return tl::unexpected(raw.error());
+                    }
                     double value = 0;
                     if (size == 8)
                     {
-                        std::memcpy(&value, &raw, sizeof(value));
+                        std::memcpy(&value, &*raw, sizeof(value));
                     }
                     else if (size == 4)
                     {
-                        const float small = static_cast<float>(raw);
+                        const float small = static_cast<float>(*raw);
                         value = small;
                     }
                     return Plist(value);
                 }
                 case kMarkerDate:
                 {
-                    const std::uint64_t raw = read_uint(8);
+                    auto raw = read_uint(8);
+                    if (!raw)
+                    {
+                        return tl::unexpected(raw.error());
+                    }
                     double value = 0;
-                    std::memcpy(&value, &raw, sizeof(value));
+                    std::memcpy(&value, &*raw, sizeof(value));
                     return Plist::date(static_cast<std::int64_t>(value));
                 }
                 case kMarkerData:
                 {
-                    const std::size_t count = static_cast<std::size_t>(read_count());
+                    auto count = read_count();
+                    if (!count)
+                    {
+                        return tl::unexpected(count.error());
+                    }
+                    const std::size_t length = static_cast<std::size_t>(*count);
+                    if (!has(length))
+                    {
+                        return tl::unexpected(protocol_error("a binary plist object is truncated"));
+                    }
                     std::vector<std::byte> data(bytes.begin() + static_cast<std::ptrdiff_t>(position),
-                                                bytes.begin() + static_cast<std::ptrdiff_t>(position + count));
+                                                bytes.begin() + static_cast<std::ptrdiff_t>(position + length));
+                    position += length;
                     return Plist(std::move(data));
                 }
                 case kMarkerAscii:
                 {
-                    const std::size_t count = static_cast<std::size_t>(read_count());
-                    return Plist(std::string(reinterpret_cast<const char *>(bytes.data() + position), count));
+                    auto count = read_count();
+                    if (!count)
+                    {
+                        return tl::unexpected(count.error());
+                    }
+                    const std::size_t length = static_cast<std::size_t>(*count);
+                    if (!has(length))
+                    {
+                        return tl::unexpected(protocol_error("a binary plist object is truncated"));
+                    }
+                    std::string text(reinterpret_cast<const char *>(bytes.data() + position), length);
+                    position += length;
+                    return Plist(std::move(text));
                 }
                 case kMarkerUtf16:
                 {
-                    const std::size_t count = static_cast<std::size_t>(read_count());
+                    auto count = read_count();
+                    if (!count)
+                    {
+                        return tl::unexpected(count.error());
+                    }
+                    const std::size_t length = static_cast<std::size_t>(*count);
+                    // Each character is a two-byte big-endian pair.
+                    if (length > (bytes.size() - position) / 2)
+                    {
+                        return tl::unexpected(protocol_error("a binary plist object is truncated"));
+                    }
                     std::string text;
-                    text.reserve(count);
+                    text.reserve(length);
                     // A UTF-16 object is big-endian pairs. This codec keeps only the
                     // low byte of each pair, so a non-ASCII character is decoded
                     // incorrectly; the plists the device sends here are ASCII.
-                    for (std::size_t i = 0; i < count; ++i)
+                    for (std::size_t i = 0; i < length; ++i)
                     {
                         text.push_back(static_cast<char>(bytes[position + i * 2 + 1]));
                     }
+                    position += length * 2;
                     return Plist(std::move(text));
                 }
                 case kMarkerUid:
                 {
                     const std::size_t size = std::size_t{1} << info;
-                    return Plist::uid(read_uint(size));
+                    auto uid = read_uint(size);
+                    if (!uid)
+                    {
+                        return tl::unexpected(uid.error());
+                    }
+                    return Plist::uid(*uid);
                 }
                 case kMarkerArray:
                 {
-                    const std::size_t count = static_cast<std::size_t>(read_count());
-                    Plist::Array items;
-                    items.reserve(count);
-                    for (std::size_t i = 0; i < count; ++i)
+                    auto count = read_count();
+                    if (!count)
                     {
-                        const std::uint64_t reference = read_uint(ref_size);
-                        auto item = decode(static_cast<std::size_t>(reference));
+                        return tl::unexpected(count.error());
+                    }
+                    const std::size_t length = static_cast<std::size_t>(*count);
+                    // Each element is a `ref_size`-byte reference.
+                    if (length > (bytes.size() - position) / ref_size)
+                    {
+                        return tl::unexpected(protocol_error("a binary plist array count exceeds its bytes"));
+                    }
+                    Plist::Array items;
+                    items.reserve(length);
+                    for (std::size_t i = 0; i < length; ++i)
+                    {
+                        auto reference = read_uint(ref_size);
+                        if (!reference)
+                        {
+                            return tl::unexpected(reference.error());
+                        }
+                        auto item = decode(static_cast<std::size_t>(*reference));
                         if (!item)
                         {
                             return tl::unexpected(item.error());
@@ -1372,21 +1450,42 @@ Result<Plist> Plist::parse_binary(std::span<const std::byte> bytes)
                 }
                 case kMarkerDictionary:
                 {
-                    const std::size_t count = static_cast<std::size_t>(read_count());
-                    std::vector<std::uint64_t> keys(count);
-                    for (std::size_t i = 0; i < count; ++i)
+                    auto count = read_count();
+                    if (!count)
                     {
-                        keys[i] = read_uint(ref_size);
+                        return tl::unexpected(count.error());
+                    }
+                    const std::size_t length = static_cast<std::size_t>(*count);
+                    // Each entry is a key and a value, each a `ref_size`-byte
+                    // reference.
+                    if (length > (bytes.size() - position) / (2 * ref_size))
+                    {
+                        return tl::unexpected(protocol_error("a binary plist dictionary count exceeds its bytes"));
+                    }
+                    std::vector<std::uint64_t> keys(length);
+                    for (std::size_t i = 0; i < length; ++i)
+                    {
+                        auto key = read_uint(ref_size);
+                        if (!key)
+                        {
+                            return tl::unexpected(key.error());
+                        }
+                        keys[i] = *key;
                     }
                     Plist::Dictionary items;
-                    for (std::size_t i = 0; i < count; ++i)
+                    for (std::size_t i = 0; i < length; ++i)
                     {
                         auto key = decode(static_cast<std::size_t>(keys[i]));
                         if (!key)
                         {
                             return tl::unexpected(key.error());
                         }
-                        auto item = decode(static_cast<std::size_t>(read_uint(ref_size)));
+                        auto reference = read_uint(ref_size);
+                        if (!reference)
+                        {
+                            return tl::unexpected(reference.error());
+                        }
+                        auto item = decode(static_cast<std::size_t>(*reference));
                         if (!item)
                         {
                             return tl::unexpected(item.error());
