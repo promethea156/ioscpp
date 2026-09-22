@@ -535,3 +535,22 @@ same connection, so no mux-link start is needed.
 iOS 18.7.8 device (`container: vended over the RSD shim`), listed it, and round-tripped a file in its
 `Documents` (`tests/device_test.cpp`). The mux-link fallback was not reached, so whether
 `com.apple.mobile.house_arrest` still answers on the mux link on 17.4+ is not settled.
+
+### The Wi-Fi RemotePairing route is not a route swap
+
+On iOS 17.0–17.3.1 the tunnel is not behind `CoreDeviceProxy` but only over the Wi-Fi
+**RemotePairing** route, and the route is not a drop-in for the `CoreDeviceProxy` one: the layers above
+the `CDTunnel` handshake (`protocol::Cdtunnel`, `protocol::Ipv6Framer`, `TcpLink`, and `Rsd`) are reused,
+but everything below it is new. The route needs Bonjour discovery of `_remotepairing._tcp` with an `authTag`
+match, a separate RemotePairing pairing record (Ed25519, `remote_unlock_host_key`, `peer_alt_irk`), the
+`RemotePairingProtocol` pair-verify handshake and an encrypted control channel, and then either a QUIC
+transport (pre-18.2) or a TLS-PSK TCP transport (18.2+). The record also differs from the USB `lockdownd`
+record, so a host paired only over USB has to pair again over RemotePairing (the *Trust* prompt).
+
+Two things keep it a non-goal. First, iOS 17.0–17.3.1 is pre-18.2, so its transport is QUIC, which
+mbedTLS 3.6.2 cannot provide: QUIC means a new dependency (ngtcp2/quiche/msquic) and a TLS 1.3
+handshake with datagram-frame handling. The TLS-PSK TCP path mbedTLS can do is the 18.2+ route. Second,
+verification needs a device on iOS 17.0–17.3.1, and the devices on hand are iOS 17.5.1 and 18.7.8, both
+already on `CoreDeviceProxy`. The reference is pymobiledevice3's `remote/tunnel_service.py` and
+`remote/common.py`; the layers are recorded in
+[`10-coredevice-tunnel.md`](10-coredevice-tunnel.md#the-wi-fi-remotepairing-route-ios-1701731) (issue #73).
