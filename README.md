@@ -4,7 +4,7 @@ A small, self-contained **iOS device client, as a C++20 library**.
 
 `ioscpp` talks to an iPhone or iPad directly, over USB, with **no `usbmuxd`, no `libimobiledevice`, and no external binary**. Embed it in a C++ program and it lists and transfers files, and installs and removes apps.
 
-> **Status: 2.0.0.** Connect, Info, Files, app install/uninstall, and app process control are proven on devices, including two driven at once, on iOS 17.5.1 and 18.7.8. The protocol slices are tracked in [`docs/03-roadmap.md`](docs/03-roadmap.md). Every fallible operation returns a `Result<T>` instead of throwing.
+> **Status: 2.1.0.** Connect, Info, Files, app install/uninstall, app process control, and app container access are proven on devices, including two driven at once, on iOS 17.5.1 and 18.7.8. The protocol slices are tracked in [`docs/03-roadmap.md`](docs/03-roadmap.md). Every fallible operation returns a `Result<T>` instead of throwing.
 
 ## How this was built
 
@@ -31,14 +31,16 @@ responsible for what ships.
 
 | Platform | Status | Notes |
 |----------|--------|-------|
-| Windows  | ![Windows: tested](https://img.shields.io/badge/Windows-tested-brightgreen) | Developed and exercised here. |
-| Linux    | ![Linux: untested](https://img.shields.io/badge/Linux-untested-yellow) | Expected to work; not yet verified. |
-| macOS    | ![macOS: untested](https://img.shields.io/badge/macOS-untested-yellow) | Expected to work; not yet verified. |
+| Windows  | ![Windows: tested](https://img.shields.io/badge/Windows-tested-brightgreen) | Built, tested, and exercised against real devices, including USB. |
+| Linux    | ![Linux: CI tested](https://img.shields.io/badge/Linux-CI%20tested-yellow) | CI builds it and runs the device-free suite; the USB path is unverified. |
+| macOS    | ![macOS: CI tested](https://img.shields.io/badge/macOS-CI%20tested-yellow) | CI builds it and runs the device-free suite; the USB path is unverified. |
 
-**`Windows` is the only platform this project has been built and run on so far.** The
-Linux and macOS instructions below are written from the toolchain and standard-library
-APIs the code targets, but no one has confirmed them on a real machine yet — expect
-rough edges. If you have either, please build it and
+CI builds and runs the device-free test suite on **all three** platforms, so Linux
+and macOS are known to compile and pass it. **Windows is the only platform exercised by
+hand against real devices**, including the USB transport, so the Linux and macOS USB path
+is unverified and may have rough edges. The platform steps below are written from the
+toolchain and standard-library APIs the code targets. If you have a device on either,
+please build it and
 [report the result](https://github.com/promethea156/ioscpp/issues/new?template=platform_verification.yml);
 a green run is just as useful as a red one, and see [Contributing](#contributing).
 
@@ -108,7 +110,7 @@ build/fuzz/Release/ioscpp_fuzz_plist.exe -runs=20000
 ```
 
 <details>
-<summary><b>Linux</b> — untested</summary>
+<summary><b>Linux</b> — CI tested</summary>
 
 Install the toolchain and libusb's build dependency:
 
@@ -121,7 +123,7 @@ Then run the three commands above.
 </details>
 
 <details>
-<summary><b>macOS</b> — untested</summary>
+<summary><b>macOS</b> — CI tested</summary>
 
 Install the Xcode Command Line Tools (Clang) and CMake:
 
@@ -186,7 +188,7 @@ Every device needs the host setup in [`docs/09-platform-setup.md`](docs/09-platf
 
 ```
 include/ioscpp/         Public headers (transport, protocol, session, stream,
-                         device, lockdown, afc, house_arrest, app, rsd)
+                         device, lockdown, log, afc, house_arrest, app, rsd)
 include/ioscpp/crypto/   The pairing record, backed by mbedTLS
 include/ioscpp/tcp/       The TCP transport, over the platform's sockets
 include/ioscpp/usb/       The USB transport, backed by libusb
