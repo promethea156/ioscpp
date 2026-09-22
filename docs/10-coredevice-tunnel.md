@@ -14,7 +14,8 @@ the rest of this document is the same plan in technical terms.
 This is the plan for Slice 9 ([#8](https://github.com/promethea156/ioscpp/issues/8), the
 plan itself tracked as [#23](https://github.com/promethea156/ioscpp/issues/23)). It records the
 layers, the wire formats, the API surface, the testing plan, and the one real decision: the
-userspace TCP/IP stack. It is written before any of it is implemented.
+userspace TCP/IP stack. It was written before any of it was implemented, and is kept as the
+record of the plan; the slices below are now done.
 
 ## Why the tunnel exists
 
@@ -28,7 +29,7 @@ the same tunnel is reached over the Wi-Fi **RemotePairing** route instead, which
 
 The mux-link `installation_proxy` accepts a connection but does not answer on iOS 17+
 (`docs/04-blockers.md`), so app install and uninstall use the RSD `AFC` and installer shims on
-this tunnel (Slice 7), and app control and every CoreDevice feature wait on the `DTX` codec
+this tunnel (Slice 7), and app control and every CoreDevice feature run over the `DTX` codec
 (Slice 10).
 
 ## The four layers

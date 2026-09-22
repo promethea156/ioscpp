@@ -35,7 +35,7 @@ on top of the finished layers:
 
 - `ioscpp::connect_with_retry`, which owns the re-discover, open, and connect loop for a
   dropped link (#93, done).
-- A process-wide logger, so a caller can follow what the library is doing (#91).
+- A process-wide logger, so a caller can follow what the library is doing (#91, done).
 - `Transport::wait_readable`, so one thread can drive several devices (#92).
 - The device's `diagnostics_relay` power requests, so a caller can turn the screen off,
   restart, and shut down (#89), and whether the screen can be turned back on (#90).
