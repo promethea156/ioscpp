@@ -5,8 +5,6 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
-#include <cstdio>
-#include <cstdlib>
 #include <memory>
 #include <optional>
 #include <span>
@@ -17,6 +15,7 @@
 
 #include "ioscpp/crypto/pairing.hpp"
 #include "ioscpp/error.hpp"
+#include "ioscpp/log.hpp"
 #include "ioscpp/protocol/plist.hpp"
 #include "ioscpp/stream.hpp"
 
@@ -139,9 +138,12 @@ Result<protocol::Plist> Lockdown::request(protocol::Plist request)
 
     const std::string body = request.to_xml();
 
-    if (std::getenv("IOSCPP_TRACE") != nullptr)
+    // The request body can carry key material during pairing, so only the
+    // request type is logged, at `Trace`.
+    if (is_logging(LogLevel::Trace))
     {
-        std::fprintf(stderr, "[lockdown req] %s\n", body.c_str());
+        const protocol::Plist *type = request.find("Request");
+        log(LogLevel::Trace, std::string("[lockdown req] ") + (type == nullptr ? "?" : type->string_or("?")));
     }
 
     // The 4-byte length prefix is the plist size alone, not including the
@@ -180,10 +182,8 @@ Result<protocol::Plist> Lockdown::request(protocol::Plist request)
         return tl::unexpected(answer_plist.error());
     }
 
-    if (std::getenv("IOSCPP_TRACE") != nullptr)
-    {
-        std::fprintf(stderr, "[lockdown] %s\n", answer_plist->to_xml().c_str());
-    }
+    // The answer body can carry key material during pairing, so it is not logged.
+    log(LogLevel::Debug, "[lockdown] answer");
 
     if (const protocol::Plist *error = answer_plist->find("Error"); error != nullptr)
     {
@@ -245,6 +245,7 @@ Status Lockdown::start_session(crypto::Pairing &pairing)
         }
         impl_->tls.emplace(std::move(*tls));
     }
+    log(LogLevel::Info, std::string("started the lockdown session") + (impl_->tls.has_value() ? " over TLS" : ""));
     return {};
 }
 
@@ -274,6 +275,7 @@ Result<Service> Lockdown::start_service(std::string_view name)
     {
         service.enable_ssl = *enable_ssl->boolean();
     }
+    log(LogLevel::Info, "started service " + std::string(name) + (service.enable_ssl ? " (TLS)" : ""));
     return service;
 }
 

@@ -28,6 +28,18 @@ All slices 0 to 10 are done, so the roadmap is complete for the current scope. T
 that is left is the [non-goals](#non-goals-for-now): the privileged `tunneld` and `utun`
 interface, the device-initiated AV/HID paths, WebDriverAgent, and iOS 17.0–17.3.1 over Wi-Fi.
 
+### Beyond the slices
+
+A few helpers are tracked as issues rather than slices, because each is a small addition
+on top of the finished layers:
+
+- `ioscpp::connect_with_retry`, which owns the re-discover, open, and connect loop for a
+  dropped link (#93, done).
+- A process-wide logger, so a caller can follow what the library is doing (#91).
+- `Transport::wait_readable`, so one thread can drive several devices (#92).
+- The device's `diagnostics_relay` power requests, so a caller can turn the screen off,
+  restart, and shut down (#89), and whether the screen can be turned back on (#90).
+
 Slice 8, the guided tour, is complete: `examples/demo` walks connect, identity, AFC
 list/push/stat/pull, the `CoreDevice` tunnel, the RSD connection, install, launch, the
 running check, close, the app container over `house_arrest`, and uninstall against one

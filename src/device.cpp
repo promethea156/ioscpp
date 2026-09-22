@@ -1,7 +1,5 @@
 #include "ioscpp/device.hpp"
 
-#include <cstdio>
-#include <cstdlib>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -12,6 +10,7 @@
 #include "ioscpp/crypto/pairing.hpp"
 #include "ioscpp/error.hpp"
 #include "ioscpp/lockdown.hpp"
+#include "ioscpp/log.hpp"
 #include "ioscpp/protocol/plist.hpp"
 #include "ioscpp/protocol/usbmux.hpp"
 #include "ioscpp/stream.hpp"
@@ -116,6 +115,7 @@ Result<Device> Device::connect(Transport &transport, crypto::Pairing &pairing)
 
     if (!pairing.paired())
     {
+        log(LogLevel::Info, "pairing with the device");
         if (Status status = crypto::pair(*lockdown, pairing); !status)
         {
             return tl::unexpected(status.error());
@@ -147,11 +147,7 @@ Result<Device> Device::connect(Transport &transport, crypto::Pairing &pairing)
         }
     }
     device.impl_->udid = std::string(pairing.udid());
-    if (std::getenv("IOSCPP_TRACE") != nullptr)
-    {
-        std::fprintf(stderr, "[device] product type=%s version=%s\n", device.impl_->product_type.c_str(),
-                     device.impl_->product_version.c_str());
-    }
+    log(LogLevel::Info, "connected to " + device.impl_->product_type + " on iOS " + device.impl_->product_version);
     return device;
 }
 
