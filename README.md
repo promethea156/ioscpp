@@ -64,6 +64,7 @@ both devices driven at once; **17.5.1 is the oldest iOS version tested so far**.
 - **Files**: list a directory, `stat` a path, and pull or push a file over `AFC`.
 - **Apps**: install and uninstall an app over the RSD `AFC` and `installation_proxy` shims on iOS 17.4+, or the mux link below; launch it, check whether it is running, and close it.
 - **App files**: list, `stat`, pull, and push inside one installed app's own container over `house_arrest`, on the mux link or the iOS 17.4+ RSD shim.
+- **Log**: opt in to a process-wide logger, configurable per level, that reports frames, retries, and state changes and never logs key material or a payload.
 
 Connect, Info, Files, app install/uninstall, app process control, and app container
 access are proven on a device; the container vends over the RSD shim on iOS 17.4+. Process

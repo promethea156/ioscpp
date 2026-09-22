@@ -204,11 +204,30 @@ transport.feed(response_bytes);
 auto connection = ioscpp::Connection::open(transport).value();
 ```
 
+## Log what the library is doing
+
+Logging is opt-in and process-wide: nothing is written until `set_logger`
+installs a sink, and installing a second sink replaces the first. The level is the
+most verbose the sink receives, so `Info` (the default) reports state changes and
+`Debug` adds every protocol frame, without its payload. The library never passes
+key material or a payload to the sink, so a log is safe to keep.
+
+```cpp
+ioscpp::set_logger(
+    [](ioscpp::LogLevel level, std::string_view message) { std::cerr << message << "\n"; },
+    ioscpp::LogLevel::Debug);
+```
+
+`clear_logger()` removes the sink, and `is_logging(level)` lets a caller avoid
+building a message the sink would discard.
+
 ## Trace a run
 
-`IOSCPP_TRACE` prints the protocol steps to `stderr`, and `IOSCPP_DUMP` appends the
-TLS records the host sends to a file. Both are unset by default, and they are the only
-environment variables the library reads.
+`IOSCPP_TRACE` prints the low-level pairing and TLS steps to `stderr`
+(certificates, the device key, and each TLS record header), which can include key
+material, and `IOSCPP_DUMP` appends the TLS records the host sends to a file. Both
+are unset by default, and they are the only environment variables the library
+reads.
 
 ```powershell
 $env:IOSCPP_TRACE = "1"

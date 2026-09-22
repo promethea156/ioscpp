@@ -3,14 +3,13 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
-#include <cstdio>
-#include <cstdlib>
 #include <memory>
 #include <span>
 #include <string>
 #include <vector>
 
 #include "ioscpp/error.hpp"
+#include "ioscpp/log.hpp"
 #include "ioscpp/protocol/usbmux.hpp"
 
 namespace ioscpp
@@ -29,15 +28,16 @@ Error protocol_error(std::string message)
     return Error{ErrorCode::Protocol, std::move(message)};
 }
 
-/// Prints a mux header when `IOSCPP_TRACE` is set.
+/// Logs a mux header, without its payload, when `Debug` is enabled.
 void trace_mux(const char *direction, const protocol::MuxHeader &header, std::size_t payload)
 {
-    if (std::getenv("IOSCPP_TRACE") == nullptr)
+    if (!is_logging(LogLevel::Debug))
     {
         return;
     }
-    std::fprintf(stderr, "[mux %s] protocol=%u length=%u magic=0x%08x tx_seq=%u rx_seq=%u payload=%zu\n", direction,
-                 header.protocol, header.length, header.magic, header.tx_seq, header.rx_seq, payload);
+    log(LogLevel::Debug, std::string("[mux ") + direction + "] protocol=" + std::to_string(header.protocol) +
+                             " length=" + std::to_string(header.length) + " tx_seq=" + std::to_string(header.tx_seq) +
+                             " rx_seq=" + std::to_string(header.rx_seq) + " payload=" + std::to_string(payload));
 }
 
 /// Reads exactly `buffer.size()` bytes, or fails.
@@ -121,12 +121,12 @@ Result<Frame> Session::receive()
         return tl::unexpected(status.error());
     }
 
-    if (std::getenv("IOSCPP_TRACE") != nullptr &&
-        header.protocol == static_cast<std::uint32_t>(protocol::MuxProtocol::Control) && !frame.payload.empty())
+    if (header.protocol == static_cast<std::uint32_t>(protocol::MuxProtocol::Control) && !frame.payload.empty() &&
+        is_logging(LogLevel::Trace))
     {
-        std::fprintf(stderr, "[mux control] type=%u text=%.*s\n", static_cast<unsigned>(frame.payload[0]),
-                     static_cast<int>(frame.payload.size() - 1),
-                     reinterpret_cast<const char *>(frame.payload.data() + 1));
+        log(LogLevel::Trace,
+            std::string("[mux control] type=") + std::to_string(static_cast<unsigned>(frame.payload[0])) + " text=" +
+                std::string(reinterpret_cast<const char *>(frame.payload.data() + 1), frame.payload.size() - 1));
     }
 
     // `usbmuxd` echoes the device's own `rx_seq` back (`device.c`), so the ack

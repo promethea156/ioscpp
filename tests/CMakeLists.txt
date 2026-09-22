@@ -18,6 +18,7 @@ add_executable(ioscpp_tests
   ipv6_test.cpp
   json_test.cpp
   keyed_archive_test.cpp
+  log_test.cpp
   plist_service_test.cpp
   plist_test.cpp
   process_control_test.cpp

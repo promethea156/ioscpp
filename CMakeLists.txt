@@ -77,6 +77,7 @@ add_library(ioscpp
   src/dtx_connection.cpp
   src/house_arrest.cpp
   src/lockdown.cpp
+  src/log.cpp
   src/plist_service.cpp
   src/process_control.cpp
   src/protocol/cdtunnel.cpp

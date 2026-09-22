@@ -8,6 +8,7 @@
 #include "ioscpp/error.hpp"
 #include "ioscpp/house_arrest.hpp"
 #include "ioscpp/lockdown.hpp"
+#include "ioscpp/log.hpp"
 #include "ioscpp/protocol/cdtunnel.hpp"
 #include "ioscpp/protocol/ipv6.hpp"
 #include "ioscpp/protocol/json.hpp"
