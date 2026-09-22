@@ -123,7 +123,8 @@ real iPhone, and the sample program walks them all once.
 
 The sample program connects, reads the phone's identity, lists and copies files,
 opens the tunnel, lists the phone's services, installs an app, starts it, checks it is
-running, closes it, and removes it. Verified on a real iPhone running iOS 18.7.8.
+running, reads and writes inside the app's own folder, closes it, and removes it.
+Verified on a real iPhone running iOS 18.7.8.
 
 What is left is not on the roadmap yet: the privileged helper, the keyboard and screen
 paths, and the older Wi-Fi route (the non-goals).
@@ -139,6 +140,7 @@ paths, and the older Wi-Fi route (the non-goals).
 | TLS | The encryption the phone turns on after check-in. |
 | `AFC` | The phone's file service: listing folders and copying files. |
 | `installation_proxy` | The phone's app installer and uninstaller. |
+| `house_arrest` | The phone's service that opens one app's own folder for reading and writing. |
 | iOS 17+ | The iPhone software versions where the app installer moved behind the tunnel. |
 | `RSD` | The phone's service list, reached through the tunnel. |
 | CoreDevice | Apple's newer name for the developer services behind the tunnel. |

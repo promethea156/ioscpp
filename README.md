@@ -184,7 +184,7 @@ Every device needs the host setup in [`docs/09-platform-setup.md`](docs/09-platf
 
 ```
 include/ioscpp/         Public headers (transport, protocol, session, stream,
-                         device, lockdown, afc, app, rsd)
+                         device, lockdown, afc, house_arrest, app, rsd)
 include/ioscpp/crypto/   The pairing record, backed by mbedTLS
 include/ioscpp/tcp/       The TCP transport, over the platform's sockets
 include/ioscpp/usb/       The USB transport, backed by libusb
