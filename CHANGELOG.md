@@ -5,6 +5,22 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] - 2026-09-22
+
+### Added
+
+- `ioscpp::connect_with_retry`, which owns the re-discover, open, and connect loop
+  for a dropped or reset link with a bounded exponential backoff, generic over the
+  connect callable. The device test's replug step now uses it, and
+  `tests/connect_test.cpp` covers the retry policy device-free.
+- `ioscpp::set_logger`/`clear_logger`/`is_logging`/`log` and the
+  `LogLevel`/`LogSink` types, an opt-in process-wide logger wired into
+  `Session`, `Stream`, `Connection`, `Lockdown`, `Device::connect`,
+  `UsbTransport`, and `AFC`. The library never passes key material or a payload to
+  the sink: a mux or TCP frame logs its header only, the service a stream is
+  opened for is the payload-derived detail, at `Trace`, and the pairing and TLS
+  byte dumps stay behind `IOSCPP_TRACE`/`IOSCPP_DUMP`.
+
 ## [2.1.0] - 2026-09-22
 
 ### Added
