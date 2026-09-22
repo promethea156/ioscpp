@@ -10,9 +10,10 @@ There is no CLA and no sign-up. Open an issue or a pull request and say what you
 
 ### Verify a platform
 
-**Windows is the only platform this project has been built and run on.** Linux and macOS
-are expected to work but are [marked unverified](README.md#platform-support). If you have
-either, build the project, run the suite, and
+**Windows is the only platform exercised by hand against real devices.** CI builds
+and runs the device-free suite on Linux and macOS, but their USB path is
+[marked unverified](README.md#platform-support). If you have a device on either,
+build the project, run the suite, and
 [open a verification report](https://github.com/promethea156/ioscpp/issues/new?template=platform_verification.yml)
 with the result, green or red. This is the single most useful thing you can do, and it needs no
 knowledge of the code.
@@ -37,16 +38,18 @@ output is already a contribution — [open a bug](https://github.com/promethea15
 [`docs/03-roadmap.md`](docs/03-roadmap.md) is the plan, and every slice in it is done: the
 library connects, pairs, reads identity and files, installs and controls apps, and the guided tour
 walks it all once against a real device. What is left is the
-[non-goals](docs/03-roadmap.md#non-goals-for-now) and proving the library on more than Windows.
-The open issues fall into three groups:
+[non-goals](docs/03-roadmap.md#non-goals-for-now), the post-slice helpers, and proving the
+library on more than Windows. The open issues fall into three groups:
 
 - **Verification**, which needs hardware: a device run on Linux or macOS, the pre-17.4
-  mux-link fallback, and driving two devices at once. A red report is as useful as a green
+  mux-link fallback, and the mux-link `house_arrest` path. A red report is as useful as a green
   one, and none of it needs new code.
-- **Robustness and CI**: fuzzing the wire codecs, bounding the device test with a timeout,
-  and hardening the build and CI (sanitizers, the no-USB configuration, the installed package).
-- **Features** beyond the current scope: a kernel-routable tunnel and the Wi-Fi
-  route for iOS 17.0–17.3.1.
+- **Robustness and CI**: uploading the built executables as artifacts.
+- **Features** beyond the current scope: a kernel-routable tunnel, the Wi-Fi
+  route for iOS 17.0–17.3.1, which needs its own pairing record, a pair-verify handshake,
+  an encrypted control channel, and a QUIC transport mbedTLS cannot provide
+  (`docs/10-coredevice-tunnel.md`), and the post-slice helpers
+  (`connect_with_retry`, logging, and `wait_readable`).
 
 Items labelled [`good first issue`](https://github.com/promethea156/ioscpp/labels/good%20first%20issue)
 need little context; those labelled
@@ -104,7 +107,9 @@ so an unformatted file fails the build there.
 skip) when no matching device is attached, so it never fails a machine without one;
 `IOSCPP_TEST_SERIAL` names the device to match when several are attached, and the first is used
 otherwise. Today it connects, reads the device's identity, exercises AFC listing, stat, and a push/pull round
-trip, opens the RSD tunnel, and lists the RSD services. The opt-in install and uninstall round trip runs
+trip, opens the RSD tunnel, and lists the RSD services. It then disconnects, re-discovers the device by
+serial, and reconnects through `connect_with_retry`; `IOSCPP_TEST_REPLUG` waits for a physical unplug and
+replug before that reconnect. The opt-in install and uninstall round trip runs
 only when `IOSCPP_TEST_IPA` and `IOSCPP_TEST_BUNDLE` name a development-signed app: it stages the IPA
 over the RSD `AFC` shim, installs it over the `installation_proxy` shim, vends the app's container over
 `house_arrest`, launches the app, checks it is running, closes it, and uninstalls the bundle. It

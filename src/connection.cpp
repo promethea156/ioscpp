@@ -5,14 +5,13 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
-#include <cstdio>
-#include <cstdlib>
 #include <memory>
 #include <span>
 #include <string>
 #include <thread>
 #include <vector>
 
+#include "ioscpp/log.hpp"
 #include "ioscpp/protocol/plist.hpp"
 #include "ioscpp/protocol/usbmux.hpp"
 #include "ioscpp/stream.hpp"
@@ -152,10 +151,8 @@ Result<Connection> Connection::open(Transport &transport)
         return tl::unexpected(protocol_error("the device reported an unknown mux version"));
     }
 
-    if (std::getenv("IOSCPP_TRACE") != nullptr)
-    {
-        std::fprintf(stderr, "[version] device major=%u minor=%u\n", device_version.major, device_version.minor);
-    }
+    log(LogLevel::Info,
+        "mux version " + std::to_string(device_version.major) + "." + std::to_string(device_version.minor));
 
     connection.session_.set_version(device_version.major);
     if (device_version.major >= 2)
@@ -172,6 +169,7 @@ Result<Connection> Connection::open(Transport &transport)
         std::this_thread::sleep_for(std::chrono::milliseconds(300));
     }
 
+    log(LogLevel::Info, "connected");
     return connection;
 }
 
@@ -182,6 +180,7 @@ void Connection::close() noexcept
         return;
     }
     closed_ = true;
+    log(LogLevel::Info, "closed");
     session_.transport().close();
 }
 
@@ -195,7 +194,13 @@ Status Connection::send_tcp(const protocol::TcpHeader &header, std::span<const s
 
 Result<Frame> Connection::receive()
 {
-    return session_.receive();
+    auto frame = session_.receive();
+    if (!frame)
+    {
+        log(LogLevel::Warning, "the link dropped: " + frame.error().message);
+        return tl::unexpected(frame.error());
+    }
+    return frame;
 }
 
 Result<protocol::Plist> Connection::muxd_request(protocol::Plist request)

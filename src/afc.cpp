@@ -4,8 +4,6 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
-#include <cstdio>
-#include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <memory>
@@ -17,6 +15,7 @@
 #include <vector>
 
 #include "ioscpp/error.hpp"
+#include "ioscpp/log.hpp"
 #include "ioscpp/stream.hpp"
 
 namespace ioscpp
@@ -208,12 +207,12 @@ struct Afc::Impl
         {
             return tl::unexpected(status.error());
         }
-        if (std::getenv("IOSCPP_TRACE") != nullptr)
+        if (is_logging(LogLevel::Debug))
         {
-            std::fprintf(stderr, "[afc recv] op=0x%02llx entire=%llu this=%llu num=%llu payload=%zu\n",
-                         static_cast<unsigned long long>(packet.operation),
-                         static_cast<unsigned long long>(entire_length), static_cast<unsigned long long>(this_length),
-                         static_cast<unsigned long long>(packet_number), packet.data.size());
+            log(LogLevel::Debug, std::string("[afc recv] op=") + std::to_string(packet.operation) +
+                                     " entire=" + std::to_string(entire_length) +
+                                     " this=" + std::to_string(this_length) + " num=" + std::to_string(packet_number) +
+                                     " payload=" + std::to_string(packet.data.size()));
         }
         return packet;
     }

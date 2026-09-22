@@ -81,6 +81,7 @@ The device exposes a vendor-specific USB interface that multiplexes TCP-like con
 - **Why it matters**:
   - It is easier to read than the C sources for the `lockdownd`, `AFC`, and `installation_proxy` message layouts.
   - It documents the pairing record fields and the service names (`com.apple.afc`, `com.apple.mobile.installation_proxy`, and so on).
+  - It is the reference for the iOS 17.0–17.3.1 Wi-Fi **RemotePairing** route (`remote/tunnel_service.py` and `remote/common.py`): Bonjour discovery, the pair-verify handshake, the encrypted control channel, and the QUIC/TLS-PSK transport (`10-coredevice-tunnel.md`).
 
 ### The Apple Device Protocol notes
 
