@@ -9,7 +9,8 @@ first.
 
 This is a C++ library that talks to an iPhone or an iPad directly over a USB cable.
 It is meant to be embedded in another C++ program, which then lists and transfers
-files, installs and removes apps, and starts and stops them.
+files, reads and writes inside an app's own folder, installs and removes apps, and
+starts and stops them.
 
 The important part is what it does **not** need. Apple's own tools and most other
 projects start a helper program in the background, or depend on a daemon called

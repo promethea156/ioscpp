@@ -45,8 +45,8 @@ The open issues fall into three groups:
   one, and none of it needs new code.
 - **Robustness and CI**: fuzzing the wire codecs, bounding the device test with a timeout,
   and hardening the build and CI (sanitizers, the no-USB configuration, the installed package).
-- **Features** beyond the current scope: app container access over `house_arrest`, a
-  kernel-routable tunnel, and the Wi-Fi route for iOS 17.0–17.3.1.
+- **Features** beyond the current scope: a kernel-routable tunnel and the Wi-Fi
+  route for iOS 17.0–17.3.1.
 
 Items labelled [`good first issue`](https://github.com/promethea156/ioscpp/labels/good%20first%20issue)
 need little context; those labelled

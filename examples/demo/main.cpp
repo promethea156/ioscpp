@@ -26,6 +26,7 @@
 #include "ioscpp/app.hpp"
 #include "ioscpp/crypto/pairing.hpp"
 #include "ioscpp/device.hpp"
+#include "ioscpp/house_arrest.hpp"
 #include "ioscpp/rsd.hpp"
 #include "ioscpp/usb/usb_transport.hpp"
 
@@ -188,8 +189,41 @@ int main(int argc, char **argv)
         std::cerr << "close: " << closed.error().message << "\n";
     }
 
-    // 8. Uninstall the app over the RSD installer shim.
-    step(8, "uninstall the app over the RSD shim");
+    // 8. Open the app's own container over house_arrest, push a file into its
+    // Documents, stat it, and pull it back. On iOS 17.4 and later the service
+    // rides the RSD shim; the mux-link service is the fallback.
+    step(8, "push and pull a file inside the app's container over house_arrest");
+    auto container = HouseArrest::start(*rsd, bundle_id);
+    if (!container)
+    {
+        std::cerr << "house_arrest: " << container.error().message << "\n";
+        return 1;
+    }
+    const std::string in_container = "/Documents/ioscpp_demo.txt";
+    {
+        const std::vector<std::byte> payload(64 * 1024, std::byte{0x5a});
+        std::ofstream out(local, std::ios::binary | std::ios::trunc);
+        out.write(reinterpret_cast<const char *>(payload.data()), static_cast<std::streamsize>(payload.size()));
+    }
+    if (auto pushed = container->afc().push(local, in_container); !pushed)
+    {
+        std::cerr << "container push: " << pushed.error().message << "\n";
+        return 1;
+    }
+    if (auto info = container->afc().stat(in_container); info && info->has_value())
+    {
+        std::cout << "pushed " << in_container << " (" << (*info)->size << " bytes)\n";
+    }
+    if (auto pulled = container->afc().pull(in_container, back); !pulled)
+    {
+        std::cerr << "container pull: " << pulled.error().message << "\n";
+        return 1;
+    }
+    (void)container->afc().remove(in_container);
+    container->close();
+
+    // 9. Uninstall the app over the RSD installer shim.
+    step(9, "uninstall the app over the RSD shim");
     auto uninstalled = uninstall(*rsd, bundle_id);
     if (!uninstalled)
     {

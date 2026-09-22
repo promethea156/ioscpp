@@ -522,3 +522,16 @@ drop the connection.
 A `com.apple.dvt.*` service does not exchange plists. It exchanges `DTX` messages, which have their
 own header and payload types. Sending a plist to a `dvt` service, or reading its first reply as one,
 fails.
+
+### `house_arrest` rides the RSD shim on iOS 17.4+
+
+`lockdownd` still starts `com.apple.mobile.house_arrest` over the mux link, and on iOS 17.4 and later
+the same service is also advertised over the RSD tunnel as
+`com.apple.mobile.house_arrest.shim.remote`. `HouseArrest::start(Rsd&, bundle_id)` reaches the shim,
+sends the `VendContainer` command, and the device answers with the container vended over `AFC` on the
+same connection, so no mux-link start is needed.
+
+**Hit.** The device test's opt-in round trip vended an installed app's container over the RSD shim on an
+iOS 18.7.8 device (`container: vended over the RSD shim`), listed it, and round-tripped a file in its
+`Documents` (`tests/device_test.cpp`). The mux-link fallback was not reached, so whether
+`com.apple.mobile.house_arrest` still answers on the mux link on 17.4+ is not settled.

@@ -12,6 +12,7 @@ add_executable(ioscpp_tests
   cdtunnel_test.cpp
   dtx_connection_test.cpp
   dtx_test.cpp
+  house_arrest_test.cpp
   http2_test.cpp
   ipv6_test.cpp
   json_test.cpp
