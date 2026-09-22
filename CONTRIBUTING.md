@@ -106,7 +106,8 @@ skip) when no matching device is attached, so it never fails a machine without o
 otherwise. Today it connects, reads the device's identity, exercises AFC listing, stat, and a push/pull round
 trip, opens the RSD tunnel, and lists the RSD services. The opt-in install and uninstall round trip runs
 only when `IOSCPP_TEST_IPA` and `IOSCPP_TEST_BUNDLE` name a development-signed app: it stages the IPA
-over the RSD `AFC` shim, installs it over the `installation_proxy` shim, and uninstalls the bundle. It
+over the RSD `AFC` shim, installs it over the `installation_proxy` shim, vends the app's container over
+`house_arrest`, launches the app, checks it is running, closes it, and uninstalls the bundle. It
 uninstalls and reinstalls the bundle and loses its data, so only set those variables for an app you have
 agreed to replace.
 
