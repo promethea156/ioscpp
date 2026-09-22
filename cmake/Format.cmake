@@ -26,6 +26,7 @@ if(IOSCPP_CLANG_FORMAT)
         "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/*.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/examples/*.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/fuzz/*.cpp"
     )
 
     add_custom_target(format

@@ -44,6 +44,153 @@ jobs:
       - name: Test
         run: ctest --test-dir build --output-on-failure -C Release
 
+  # The install rules, the export set, and `ioscppConfig.cmake` are only valid if
+  # a downstream `find_package(ioscpp)` consumer builds against them, so the build
+  # is installed and a tiny consumer is configured, built, and run against it.
+  package:
+    name: package (find_package)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: >
+          cmake -S . -B build
+          -DIOSCPP_BUILD_TESTS=OFF
+          -DIOSCPP_BUILD_EXAMPLES=OFF
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Install
+        run: cmake --install build --config Release --prefix "${GITHUB_WORKSPACE}/install"
+
+      - name: Configure the consumer
+        run: >
+          cmake -S tests/package -B consumer
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_PREFIX_PATH="${GITHUB_WORKSPACE}/install"
+
+      - name: Build the consumer
+        run: cmake --build consumer --config Release
+
+      # The USB backend links libusb, which is a shared library here, so the
+      # loader has to find it in the install tree.
+      - name: Run the consumer
+        env:
+          LD_LIBRARY_PATH: ${{ github.workspace }}/install/lib
+        run: ./consumer/ioscpp_package_consumer
+
+  # The codecs parse bytes that come from a device, and malformed input must
+  # return an error rather than crash, so the device-free suite runs under ASan
+  # and UBSan with recovery disabled, and the first finding fails the job. The USB
+  # backend is off: it cannot be exercised without a device, and instrumenting its
+  # third-party dependency would only add noise.
+  sanitizers:
+    name: ASan+UBSan
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: >
+          cmake -S . -B build
+          -DCMAKE_BUILD_TYPE=Debug
+          -DIOSCPP_BUILD_TESTS=ON
+          -DIOSCPP_BUILD_EXAMPLES=ON
+          -DIOSCPP_BUILD_USB=OFF
+          -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer -g"
+
+      - name: Build
+        run: cmake --build build --config Debug
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure -C Debug
+
+  # `IOSCPP_BUILD_USB=OFF` is the documented way for a consumer to build the core
+  # with no USB dependency and supply its own `Transport`, so it is built and tested
+  # on its own to keep the configuration from rotting.
+  build-no-usb:
+    name: core (USB off)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: >
+          cmake -S . -B build
+          -DIOSCPP_BUILD_TESTS=ON
+          -DIOSCPP_BUILD_EXAMPLES=ON
+          -DIOSCPP_BUILD_USB=OFF
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure -C Release
+
+  # The codecs parse bytes that come from a device, and malformed input must
+  # return an error rather than crash, so every codec harness runs under
+  # libFuzzer with ASan and UBSan for a short budget. libFuzzer ships with
+  # upstream Clang, so the job uses Clang rather than the default GCC.
+  fuzz:
+    name: fuzz (libFuzzer)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: >
+          cmake -S . -B build
+          -DCMAKE_C_COMPILER=clang
+          -DCMAKE_CXX_COMPILER=clang++
+          -DIOSCPP_BUILD_TESTS=OFF
+          -DIOSCPP_BUILD_EXAMPLES=OFF
+          -DIOSCPP_BUILD_FUZZERS=ON
+          -DIOSCPP_USE_LIBFUZZER=ON
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Fuzz
+        run: |
+          for fuzzer in build/fuzz/ioscpp_fuzz_*; do
+            echo "== $fuzzer =="
+            "$fuzzer" -max_total_time=30 -rss_limit_mb=2048 -print_final_stats=1
+          done
+
+  # A compiler without libFuzzer (MSVC, or an AppleClang without it) uses the
+  # in-repo standalone driver instead, so that path is built and run too, to keep
+  # it from rotting.
+  fuzz-standalone:
+    name: fuzz (standalone)
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: >
+          cmake -S . -B build
+          -DIOSCPP_BUILD_TESTS=OFF
+          -DIOSCPP_BUILD_EXAMPLES=OFF
+          -DIOSCPP_BUILD_FUZZERS=ON
+          -DIOSCPP_USE_LIBFUZZER=OFF
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Fuzz
+        run: |
+          Get-ChildItem build/fuzz/Release/ioscpp_fuzz_*.exe | ForEach-Object {
+            Write-Host "== $_ =="
+            & $_.FullName -runs=2000
+          }
+
   release:
     name: release
     # Only on a tag, and only after the matrix has built and tested it on every

@@ -6,6 +6,7 @@
 #include "ioscpp/crypto/pairing.hpp"
 #include "ioscpp/device.hpp"
 #include "ioscpp/error.hpp"
+#include "ioscpp/house_arrest.hpp"
 #include "ioscpp/lockdown.hpp"
 #include "ioscpp/protocol/cdtunnel.hpp"
 #include "ioscpp/protocol/ipv6.hpp"

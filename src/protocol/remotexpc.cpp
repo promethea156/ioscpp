@@ -356,6 +356,13 @@ Result<Xpc> decode_object(Reader &reader)
             {
                 return tl::unexpected(count.error());
             }
+            // Each element carries at least its 4-byte type word, so a count
+            // larger than the bytes that remain cannot be honest; reserving for it
+            // would allocate from a crafted length.
+            if (*count > (reader.bytes.size() - reader.offset) / 4)
+            {
+                return tl::unexpected(protocol_error("an xpc array count exceeds its bytes"));
+            }
             Xpc::Array array;
             array.reserve(*count);
             for (std::uint32_t i = 0; i < *count; ++i)

@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `HouseArrest`, `AFC` access to one installed app's own container: it starts
+  `com.apple.mobile.house_arrest` over the mux link or, on iOS 17.4+, its
+  `com.apple.mobile.house_arrest.shim.remote` RSD shim, sends the
+  `VendContainer`/`VendDocuments` command with the bundle id, and returns the `Afc`
+  session rooted at the container. Tested device-free over the mock, and device-verified
+  on iOS 18.7.8, where the container vended over the RSD shim.
+
+### Fixed
+
+- The `RemoteXPC` array decoder no longer reserves from an element count that
+  exceeds the bytes that remain; a crafted count was an out-of-memory abort instead
+  of an `ErrorCode::Protocol` error (`src/protocol/remotexpc.cpp`).
+- The binary plist decoder bounds its object reads and count-based allocations, and
+  forms the trailer's table bound as a division so a crafted object count cannot
+  overflow it; a crafted trailer was an out-of-memory abort instead of an
+  `ErrorCode::Protocol` error (`src/protocol/plist.cpp`).
+
 ## [2.0.0] - 2026-09-20
 
 ### Removed

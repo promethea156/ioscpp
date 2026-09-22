@@ -106,6 +106,26 @@ afc.pull("/DCIM/100APPLE/IMG_0001.JPG", "IMG_0001.JPG").value();
 afc.push("local.txt", "/Documents/local.txt").value();
 ```
 
+## Read and write inside an app's container
+
+`house_arrest` vends one installed app's own sandbox over `AFC`, so the same
+`list`, `stat`, `pull`, and `push` act inside the app. The service is
+`com.apple.mobile.house_arrest`; on iOS 17.4 and later the RSD tunnel carries it
+as `com.apple.mobile.house_arrest.shim.remote`, so `start` has an overload for
+each. The bundle id travels in a `VendContainer` (whole container) or
+`VendDocuments` (`Documents` only) command after the service starts.
+
+```cpp
+auto container = ioscpp::HouseArrest::start(*rsd, "com.example.app").value();
+
+for (const auto &entry : container.afc().list("/Documents").value())
+{
+    std::cout << entry.name << "\n";
+}
+
+container.afc().push("local.txt", "/Documents/local.txt").value();
+```
+
 ## Install and uninstall an app
 
 On iOS 17.4 and later, `install(Rsd&, ipa)` uploads the IPA into `/PublicStaging` over the RSD

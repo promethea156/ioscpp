@@ -80,7 +80,7 @@ and `st_ifmt`. A path that does not exist is a `STATUS` with a non-zero code, wh
 `pull` is a `FILE_OPEN` (read mode), a loop of `FILE_READ`, and a `FILE_CLOSE`:
 
 1. The host sends `FILE_OPEN` with mode `1` and the path.
-2. The device answers with a `DATA` packet carrying an 8-byte file handle.
+2. The device answers with a `FILE_OPEN_RES` packet carrying an 8-byte file handle.
 3. The host sends `FILE_READ` with the handle and the number of bytes it wants.
 4. The device answers with a `DATA` packet of the bytes, or a `STATUS` with code
    `0` when the file is exhausted.
@@ -95,7 +95,7 @@ memory.
 `push` is a `FILE_OPEN` (write mode), a loop of `FILE_WRITE`, and a `FILE_CLOSE`:
 
 1. The host sends `FILE_OPEN` with mode `4` and the path.
-2. The device answers with a `DATA` packet carrying an 8-byte file handle.
+2. The device answers with a `FILE_OPEN_RES` packet carrying an 8-byte file handle.
 3. The host sends `FILE_WRITE` with the handle and a chunk of the file. The handle
    is the packet's data and the chunk its payload, so `this_length` is the header and
    the handle alone.

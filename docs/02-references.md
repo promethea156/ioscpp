@@ -68,7 +68,7 @@ The device exposes a vendor-specific USB interface that multiplexes TCP-like con
 - **Why it matters**:
   - It is a working, tested implementation to compare against when a call does not behave as the device expects, which is exactly the kind of second opinion a protocol reimplementation needs.
   - Its `ios` service list is the broadest map of what the device offers (`installation_proxy`, `process_control`, `AFC`, `diagnostics_relay`, `screenshotr`, `os_trace_relay`, and so on), which is what the roadmap is drawn from.
-  - It documents the iOS 17+ paths this library has not reached yet: the Remote Service Discovery (`RSD`) tunnel, the `CoreDevice` services, and the userspace `tunnel` needed before any of them work.
+  - It documents the iOS 17+ paths this library now follows: the Remote Service Discovery (`RSD`) tunnel, the `CoreDevice` services, and the userspace `tunnel` that carries them.
   - It pairs without the manual trust tap, which is the behavior the pairing slice targets.
   - It is MIT-licensed and compiles statically for every host, the same self-contained goal this library has.
 
