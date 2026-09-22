@@ -46,7 +46,9 @@ The open issues fall into three groups:
 - **Robustness and CI**: fuzzing the wire codecs, bounding the device test with a timeout,
   and hardening the build and CI (sanitizers, the no-USB configuration, the installed package).
 - **Features** beyond the current scope: a kernel-routable tunnel and the Wi-Fi
-  route for iOS 17.0–17.3.1.
+  route for iOS 17.0–17.3.1, which needs its own pairing record, a pair-verify handshake,
+  an encrypted control channel, and a QUIC transport mbedTLS cannot provide
+  (`docs/10-coredevice-tunnel.md`).
 
 Items labelled [`good first issue`](https://github.com/promethea156/ioscpp/labels/good%20first%20issue)
 need little context; those labelled

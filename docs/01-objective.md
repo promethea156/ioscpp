@@ -25,6 +25,10 @@ The first iteration targets a minimal but practical feature set, mirroring the `
 - Support for every iOS version, device family, or carrier variant.
 - Jailbreak-only services.
 - Wireless (Wi-Fi sync) discovery; the first iteration is USB-only.
+- The iOS 17.0–17.3.1 Wi-Fi **RemotePairing** route, which needs its own pairing record, a
+  pair-verify handshake, an encrypted control channel, and a QUIC transport the current mbedTLS
+  cannot provide ([`10-coredevice-tunnel.md`](10-coredevice-tunnel.md#the-wi-fi-remotepairing-route-ios-1701731),
+  issue #73).
 
 ## Technical Requirements
 

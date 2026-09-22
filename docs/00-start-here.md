@@ -127,7 +127,9 @@ running, reads and writes inside the app's own folder, closes it, and removes it
 Verified on a real iPhone running iOS 18.7.8.
 
 What is left is not on the roadmap yet: the privileged helper, the keyboard and screen
-paths, and the older Wi-Fi route (the non-goals).
+paths, and the older Wi-Fi route (the non-goals). The older Wi-Fi route turned out to be
+bigger than it looked — it needs its own separate pairing step, and a kind of connection
+the library cannot make today — so it stays a non-goal for now.
 
 ## The words this project uses
 

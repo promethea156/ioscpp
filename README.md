@@ -52,6 +52,7 @@ developer tools behind the `CoreDevice` tunnel:
 |-------------|------------|
 | Any | Connect, Info, and Files, over the mux link. |
 | 17.4 or later | The app steps too: install, launch, the running check, close, and uninstall, over the tunnel. |
+| 17.0–17.3.1 | Connect, Info, and Files; the app steps need the Wi-Fi `RemotePairing` route, which is not implemented ([`docs/10-coredevice-tunnel.md`](docs/10-coredevice-tunnel.md#the-wi-fi-remotepairing-route-ios-1701731)). |
 
 Exercised on **iOS 17.5.1** (iPhone15,4) and **iOS 18.7.8** (iPhone17,4), including
 both devices driven at once; **17.5.1 is the oldest iOS version tested so far**.
