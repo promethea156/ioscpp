@@ -10,9 +10,9 @@ There is no CLA and no sign-up. Open an issue or a pull request and say what you
 
 ### Verify a platform
 
-**Windows is the only platform exercised by hand against real devices.** CI builds
-and runs the device-free suite on Linux and macOS, but their USB path is
-[marked unverified](README.md#platform-support). If you have a device on either,
+**Windows and Linux are exercised by hand against real devices.** CI builds
+and runs the device-free suite on macOS, but its USB path is
+[marked unverified](README.md#platform-support). If you have a device on macOS,
 build the project, run the suite, and
 [open a verification report](https://github.com/promethea156/ioscpp/issues/new?template=platform_verification.yml)
 with the result, green or red. This is the single most useful thing you can do, and it needs no
@@ -39,9 +39,9 @@ output is already a contribution — [open a bug](https://github.com/promethea15
 library connects, pairs, reads identity and files, installs and controls apps, and the guided tour
 walks it all once against a real device. What is left is the
 [non-goals](docs/03-roadmap.md#non-goals-for-now), the post-slice helpers, and proving the
-library on more than Windows. The open issues fall into three groups:
+library on more than Windows and Linux. The open issues fall into three groups:
 
-- **Verification**, which needs hardware: a device run on Linux or macOS, the pre-17.4
+- **Verification**, which needs hardware: a device run on macOS, the pre-17.4
   mux-link fallback, and the mux-link `house_arrest` path. A red report is as useful as a green
   one, and none of it needs new code.
 - **Robustness and CI**: uploading the built executables as artifacts.
