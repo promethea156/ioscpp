@@ -57,10 +57,10 @@ serial descriptor work on Windows (WinUSB), macOS, and Linux alike.
 **Why we believe it.** libusb is the documented cross-platform path, and the code has a Linux
 detach (`src/usb/usb_transport.cpp:441`).
 
-**Status.** Proven on Windows: the device test claims the interface and connects
-(`tests/device_test.cpp`). macOS and Linux are still only compiled.
+**Status.** Proven on Windows and Linux: the device test claims the interface and connects
+(`tests/device_test.cpp`). macOS is still only compiled.
 
-**Proof.** The device test passes on all three CI platforms.
+**Proof.** The device test passes on macOS against a real device.
 
 ### A short bulk transfer is not an error
 

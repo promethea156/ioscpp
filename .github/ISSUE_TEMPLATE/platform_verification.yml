@@ -6,8 +6,8 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thank you for verifying `ioscpp`. Windows is the only platform it has been built
-        and run on, so a Linux or macOS result — green **or** red — is the most useful
+        Thank you for verifying `ioscpp`. Windows and Linux are the only platforms it has
+        been built and run on, so a macOS result — green **or** red — is the most useful
         thing you can report. A failure is a contribution, not a nuisance.
 
         The device-free suite needs no hardware, so you can run it even without an iPhone
