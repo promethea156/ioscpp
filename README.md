@@ -32,15 +32,14 @@ responsible for what ships.
 | Platform | Status | Notes |
 |----------|--------|-------|
 | Windows  | ![Windows: tested](https://img.shields.io/badge/Windows-tested-brightgreen) | Built, tested, and exercised against real devices, including USB. |
-| Linux    | ![Linux: CI tested](https://img.shields.io/badge/Linux-CI%20tested-yellow) | CI builds it and runs the device-free suite; the USB path is unverified. |
+| Linux    | ![Linux: tested](https://img.shields.io/badge/Linux-tested-brightgreen) | Built, tested, and exercised against real devices, including USB. |
 | macOS    | ![macOS: CI tested](https://img.shields.io/badge/macOS-CI%20tested-yellow) | CI builds it and runs the device-free suite; the USB path is unverified. |
 
-CI builds and runs the device-free test suite on **all three** platforms, so Linux
-and macOS are known to compile and pass it. **Windows is the only platform exercised by
-hand against real devices**, including the USB transport, so the Linux and macOS USB path
-is unverified and may have rough edges. The platform steps below are written from the
-toolchain and standard-library APIs the code targets. If you have a device on either,
-please build it and
+CI builds and runs the device-free test suite on **all three** platforms, so all three are
+known to compile and pass it. **Windows and Linux are exercised by hand against real
+devices**, including the USB transport, so the macOS USB path is unverified and may have
+rough edges. The platform steps below are written from the toolchain and standard-library
+APIs the code targets. If you have a device on macOS, please build it and
 [report the result](https://github.com/promethea156/ioscpp/issues/new?template=platform_verification.yml);
 a green run is just as useful as a red one, and see [Contributing](#contributing).
 
@@ -77,9 +76,11 @@ independent, so a program can drive every attached device at once, one thread pe
 
 ## Build it
 
-You need a **C++20 compiler**, **CMake 3.24 or newer**, and **Git** (the test framework and the dependencies are fetched automatically at configure time). The build is the same everywhere; only the toolchain setup differs. Only **Windows** is known to work so far — see [Platform support](#platform-support).
+You need a **C++20 compiler**, **CMake 3.24 or newer**, and **Git** (the test framework and the dependencies are fetched automatically at configure time). The build is the same everywhere; only the toolchain setup differs. **Windows and Linux** are known to work so far — see [Platform support](#platform-support).
 
 Every dependency is fetched by CMake, so there is nothing else to install. The compiler, USB driver, device permission, and daemon steps for each platform are in [`docs/09-platform-setup.md`](docs/09-platform-setup.md).
+
+One process owns the device's mux interface at a time, so stop any `usbmuxd` before running `ioscpp` against a device, exactly as `adb kill-server` is needed for Android. On Linux that is `sudo systemctl stop usbmuxd`; the other platforms and the first-run *Trust* prompt are in [`docs/09-platform-setup.md`](docs/09-platform-setup.md).
 
 From the repository root:
 
@@ -110,13 +111,19 @@ build/fuzz/Release/ioscpp_fuzz_plist.exe -runs=20000
 ```
 
 <details>
-<summary><b>Linux</b> — CI tested</summary>
+<summary><b>Linux</b> — tested</summary>
 
 Install the toolchain and libusb's build dependency:
 
 ```
 sudo apt-get update
 sudo apt-get install -y build-essential cmake git pkg-config
+```
+
+Stop `usbmuxd` before running against a device, exactly as `adb kill-server` is needed for Android:
+
+```
+sudo systemctl stop usbmuxd
 ```
 
 Then run the three commands above.
@@ -139,6 +146,8 @@ Then run the three commands above.
 <summary><b>Windows</b> — tested</summary>
 
 Install **Visual Studio 2022** with the *Desktop development with C++* workload, and CMake 3.24 or newer. Then run the three commands above from a **Developer PowerShell for VS 2022**.
+
+Before a device is reachable, the mux interface needs the libusb-win32 driver bound to it with [Zadig](https://zadig.akeo.ie/), and Apple Mobile Device Service stopped; the steps are in [`docs/09-platform-setup.md`](docs/09-platform-setup.md).
 </details>
 
 Optional API documentation, if [Doxygen](https://www.doxygen.nl/) is installed:

@@ -5,6 +5,20 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.1] - 2026-09-24
+
+### Changed
+
+- Linux is recorded as a verified platform: the build, the suite, and the USB
+  path against a real device. The README platform table and
+  `docs/08-assumptions.md` now mark it proven, and only macOS remains
+  unverified.
+- The Windows driver steps in `docs/09-platform-setup.md` now install
+  libusb-win32 with **Zadig** by default, since it signs the package for the
+  device and leaves driver signature enforcement on; editing `libusb0.inf` is kept as
+  the alternative. The README calls out stopping `usbmuxd` before a run, as
+  `adb kill-server` is needed for Android.
+
 ## [2.2.0] - 2026-09-22
 
 ### Added
