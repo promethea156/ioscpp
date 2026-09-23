@@ -110,30 +110,38 @@ itself, as `usbmuxd` does. A device that is already in the right configuration, 
 example because Apple Mobile Device Support selected it, works with either. `libusbK`
 cannot select a configuration either, so it has the same limit as WinUSB.
 
-Install the driver with **Device Manager**, so no installer is needed:
+Install the driver with **[Zadig](https://zadig.akeo.ie/)**. It generates and signs a
+package for the device, so no INF is edited and driver signature enforcement can stay on.
+Editing a package's INF leaves its catalog signature stale, and a machine with enforcement
+on refuses the package until enforcement is turned off or the package is re-signed.
 
-1. Download the libusb-win32 binary package (`libusb-win32-bin-1.4.0.2.zip`) from
-   [SourceForge](https://sourceforge.net/projects/libusb-win32/files/libusb-win32-release/)
-   and extract it.
-2. The package's `bin\libusb0.inf` ships another device's hardware id, in the `DeviceID`
-   string of its `[Strings]` section. Set it to the mux interface's hardware id,
-   `VID_05AC&PID_12A8&MI_01`; check the interface's *Hardware Ids* in Device Manager if
-   the interface number differs.
-3. Put the device in the normal (unlocked) mode and plug it in.
-4. In **Device Manager**, find the mux interface: *View* -> *Devices by connection*, then
-   the Apple composite device and its `Apple Mobile Device USB Device` (interface 1).
-5. *Update driver* -> *Browse my computer* -> *Let me pick from a list* -> *Have Disk* ->
-   browse to `libusb0.inf` -> **libusb-win32** -> install.
-6. Replug the device.
+1. Put the device in the normal (unlocked) mode and plug it in.
+2. Run Zadig, open *Options* -> *List All Devices*, and select the mux interface of the
+   Apple composite device: the entry whose USB id ends in `MI_01` (`VID_05AC&PID_12A8&MI_01`
+   on this device), shown as `Apple Mobile Device USB Device`. Check the interface's
+   *Hardware Ids* in **Device Manager** if the interface number differs.
+3. Set the driver on the right to **libusb-win32**.
+4. Click **Install Driver** (or **Replace Driver**), then replug the device.
 
 The binding is per device, so every device a host talks to needs the step once; it survives
 replugs. With two devices attached and only one bound, the unbound one has no readable serial,
 so `list` leaves it out and it is not driven.
 
-Editing the INF leaves its catalog signature stale, so a machine with driver signature
-enforcement on can refuse the package; the install then needs enforcement off, or the package
-re-signed. [Zadig](https://zadig.akeo.ie/) generates and signs a package for the device
-instead, with no INF editing, so it is the shorter route when the manual one is refused.
+#### Alternative: install libusb-win32 by hand
+
+If Zadig is not an option, the libusb-win32 package's `bin\libusb0.inf` can be installed
+through **Device Manager**. It ships another device's hardware id in the `DeviceID` string of
+its `[Strings]` section, so set it to the mux interface's hardware id,
+`VID_05AC&PID_12A8&MI_01`, first.
+
+1. Download the libusb-win32 binary package (`libusb-win32-bin-1.4.0.2.zip`) from
+   [SourceForge](https://sourceforge.net/projects/libusb-win32/files/libusb-win32-release/)
+   and extract it.
+2. In **Device Manager**, find the mux interface: *View* -> *Devices by connection*, then
+   the Apple composite device and its `Apple Mobile Device USB Device` (interface 1).
+3. *Update driver* -> *Browse my computer* -> *Let me pick from a list* -> *Have Disk* ->
+   browse to `libusb0.inf` -> **libusb-win32** -> install.
+4. Replug the device.
 
 Replacing the whole composite device's driver instead of one interface can make iTunes
 re-pair it; binding the single interface avoids that.
@@ -144,7 +152,11 @@ provides it.
 ### Stop the daemon
 
 Stop the `usbmuxd` service, or stop Apple Mobile Device Support, so it releases the
-interface.
+interface:
+
+```powershell
+Stop-Service 'Apple Mobile Device Service'
+```
 
 ## Developer tooling
 
