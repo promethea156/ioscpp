@@ -48,6 +48,64 @@ bug.
 There is also a chicken-and-egg: a WinUSB handle is per interface, and the `MI_01` node may not
 exist until the configuration is already switched.
 
+## Addressing the configuration problem
+
+The uncertainty is narrow enough to isolate, so the plan attacks it in two stages: a cheap
+standalone spike first, then a backend whose fallbacks end at "keep what already works".
+
+### Step 0: a standalone spike, before any backend code
+
+Write a roughly 150-line Windows-only probe, independent of `ioscpp`, that:
+
+1. enumerates `VID_05AC&PID_*&MI_01` (and `MI_00`) with SetupAPI;
+2. reads and logs the active configuration;
+3. opens a handle, calls `WinUsb_Initialize`, and sends `SET_CONFIGURATION(3)` with
+   `WinUsb_ControlTransfer`;
+4. logs the return code, whether the device re-enumerates, and whether `MI_01` reappears;
+5. confirms on the wire with USBPcap that the request actually goes out.
+
+The whole Windows port is gated on this. If it passes, the rest is mechanical; if it fails, a
+fallback is chosen before the port rather than during it.
+
+### Option 1 (primary): send it ourselves, then reopen
+
+libusb's "not supported" is a libusb policy, not a WinUSB limit: `WinUsb_ControlTransfer`
+carries any setup packet, and libusb0's user-space path does the same thing. So the backend:
+
+1. opens a handle to a present interface and calls `WinUsb_Initialize`;
+2. sends `SET_CONFIGURATION(3)` on endpoint 0;
+3. closes the handle, because the switch invalidates WinUSB's cached pipes;
+4. waits for re-enumeration, then re-opens by hardware id (`VID/PID&MI_01`), not by a cached
+   path, because the instance number changes;
+5. queries the pipes and claims the interface.
+
+Two rules make this reliable: never cache the device path across a switch, and wait for
+re-enumeration with a bounded poll (or `CM_Register_Notification`) rather than a fixed sleep.
+
+### Option 2 (if Option 1 fails): switch through the PTP interface
+
+`MI_00` (PTP) exists on configuration 1, so open it, send the switch, then open `MI_01`. The cost
+is that WinUSB replaces Apple's driver on `MI_00` too, which can affect iTunes and photo import on
+that host.
+
+### Option 3 (fallback): keep `libusb0.sys`
+
+Drive libusb-win32's ioctl API directly. libusb-the-library is still removed, but a third-party kernel
+driver is kept. This is the reliable path, and the one the project uses today.
+
+### Option 4 (accept): keep libusb on Windows
+
+If the win shrinks too much, go native on Linux and macOS only. The lowest-risk outcome.
+
+### What the spike decides
+
+- Does `WinUsb_ControlTransfer(SET_CONFIGURATION)` succeed?
+- Does the device re-enumerate and `MI_01` come back?
+- Does a re-open then read and write bulk?
+- Is `MI_01` present on a fresh plug, or is Option 2 required?
+
+Whichever way it lands, record it in [`04-blockers.md`](04-blockers.md).
+
 ## The Windows API mapping
 
 | libusb today | Native Windows |
@@ -78,18 +136,12 @@ Each increment is verifiable against a real device, reusing the existing
 | 1 | Enumeration: SetupAPI device-interface walk, filter VID/PID and `MI_01`, parse descriptors, convert the UTF-16 `iSerial` to UTF-8. | `list` and `is_present` return the same serial as libusb |
 | 2 | Open and claim: `CreateFile` the interface path, `WinUsb_Initialize`, `WinUsb_QueryInterfaceSettings`, `WinUsb_QueryPipe` for the two bulk pipes. | `open` succeeds with Apple's service stopped |
 | 3 | Transfers: `WinUsb_ReadPipe` / `WinUsb_WritePipe`, `PIPE_TRANSFER_TIMEOUT`, `AUTO_CLEAR_STALL`, `WinUsb_ResetPipe`; map `ERROR_SEM_TIMEOUT` into the existing retry and budget loop. | Device test read and write, including the TLS handshake's short reads |
-| 4 | **Configuration-selection spike** (see below): fetch every configuration descriptor, locate the mux configuration, send `SET_CONFIGURATION`, reopen. | `open` on a freshly replugged, untrusted device |
+| 4 | **Configuration-selection spike** ([below](#addressing-the-configuration-problem)): a standalone probe sends `SET_CONFIGURATION` and confirms re-enumeration; the backend then does the same, re-enumerating by hardware id. | `open` on a freshly replugged, untrusted device |
 | 5 | Wire the factory, default Windows to the native backend, keep `IOSCPP_USB_BACKEND=libusb` as an escape hatch; drop the libusb `FetchContent` and DLL copy on Windows. | Full device and multi-device tests on Windows |
 | 6 | Docs: rewrite the Windows driver section of [`09-platform-setup.md`](09-platform-setup.md) for WinUSB, and note the LGPL obligation is gone. | — |
 
-Increment 4 is the only genuinely uncertain step. Its fallbacks, in order:
-
-1. **`WinUsb_ControlTransfer` plus reopen** — the most likely fix. libusb's "creates issues"
-   comment is about its own cached configuration and pipes, which a reopen discards.
-2. **Switch through the PTP interface** — bind WinUSB to `MI_00`, open it, send
-   `SET_CONFIGURATION`, after which `MI_01` appears.
-3. **Keep `libusb0.sys` and drive it directly** — the most reliable, but this is libusb-win32's
-   ioctl API rather than WinUSB, and still ships a third-party kernel driver.
+Increment 4 is the only genuinely uncertain step; its spike, options, and fallbacks are in
+[Addressing the configuration problem](#addressing-the-configuration-problem).
 
 ## What it buys, and what it does not
 
