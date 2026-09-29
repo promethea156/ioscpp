@@ -233,6 +233,9 @@ cmake/                  CMake package configuration
 - [`docs/08-assumptions.md`](docs/08-assumptions.md) — what the implementation assumes but has not yet proven on a device
 - [`docs/09-platform-setup.md`](docs/09-platform-setup.md) — what to install and grant per platform to build and reach a device
 - [`docs/10-coredevice-tunnel.md`](docs/10-coredevice-tunnel.md) — the iOS 17+ CoreDevice tunnel plan: the layers, the wire formats, and the testing plan
+- [`docs/11-native-usb-windows.md`](docs/11-native-usb-windows.md) — the plan to replace libusb with the native Windows USB API
+- [`docs/12-native-usb-linux.md`](docs/12-native-usb-linux.md) — the same plan for the native Linux USB API
+- [`docs/13-native-usb-macos.md`](docs/13-native-usb-macos.md) — the same plan for the native macOS USB API
 
 ## Contributing
 
