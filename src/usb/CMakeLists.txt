@@ -13,7 +13,7 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(libusb_cmake)
 
-add_library(ioscpp-usb usb_transport.cpp)
+add_library(ioscpp-usb usb_transport.cpp windows_driver.cpp)
 add_library(ioscpp::usb ALIAS ioscpp-usb)
 
 # Export the target as `ioscpp::usb`, matching the in-tree alias.
@@ -25,6 +25,12 @@ target_link_libraries(ioscpp-usb
   PUBLIC ioscpp::ioscpp
   PRIVATE usb-1.0
 )
+
+# The Windows driver helper is pure Win32: SetupAPI and CfgMgr for discovery,
+# NewDev to install, and CryptoAPI to sign.
+if(WIN32)
+  target_link_libraries(ioscpp-usb PRIVATE setupapi newdev cfgmgr32 crypt32 advapi32)
+endif()
 
 if(MSVC)
   target_compile_options(ioscpp-usb PRIVATE /W4 /permissive-)

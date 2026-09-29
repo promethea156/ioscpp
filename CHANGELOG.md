@@ -5,6 +5,19 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `ioscpp::usb::driver_targets`/`install_driver`/`uninstall_driver`, which bind a
+  libusb-compatible driver to the device without Zadig, and
+  `tools/install-windows-driver.ps1` as a wrapper that builds and elevates the
+  `ioscpp_windows_driver` front end. The helper discovers the device node,
+  generates the INF, sets `InitialConfigValue` so the driver selects the mux
+  configuration, signs the package with a self-signed certificate, and installs it.
+  [`docs/14-windows-driver-automation.md`](docs/14-windows-driver-automation.md)
+  records the signing route.
+
 ## [2.2.0] - 2026-09-22
 
 ### Added

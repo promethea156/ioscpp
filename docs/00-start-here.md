@@ -162,3 +162,4 @@ the library cannot make today — so it stays a non-goal for now.
 - [`11-native-usb-windows.md`](11-native-usb-windows.md) — the plan to replace libusb with the native Windows USB API.
 - [`12-native-usb-linux.md`](12-native-usb-linux.md) — the same plan for the native Linux USB API.
 - [`13-native-usb-macos.md`](13-native-usb-macos.md) — the same plan for the native macOS USB API.
+- [`14-windows-driver-automation.md`](14-windows-driver-automation.md) — binding the Windows driver without Zadig.

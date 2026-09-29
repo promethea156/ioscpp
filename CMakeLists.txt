@@ -18,6 +18,7 @@ endif()
 
 option(IOSCPP_BUILD_TESTS "Build ioscpp tests" ${IOSCPP_IS_TOP_LEVEL})
 option(IOSCPP_BUILD_EXAMPLES "Build ioscpp examples" ${IOSCPP_IS_TOP_LEVEL})
+option(IOSCPP_BUILD_TOOLS "Build ioscpp command-line tools" ${IOSCPP_IS_TOP_LEVEL})
 option(IOSCPP_BUILD_DOCS "Build ioscpp documentation" OFF)
 option(IOSCPP_BUILD_USB "Build the ioscpp USB backend (libusb)" ${IOSCPP_IS_TOP_LEVEL})
 option(IOSCPP_BUILD_FUZZERS "Build the ioscpp codec fuzzers" OFF)
@@ -148,6 +149,11 @@ endif()
 
 if(IOSCPP_BUILD_EXAMPLES)
   add_subdirectory(examples)
+endif()
+
+# The Windows driver helper is the only tool so far, and it needs the USB backend.
+if(IOSCPP_BUILD_TOOLS AND WIN32 AND IOSCPP_BUILD_USB)
+  add_subdirectory(tools)
 endif()
 
 if(IOSCPP_BUILD_FUZZERS)

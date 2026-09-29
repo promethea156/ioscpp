@@ -149,7 +149,8 @@ Increment 4 is the only genuinely uncertain step; its spike, options, and fallba
   becomes possible, and one fewer DLL beside the binaries.
 - **Does not buy:** the interface still has to be bound to a non-Apple driver with Zadig — the step in
   [`09-platform-setup.md`](09-platform-setup.md#usb-driver) stays, only the driver chosen changes
-  from `libusb-win32` to **WinUSB**. If fallback 3 is needed, even that stays as it is.
+  from `libusb-win32` to **WinUSB**. If fallback 3 is needed, even that stays as it is. The GUI can be
+  removed without this port; see [`14-windows-driver-automation.md`](14-windows-driver-automation.md).
 
 ## Estimate
 

@@ -115,6 +115,10 @@ package for the device, so no INF is edited and driver signature enforcement can
 Editing a package's INF leaves its catalog signature stale, and a machine with enforcement
 on refuses the package until enforcement is turned off or the package is re-signed.
 
+The library can do the same bind without the GUI: `ioscpp::usb::install_driver`,
+run by `tools/install-windows-driver.ps1`; see
+[`14-windows-driver-automation.md`](14-windows-driver-automation.md).
+
 1. Put the device in the normal (unlocked) mode and plug it in.
 2. Run Zadig, open *Options* -> *List All Devices*, and select the mux interface of the
    Apple composite device: the entry whose USB id ends in `MI_01` (`VID_05AC&PID_12A8&MI_01`
