@@ -30,6 +30,8 @@ int main(int argc, char **argv)
     bool list = false;
     bool uninstall = false;
 
+    // The options are parsed by hand: there are only a few, and a dependency
+    // such as `CLI11` would be more than the tool needs.
     for (int i = 1; i < argc; ++i)
     {
         const std::string argument = argv[i];
@@ -65,6 +67,8 @@ int main(int argc, char **argv)
         }
     }
 
+    // The helper logs at `Info`, so the tool installs a sink that prints to
+    // `std::cout`; without one the helper would be silent.
     set_logger(
         [](LogLevel, std::string_view message)
         {
@@ -82,6 +86,8 @@ int main(int argc, char **argv)
         return 0;
     }
 
+    // The targets are found and reported first, so `--list` can stop before any
+    // install and a person can see what would be changed.
     auto targets = driver_targets();
     if (!targets)
     {
@@ -104,6 +110,8 @@ int main(int argc, char **argv)
         return 0;
     }
 
+    // Every target is installed; one failure is reported but the rest are still
+    // tried, so one bad device does not leave the others untouched.
     bool failed = false;
     for (const DriverTarget &target : *targets)
     {

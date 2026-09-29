@@ -10,6 +10,10 @@
 // behind the `CoreDevice` tunnel there; on an older device the tour stops after the
 // file steps.
 //
+// On Windows the mux interface is owned by Apple's driver, which libusb cannot
+// open, so the libusb driver is bound to any device that needs it before the
+// device is opened. That bind needs an elevated process.
+//
 // Usage: ioscpp_demo_example <bundle-id> <app.ipa>
 
 #include <chrono>
@@ -29,14 +33,51 @@
 #include "ioscpp/house_arrest.hpp"
 #include "ioscpp/rsd.hpp"
 #include "ioscpp/usb/usb_transport.hpp"
+#if defined(_WIN32)
+#    include "ioscpp/usb/windows_driver.hpp"
+#endif
 
 namespace
 {
+
+using namespace ioscpp;
 
 void step(int number, const char *what)
 {
     std::cout << "\n[" << number << "] " << what << "\n";
 }
+
+#if defined(_WIN32)
+/// Binds the libusb driver to every attached device that is not already on it,
+/// which has to happen before the device is opened. The bind needs an elevated
+/// process, so a non-elevated run that has nothing to bind still works.
+bool bind_drivers()
+{
+    auto targets = usb::driver_targets();
+    if (!targets)
+    {
+        std::cerr << "driver_targets: " << targets.error().message << "\n";
+        return false;
+    }
+    for (const usb::DriverTarget &target : *targets)
+    {
+        if (target.service == "libusb0")
+        {
+            std::cout << target.hardware_id << " is already on libusb-win32\n";
+            continue;
+        }
+        std::cout << "binding libusb-win32 to " << target.hardware_id << " (was "
+                  << (target.service.empty() ? "<none>" : target.service) << ")\n";
+        if (auto status = usb::install_driver(target); !status)
+        {
+            std::cerr << "install_driver: " << status.error().message
+                      << "\n  (run from an elevated shell to bind the driver)\n";
+            return false;
+        }
+    }
+    return true;
+}
+#endif
 
 } // namespace
 
@@ -51,6 +92,17 @@ int main(int argc, char **argv)
     }
     const std::string bundle_id = argv[1];
     const std::filesystem::path ipa = argv[2];
+
+#if defined(_WIN32)
+    // 0. Bind the libusb driver to any device that needs it. This is done
+    // before the device is opened, because libusb cannot open a device that is
+    // still on Apple's driver.
+    step(0, "bind the libusb driver to any device that needs it");
+    if (!bind_drivers())
+    {
+        return 1;
+    }
+#endif
 
     // 1. Find the device and open its USB interface.
     step(1, "find a device and open its USB interface");

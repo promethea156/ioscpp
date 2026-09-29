@@ -8,6 +8,30 @@
 
 #if defined(_WIN32)
 
+/**
+ * @file
+ * @brief Binds a libusb-compatible driver to the device, without Zadig.
+ *
+ * On Windows a device is bound to Apple's `usbaapl64` driver, which libusb
+ * cannot open, and libusb's WinUSB backend cannot send the `SET_CONFIGURATION`
+ * the device's initial USB mode needs. The user therefore has to bind a
+ * libusb-compatible driver to the device before libusb can reach it.
+ *
+ * Zadig does that by hand through a GUI. These functions do the same four steps in
+ * code, so the step can move into a program:
+ *
+ *  1. @ref driver_targets finds the device node and the driver already on it;
+ *  2. the INF is written from the template a working package uses;
+ *  3. `makecat` and `signtool` build and sign the package's catalog;
+ *  4. `SetupCopyOEMInf` and `UpdateDriverForPlugAndPlayDevices` install it.
+ *
+ * Installing a kernel driver needs an elevated process, so a caller that is not
+ * elevated gets a failure rather than a silent no-op.
+ *
+ * @note These functions are Windows-only, so a cross-platform caller guards a call
+ * with `#if defined(_WIN32)`.
+ */
+
 namespace ioscpp::usb
 {
 

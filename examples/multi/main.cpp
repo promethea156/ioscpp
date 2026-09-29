@@ -15,6 +15,11 @@
 // the file steps. Each device's install replaces any existing copy of the bundle,
 // so it loses that bundle's data.
 //
+// On Windows the mux interface is owned by Apple's driver, which libusb cannot
+// open, so the libusb driver is bound to any device that needs it before the
+// devices are listed. That bind needs an elevated process, and is done once, before
+// the threads, because it is global rather than per device.
+//
 // Usage: ioscpp_multi_example <bundle-id> <app.ipa>
 
 #include <chrono>
@@ -34,9 +39,14 @@
 #include "ioscpp/device.hpp"
 #include "ioscpp/rsd.hpp"
 #include "ioscpp/usb/usb_transport.hpp"
+#if defined(_WIN32)
+#    include "ioscpp/usb/windows_driver.hpp"
+#endif
 
 namespace
 {
+
+using namespace ioscpp;
 
 /// Guards `std::cout`, so two devices' lines do not interleave.
 std::mutex g_output;
@@ -47,6 +57,38 @@ void report(const std::string &serial, const std::string &text)
     const std::lock_guard<std::mutex> lock(g_output);
     std::cout << serial << ": " << text << "\n";
 }
+
+#if defined(_WIN32)
+/// Binds the libusb driver to every attached device that is not already on it,
+/// which has to happen before the devices are listed. The bind needs an elevated
+/// process, so a non-elevated run that has nothing to bind still works.
+bool bind_drivers()
+{
+    auto targets = usb::driver_targets();
+    if (!targets)
+    {
+        std::cerr << "driver_targets: " << targets.error().message << "\n";
+        return false;
+    }
+    for (const usb::DriverTarget &target : *targets)
+    {
+        if (target.service == "libusb0")
+        {
+            std::cout << target.hardware_id << " is already on libusb-win32\n";
+            continue;
+        }
+        std::cout << "binding libusb-win32 to " << target.hardware_id << " (was "
+                  << (target.service.empty() ? "<none>" : target.service) << ")\n";
+        if (auto status = usb::install_driver(target); !status)
+        {
+            std::cerr << "install_driver: " << status.error().message
+                      << "\n  (run from an elevated shell to bind the driver)\n";
+            return false;
+        }
+    }
+    return true;
+}
+#endif
 
 /// Runs the whole tour against one device, returning whether every step worked.
 bool run_tour(const ioscpp::usb::DeviceId &id, const std::string &bundle_id, const std::filesystem::path &ipa)
@@ -197,6 +239,17 @@ int main(int argc, char **argv)
     }
     const std::string bundle_id = argv[1];
     const std::filesystem::path ipa = argv[2];
+
+#if defined(_WIN32)
+    // Bind the libusb driver to any device that needs it, before the devices
+    // are listed, because libusb cannot read a device that is still on Apple's
+    // driver. The bind is global, so it is done once, before the threads.
+    std::cout << "binding the libusb driver to any device that needs it\n";
+    if (!bind_drivers())
+    {
+        return 1;
+    }
+#endif
 
     auto devices = usb::UsbTransport::list();
     if (!devices || devices->empty())

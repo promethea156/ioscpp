@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   configuration, signs the package with a self-signed certificate, and installs it.
   [`docs/14-windows-driver-automation.md`](docs/14-windows-driver-automation.md)
   records the signing route.
+- The single and multi device demos now bind the libusb driver to any attached
+  device that is not already on it, before opening the device, on Windows.
 
 ## [2.2.0] - 2026-09-22
 

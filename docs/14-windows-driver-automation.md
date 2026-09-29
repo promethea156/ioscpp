@@ -43,7 +43,8 @@ The helper does the same four steps with the Win32 API:
 - the INF is written from the template a working package uses;
 - `makecat` and `signtool` (Windows SDK) build and sign the catalog, with a
   self-signed certificate that is trusted on the machine;
-- `DiInstallDriver` (NewDev) installs the package and binds it.
+- `SetupCopyOEMInf` installs the package, and
+  `UpdateDriverForPlugAndPlayDevices` binds it to the node.
 
 The bind is scoped by the INF's `[Devices]` model, which is `USB\<hardware id>`,
 so only the target is rebound and the rest of the device keeps Apple's driver.
@@ -91,7 +92,7 @@ device, and ship route 1 when the release process is set up. The helper prefers
 
 ### When the package is not signed
 
-`DiInstallDriver` refuses it under enforcement. Two stopgaps, in order: run
+`UpdateDriverForPlugAndPlayDevices` refuses it under enforcement. Two stopgaps, in order: run
 `bcdedit /set testsigning on` and reboot, which accepts any test-signed package, or
 install Apple's *desktop* iTunes support package, whose `usbaapl64` driver already
 selects a configuration, so the device reaches the mux interface without any libusb
